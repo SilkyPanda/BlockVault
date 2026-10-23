@@ -20,7 +20,7 @@ import net.minecraft.util.FormattedCharSequence;
 
 /** Vanilla credential card shared by save, update, registration, and rejection prompts. */
 final class CredentialConfirmScreen extends Screen {
-    private static final int CARD_WIDTH = 316;
+    private static final int CARD_WIDTH = 360;
     private static final int CARD_HEIGHT = 226;
     private static final Identifier CARD_TEXTURE = Identifier.fromNamespaceAndPath("blockvault", "textures/gui/sprites/card.png");
     private static final Identifier ICON_TEXTURE = Identifier.fromNamespaceAndPath("blockvault", "textures/gui/sprites/icon.png");
@@ -101,17 +101,17 @@ final class CredentialConfirmScreen extends Screen {
         int actionY = cardY + 148;
         String actionKey = registration ? "blockvault.card.register"
                 : model.variant() == CardVariant.UPDATE ? "blockvault.card.update" : "blockvault.card.save";
-        addButton(cardX + 18, actionY, 132, "blockvault.card.accept", actionKey, button -> accept(registration));
-        addButton(cardX + 166, actionY, 132, "blockvault.card.cancel", null, button -> onClose());
-        addButton(cardX + 18, actionY + 26, 84, "blockvault.card.reveal", null,
+        addButton(cardX + 18, actionY, 156, "blockvault.card.accept", actionKey, button -> accept(registration));
+        addButton(cardX + 186, actionY, 156, "blockvault.card.cancel", null, button -> onClose());
+        addButton(cardX + 18, actionY + 26, 100, "blockvault.card.reveal", null,
                 button -> { reveal = !reveal; });
-        addButton(cardX + 109, actionY + 26, 84, "blockvault.card.copy", null,
+        addButton(cardX + 130, actionY + 26, 100, "blockvault.card.copy", null,
                 button -> copyFromField());
         if (registration) {
-            addButton(cardX + 206, actionY + 26, 92, "blockvault.card.regenerate", null,
+            addButton(cardX + 242, actionY + 26, 100, "blockvault.card.regenerate", null,
                     button -> regenerate());
         } else {
-            addButton(cardX + 206, actionY + 26, 92, "blockvault.card.never_server", null,
+            addButton(cardX + 242, actionY + 26, 100, "blockvault.card.never_server", null,
                     button -> {
                         VaultRuntime.setNeverSave(model.host(), true);
                         onClose();
@@ -121,22 +121,22 @@ final class CredentialConfirmScreen extends Screen {
 
     private void initRejectedButtons() {
         int y = cardY + 148;
-        addButton(cardX + 18, y, 92, "blockvault.card.manual", null, button -> {
+        addButton(cardX + 18, y, 100, "blockvault.card.manual", null, button -> {
             session.dismissRejectedPrompt();
             onClose();
         });
-        addButton(cardX + 112, y, 92, "blockvault.card.update", null, button -> {
+        addButton(cardX + 130, y, 100, "blockvault.card.update", null, button -> {
             password = passwordBox.getValue().toCharArray();
             session.updateRejectedPassword(password);
             onClose();
         });
-        addButton(cardX + 206, y, 92, "blockvault.card.forget", null, button -> {
+        addButton(cardX + 242, y, 100, "blockvault.card.forget", null, button -> {
             session.forgetRejectedCredential();
             onClose();
         });
-        addButton(cardX + 18, y + 26, 132, "blockvault.card.reveal", null,
+        addButton(cardX + 18, y + 26, 156, "blockvault.card.reveal", null,
                 button -> { reveal = !reveal; });
-        addButton(cardX + 166, y + 26, 132, "blockvault.card.cancel", null, button -> onClose());
+        addButton(cardX + 186, y + 26, 156, "blockvault.card.cancel", null, button -> onClose());
     }
 
     private void addButton(int x, int y, int buttonWidth, String key, String actionKey, Button.OnPress action) {
@@ -225,7 +225,7 @@ final class CredentialConfirmScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        graphics.blit(ICON_TEXTURE, cardX + 18, cardY + 17, 24, 24, 0, 0, 1, 1);
+        graphics.blit(ICON_TEXTURE, cardX + 18, cardX + 42, cardY + 17, cardY + 41, 0, 1, 0, 1);
         graphics.text(font, Component.translatable("blockvault.card.title"), cardX + 52, cardY + 18, 0xffffffff);
         graphics.text(font, Component.literal(model.username()), cardX + 52, cardY + 34, 0xffc7c3d3);
         if (!BlockVaultConfig.current().streamerMode()) {
@@ -259,9 +259,9 @@ final class CredentialConfirmScreen extends Screen {
         int[] sh = {edge, middleHeight, edge};
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 3; column++) {
-                graphics.blit(texture, dx[column], dy[row], dw[column], dh[row],
-                        (float) sx[column] / textureSize, (float) sy[row] / textureSize,
-                        (float) sw[column] / textureSize, (float) sh[row] / textureSize);
+                graphics.blit(texture, dx[column], dx[column] + dw[column], dy[row], dy[row] + dh[row],
+                        (float) sx[column] / textureSize, (float) (sx[column] + sw[column]) / textureSize,
+                        (float) sy[row] / textureSize, (float) (sy[row] + sh[row]) / textureSize);
             }
         }
     }

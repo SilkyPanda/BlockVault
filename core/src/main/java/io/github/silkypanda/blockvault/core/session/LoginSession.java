@@ -127,11 +127,14 @@ public final class LoginSession {
         if (host == null || state != SessionState.PROMPTED || !canRegister || action == Action.REGISTER) return;
         replacePending(password);
         action = Action.REGISTER;
+        // Close the prompt race while the pending credential is persisted. Repeated
+        // registration messages must not queue a second card before send() runs.
+        state = SessionState.SENT;
         int token = generation;
         char[] staged = pending.clone();
         env.vault().savePending(host, username, staged, saved -> {
             Arrays.fill(staged, '\0');
-            if (token != generation || state != SessionState.PROMPTED) return;
+            if (token != generation || state != SessionState.SENT || action != Action.REGISTER) return;
             if (!saved) { wipePending(); state = SessionState.UNKNOWN; return; }
             send(true, email, token);
         });
@@ -204,7 +207,8 @@ public final class LoginSession {
     private void arm(PromptKind kind, String plain) {
         long now = scheduler.nowMillis();
         if ((lastPromptKind == kind && lastPromptAt != Long.MIN_VALUE && now - lastPromptAt < DEBOUNCE_MILLIS)
-                || state == SessionState.SENT || attempted || state == SessionState.CONFIRMED) return;
+                || state == SessionState.SENT || action == Action.REGISTER || attempted
+                || state == SessionState.CONFIRMED) return;
         cancelTimer();
         wipePending();
         action = Action.NONE;

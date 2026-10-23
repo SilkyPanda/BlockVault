@@ -65,3 +65,9 @@ The refreshed API dump confirms `CommandHistory.addCommand(String)` and a privat
 ## 2026-10-23 — Classify registration failure responses
 
 The M2 CI run showed that `Registration failed!` did not match the default failure patterns, leaving a pending account undeleted. Add a narrow registration/account-creation failure expression and a matcher assertion so these responses enter the existing failure cleanup path.
+## 2026-10-24 — Current UI report
+
+- Verified `GuiGraphicsExtractor.blit` in the local Minecraft 26.3 client bytecode: the four destination integers are endpoint coordinates, and UV floats are min/max endpoints. The credential card passed x/y/width/height and UV origin/size, causing the stretched background. Updated both card and icon calls to endpoints.
+- Mark registration as in-progress before asynchronous pending-vault persistence. This suppresses repeated prompts during the write and discards any stale queued prompt after the registration card closes, addressing the card reopening immediately after Register.
+- Added `disableAutoLogin` (default false) as an explicit master override on the existing autofill setting. No credential or network behavior is added.
+- The exact Mod Menu API artifact/version is absent locally, so the Fabric config entrypoint remains pending instead of guessing its API. NeoForge's `IConfigScreenFactory` contract was verified from the locally cached NeoForge 26.3.0.84 source and is registered for the vanilla settings screen.

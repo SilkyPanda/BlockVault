@@ -890,7 +890,7 @@ Keep `JAVA_21` (it is a minimum level; do not raise it). Register the config in 
 - Vault access via `BackgroundExecutor`; results delivered back on the game thread.
 - A master-password vault that is locked triggers the Unlock card first, then continues the pending action.
 - `showSavePrompt` opens the card screen (section 8.5). Never open a card while another BlockVault card is open: queue it.
-Config (`<dataDir>/config.json`, Gson tree API): `autofill` (true), `autofillDelayMillis` (400), `resultTimeoutMillis` (5000), `autoLockMinutes` (15, 0 = never), `cardDurationSeconds` (10), `cardPosition` ("top_right"), `streamerMode` (false), `generator` (policy fields), `scrubHistory` (true), `trustDevice` (true). Load lazily, write only when the user changes a setting.
+Config (`<dataDir>/config.json`, Gson tree API): `autofill` (true), `disableAutoLogin` (false; overrides autofill when true), `autofillDelayMillis` (400), `resultTimeoutMillis` (5000), `autoLockMinutes` (15, 0 = never), `cardDurationSeconds` (10), `cardPosition` ("top_right"), `streamerMode` (false), `generator` (policy fields), `scrubHistory` (true), `trustDevice` (true). Load lazily, write only when the user changes a setting.
 
 ### 8.4 Threading summary
 Game thread: hooks, UI. Background thread: KDF, vault IO, key provider calls. Never block the game thread on either. Timers for the session use the game thread via `Minecraft.execute` + a scheduled executor shared with `BackgroundExecutor`.
@@ -907,7 +907,7 @@ Toasts for short confirmations ("Saved", "Autofilled", "Vault locked") use the v
 Keybind (default unbound or a rarely used key; verify no conflict) and the multiplayer-screen button open it. List of servers (search box), per server: accounts, reveal (requires re-confirming the master password in master mode), copy (30 s clipboard auto-clear), edit, delete, generate new, edit command template, toggle autofill/neverSave. Footer: Lock now, Settings, Import, Export.
 
 ### 8.7 Settings screen
-Built on vanilla `OptionsSubScreen`/`OptionsList` (no config library). Options: autofill on/off, autofill delay, master-password prompt policy (`Ask every launch` or `Trust this device`, default trusted), auto-lock minutes, generator defaults, streamer mode, card position/duration, history scrub on/off, "Wipe vault" (double confirm). Fabric: optional Mod Menu entrypoint is NOT required; add a Mod Menu `ModMenuApi` integration only if it adds no build dependency (use `compileOnly` of Mod Menu only if needed; otherwise skip). NeoForge: register `IConfigScreenFactory` via the mod container.
+Built on vanilla `OptionsSubScreen`/`OptionsList` (no config library). Options: autofill on/off, explicit disable auto-login override (default off), autofill delay, master-password prompt policy (`Ask every launch` or `Trust this device`, default trusted), auto-lock minutes, generator defaults, streamer mode, card position/duration, history scrub on/off, "Wipe vault" (double confirm). Fabric: provide the settings screen through Mod Menu. Verify the exact Mod Menu API and version from its API artifact before adding the compile-only dependency or entrypoint; do not guess. NeoForge: register `IConfigScreenFactory` via the mod container.
 
 ### 8.8 Translations
 `assets/blockvault/lang/en_us.json` with every key. Add stub `es_es`, `pt_br`, `ru_ru`, `de_de`, `fr_fr`, `tr_tr`, `zh_cn` files that contain the same keys with English text (owner will translate later).

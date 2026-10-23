@@ -3,6 +3,7 @@ package io.github.silkypanda.blockvault;
 import io.github.silkypanda.blockvault.core.session.LoginSession;
 import io.github.silkypanda.blockvault.core.session.PromptModel;
 import io.github.silkypanda.blockvault.core.session.SessionEnv;
+import io.github.silkypanda.blockvault.core.session.SessionState;
 import io.github.silkypanda.blockvault.core.session.VaultAccess;
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -49,6 +50,11 @@ final class McSessionEnv implements SessionEnv {
 
     private void showNext() {
         showing = false;
+        if (session != null && session.state() == SessionState.SENT) {
+            PromptModel stale;
+            while ((stale = queuedPrompts.poll()) != null) stale.clearPassword();
+            return;
+        }
         PromptModel next = queuedPrompts.poll();
         if (next != null) show(next);
     }
