@@ -1,6 +1,11 @@
 {
   "version": 1,
-  "commandNames": { "login": ["login", "log", "l"], "register": ["register", "reg"] },
+  "commandNames": {
+    "login": ["login", "log", "l"],
+    "register": ["register", "reg"],
+    "changePassword": ["changepassword", "changepass"],
+    "unregister": ["unregister"]
+  },
   "prompt": {
     "login": ["(?iu)/(?:login|log|l)\\b"],
     "register": ["(?iu)/(?:register|reg)\\b"]

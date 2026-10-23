@@ -1,20 +1,24 @@
 package io.github.silkypanda.blockvault.core.session;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.vault.Account;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 final class LoginSessionTest {
     @Test
-    void persistsPendingBeforeSendingRegistration() throws Exception {
+    void persistsPendingBeforeSendingAndConfirmsRegistration() throws Exception {
         FakeEnv env = new FakeEnv();
-        LoginSession session = new LoginSession(env, new FakeScheduler(), PatternPackFixture.load(), PasswordGenerator.Policy.defaults());
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
         session.onJoin("example.org:25565", "Alex");
         session.onSystemMessage("Please register using /register <password>");
         assertEquals(CardVariant.REGISTER, env.card.variant());
@@ -26,12 +30,80 @@ final class LoginSessionTest {
     }
 
     @Test
-    void manualCaptureIsOnlyOfferedAfterSuccess() throws Exception {
+    void verifiedCredentialAutofillsOnceAndFailureRejectsWithoutRetry() throws Exception {
         FakeEnv env = new FakeEnv();
-        LoginSession session = new LoginSession(env, new FakeScheduler(), PatternPackFixture.load(), PasswordGenerator.Policy.defaults());
+        env.credential("secret");
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
         session.onJoin("example.org:25565", "Alex");
-        session.onOutgoingCommand("/login manuallyTyped");
+        session.onSystemMessage("Please login with /login <password>");
+        assertTrue(env.commands.isEmpty());
+        clock.advance(399);
+        assertTrue(env.commands.isEmpty());
+        clock.advance(1);
+        assertEquals(List.of("login secret"), env.commands);
+        session.onSystemMessage("Wrong password!");
+        assertEquals(SessionState.REJECTED, session.state());
+        assertEquals(CardVariant.REJECTED, env.card.variant());
+        session.onSystemMessage("Please login with /login <password>");
+        clock.advance(1000);
+        assertEquals(1, env.commands.size());
+    }
+
+    @Test
+    void serverPolicyCanDisableAutofillAndRegistrationSaving() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("secret");
+        env.credential = new SavedCredential(env.credential.account(), false, false, null);
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please login with /login <password>");
+        clock.advance(1000);
+        assertTrue(env.commands.isEmpty());
+
+        env.credential = new SavedCredential(null, true, true, null);
+        session.onDisconnect();
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please register using /register <password>");
         assertEquals(null, env.card);
+    }
+
+    @Test
+    void commandTreeWithBothCommandsWaitsForActualRegistrationPrompt() throws Exception {
+        FakeEnv env = new FakeEnv();
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onCommandTree(Set.of("login", "register"));
+        assertEquals(null, env.card);
+        session.onSystemMessage("Please register with /register <password>");
+        assertEquals(CardVariant.REGISTER, env.card.variant());
+    }
+
+    @Test
+    void timeoutAndDebouncePreventRepeatedAutofill() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("secret");
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please login with /login <password>");
+        session.onSystemMessage("Please login with /login <password>");
+        clock.advance(400);
+        assertEquals(1, env.commands.size());
+        clock.advance(5000);
+        assertEquals(SessionState.UNKNOWN, session.state());
+        session.onSystemMessage("Please login with /login <password>");
+        clock.advance(2000);
+        assertEquals(1, env.commands.size());
+    }
+
+    @Test
+    void manualCaptureIsOnlyOfferedAfterSuccessfulResult() throws Exception {
+        FakeEnv env = new FakeEnv();
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onOutgoingCommand("/login wrongValue");
         session.onSystemMessage("Wrong password!");
         assertEquals(null, env.card);
         session.onOutgoingCommand("/login correctValue");
@@ -39,28 +111,119 @@ final class LoginSessionTest {
         assertEquals(CardVariant.SAVE, env.card.variant());
     }
 
+    @Test
+    void registerFailureDeletesPendingAndRuleComplaintOffersOneAdjustedRetry() throws Exception {
+        FakeEnv env = new FakeEnv();
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please register using /register <password> <confirmPassword>");
+        session.confirmRegistration("first-secret".toCharArray());
+        session.onSystemMessage("Password too short, at least 24 characters");
+        assertEquals(1, env.deleted);
+        assertEquals(CardVariant.REGISTER, env.card.variant());
+        session.confirmRegistration(env.card.password());
+        session.onSystemMessage("Password too short, at least 24 characters");
+        assertEquals(SessionState.REJECTED, session.state());
+        assertEquals(2, env.deleted);
+    }
+
+    @Test
+    void registerFailureDeletesPendingCredential() throws Exception {
+        FakeEnv env = new FakeEnv();
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please register using /register <password>");
+        session.confirmRegistration("not-accepted".toCharArray());
+        session.onSystemMessage("Registration failed!");
+        assertEquals(1, env.deleted);
+        assertEquals(SessionState.REJECTED, session.state());
+    }
+
+    @Test
+    void pendingAccountAfterRestartShowsUpdateInsteadOfGenerating() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.pendingCredential("recover-me");
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please register using /register <password>");
+        assertEquals(CardVariant.UPDATE, env.card.variant());
+        assertEquals("recover-me", new String(env.card.password()));
+    }
+
+    @Test
+    void disconnectCancelsAutofillTimerAndWipesSession() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("secret");
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please login with /login <password>");
+        session.onDisconnect();
+        clock.advance(1000);
+        assertEquals(SessionState.IDLE, session.state());
+        assertTrue(env.commands.isEmpty());
+        assertFalse(session.attempted());
+    }
+
+    private static LoginSession session(FakeEnv env, FakeScheduler scheduler) throws Exception {
+        return new LoginSession(env, scheduler, PatternPackFixture.load(), PasswordGenerator.Policy.defaults());
+    }
+
     private static final class FakeScheduler implements Scheduler {
         private long now;
-        private final List<Runnable> callbacks = new ArrayList<>();
-        @Override public void schedule(long delayMillis, Runnable callback) { callbacks.add(callback); }
+        private final List<Entry> entries = new ArrayList<>();
+        @Override public Handle schedule(long delayMillis, Runnable callback) {
+            Entry entry = new Entry(now + delayMillis, callback);
+            entries.add(entry);
+            return () -> entry.cancelled = true;
+        }
         @Override public long nowMillis() { return now; }
+        void advance(long amount) {
+            now += amount;
+            boolean ran;
+            do {
+                ran = false;
+                for (Entry entry : List.copyOf(entries)) {
+                    if (!entry.cancelled && !entry.ran && entry.at <= now) {
+                        entry.ran = true;
+                        entry.callback.run();
+                        ran = true;
+                    }
+                }
+            } while (ran);
+        }
+        private static final class Entry {
+            final long at;
+            final Runnable callback;
+            boolean cancelled;
+            boolean ran;
+            Entry(long at, Runnable callback) { this.at = at; this.callback = callback; }
+        }
     }
 
     private static final class FakeEnv implements SessionEnv, VaultAccess {
         private final List<String> order = new ArrayList<>();
+        private final List<String> commands = new ArrayList<>();
         private PromptModel card;
+        private SavedCredential credential;
         private int verified;
-        @Override public void sendCommand(String commandWithoutSlash) { order.add("send"); }
+        private int deleted;
+        @Override public void sendCommand(String commandWithoutSlash) { order.add("send"); commands.add(commandWithoutSlash); }
         @Override public void showSavePrompt(PromptModel model) { card = model; }
         @Override public void toast(String translationKey) { }
         @Override public VaultAccess vault() { return this; }
-        @Override public void find(String host, String username, Consumer<Account> result) { result.accept(null); }
+        @Override public void find(String host, String username, Consumer<SavedCredential> result) { result.accept(credential); }
         @Override public void savePending(String host, String username, char[] password, Consumer<Boolean> saved) {
             order.add("pending"); saved.accept(true);
         }
         @Override public void markVerified(String host, String username) { verified++; }
-        @Override public void delete(String host, String username) { }
+        @Override public void delete(String host, String username) { deleted++; credential = null; }
         @Override public void saveVerified(String host, String username, char[] password) { }
+        void credential(String secret) { credential = new SavedCredential(account(secret, Account.Status.VERIFIED), true, false, null); }
+        void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, false, null); }
+        private static Account account(String secret, Account.Status status) {
+            return new Account("Alex", secret.toCharArray(), status, 0, 0, 0, null, null);
+        }
     }
 
     private static final class PatternPackFixture {

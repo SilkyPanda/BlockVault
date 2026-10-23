@@ -1,7 +1,12 @@
 package io.github.silkypanda.blockvault.core.session;
 
 /** Data passed to a card UI, with secret-safe representation and defensive password access. */
-public record PromptModel(CardVariant variant, String host, String username, char[] password) {
+public record PromptModel(CardVariant variant, String host, String username, char[] password, boolean emailRequired) {
+    /** Creates a prompt model that does not require an email field. */
+    public PromptModel(CardVariant variant, String host, String username, char[] password) {
+        this(variant, host, username, password, false);
+    }
+
     public PromptModel {
         password = password == null ? new char[0] : password.clone();
     }

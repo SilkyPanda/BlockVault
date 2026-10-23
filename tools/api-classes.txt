@@ -37,14 +37,19 @@ net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents$Game
 net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents$Join
 net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents$Disconnect
-net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
+net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
 net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
 net.fabricmc.fabric.api.client.screen.v1.ScreenEvents$AfterInit
 net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 # NeoForge
 net.neoforged.neoforge.client.event.ClientChatReceivedEvent
 net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent
+net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent$LoggingIn
+net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent$LoggingOut
 net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent
 net.neoforged.neoforge.client.event.ScreenEvent
+net.neoforged.neoforge.client.event.ScreenEvent$Init$Post
+net.neoforged.neoforge.common.NeoForge
+net.neoforged.bus.api.IEventBus
 net.neoforged.neoforge.client.gui.IConfigScreenFactory
 net.neoforged.fml.common.Mod

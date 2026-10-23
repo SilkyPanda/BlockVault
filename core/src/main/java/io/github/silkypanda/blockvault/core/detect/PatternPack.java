@@ -57,10 +57,13 @@ public final class PatternPack {
         addPatterns(results, ResultKind.FAILURE, getArray(user, "result", "failure"), warning);
         addPatterns(results, ResultKind.PASSWORD_RULE, getArray(user, "result", "passwordRules"), warning);
         Map<String, Set<String>> names = new java.util.HashMap<>();
-        for (String kind : List.of("login", "register")) {
-            JsonArray values = getArray(base, "commandNames", kind);
-            values.forEach(v -> names.computeIfAbsent(kind, ignored -> new java.util.HashSet<>()).add(v.getAsString().toLowerCase(Locale.ROOT)));
-            getArray(user, "commandNames", kind).forEach(v -> names.computeIfAbsent(kind, ignored -> new java.util.HashSet<>()).add(v.getAsString().toLowerCase(Locale.ROOT)));
+        if (base.has("commandNames") && base.get("commandNames").isJsonObject()) {
+            base.getAsJsonObject("commandNames").entrySet().forEach(entry ->
+                    addCommandNames(names, entry.getKey(), entry.getValue()));
+        }
+        if (user.has("commandNames") && user.get("commandNames").isJsonObject()) {
+            user.getAsJsonObject("commandNames").entrySet().forEach(entry ->
+                    addCommandNames(names, entry.getKey(), entry.getValue()));
         }
         Map<String, Set<String>> frozen = new java.util.HashMap<>();
         names.forEach((key, value) -> frozen.put(key, Set.copyOf(value)));
@@ -89,5 +92,18 @@ public final class PatternPack {
     private static JsonArray getArray(JsonObject object, String parent, String key) {
         if (!object.has(parent) || !object.getAsJsonObject(parent).has(key)) return new JsonArray();
         return object.getAsJsonObject(parent).getAsJsonArray(key);
+    }
+
+    private static void addCommandNames(Map<String, Set<String>> names, String kind, JsonElement value) {
+        if (!value.isJsonArray()) return;
+        String key = kind.toLowerCase(Locale.ROOT);
+        value.getAsJsonArray().forEach(alias -> {
+            if (alias.isJsonPrimitive() && alias.getAsJsonPrimitive().isString()) {
+                String name = alias.getAsString().trim().toLowerCase(Locale.ROOT);
+                if (!name.isEmpty() && name.matches("[\\p{L}0-9_]+")) {
+                    names.computeIfAbsent(key, ignored -> new java.util.HashSet<>()).add(name);
+                }
+            }
+        });
     }
 }
