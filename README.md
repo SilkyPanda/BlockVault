@@ -25,3 +25,19 @@ Test on Paper with AuthMe (offline-mode or a cracked-friendly setup), then on a 
 11. Disconnect and watch `logs/latest.log`: no passwords, no secrets, no stack traces from BlockVault.
 
 `Trust this device` stores a 32-byte vault key file with owner-only permissions. It does not store the master password or use an operating-system keychain. Anyone with access to your OS account can access that trusted-device file; select `Ask for master password every launch` to remove it.
+
+## Local data and cleanup
+
+BlockVault stores data outside the Minecraft game folder:
+
+- Windows: `%APPDATA%\BlockVault`
+- macOS: `~/Library/Application Support/BlockVault`
+- Linux: `$XDG_DATA_HOME/blockvault`, or `~/.local/share/blockvault` when `XDG_DATA_HOME` is unset
+
+The directory can also be overridden with the Java system property `blockvault.dataDir`.
+
+`vault.bv` and the rotating `vault.bv.bak1` through `vault.bv.bak3` files hold the encrypted vault, including saved server passwords and any TOTP secrets. With `Trust this device` enabled, `vault.bv.trust` holds the random vault key, not the master password. `config.json` stores preferences only. `patterns.json` is optional custom prompt-detection data.
+
+Deleting an account in the vault removes it from the current vault; older encrypted backups rotate out as later saves occur. BlockVault does not automatically erase its data directory when you uninstall the mod. To remove everything, exit Minecraft and delete the BlockVault data directory above. This also removes all saved accounts, backups, the trusted-device key, and settings.
+
+Copying a password to the clipboard schedules a clear after 30 seconds. If Minecraft exits before that timer runs, clear the operating-system clipboard yourself.

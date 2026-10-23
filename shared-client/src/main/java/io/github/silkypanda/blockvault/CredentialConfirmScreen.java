@@ -1,6 +1,5 @@
 package io.github.silkypanda.blockvault;
 
-import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.session.CardVariant;
 import io.github.silkypanda.blockvault.core.session.LoginSession;
 import io.github.silkypanda.blockvault.core.session.PromptModel;
@@ -15,22 +14,25 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Vanilla credential card shared by save, update, registration, and rejection prompts. */
 final class CredentialConfirmScreen extends Screen {
-    private static final int CARD_WIDTH = 360;
-    private static final int CARD_HEIGHT = 226;
-    private static final Identifier CARD_TEXTURE = Identifier.fromNamespaceAndPath("blockvault", "textures/gui/sprites/card.png");
-    private static final Identifier ICON_TEXTURE = Identifier.fromNamespaceAndPath("blockvault", "textures/gui/sprites/icon.png");
+    private static final int BASE_WIDTH = 300;
+    private static final int BASE_HEIGHT = 92;
+    private static final int EMAIL_HEIGHT = 116;
     private final PromptModel model;
     private final LoginSession session;
     private final Runnable closed;
     private char[] password;
     private EditBox passwordBox;
     private EditBox emailBox;
-    private boolean reveal;
+    private boolean closing;
+    private boolean registration;
+    private boolean emailRequired;
+    private int cardWidth;
+    private int cardHeight;
+    private float scale;
     private int cardX;
     private int cardY;
     private int mouseX;
@@ -45,7 +47,6 @@ final class CredentialConfirmScreen extends Screen {
         this.session = session;
         this.closed = closed;
         this.password = model.password();
-        this.remainingNanos = (long) BlockVaultConfig.current().cardDurationSeconds() * 1_000_000_000L;
     }
 
     private static Component title(CardVariant variant) {
@@ -58,33 +59,50 @@ final class CredentialConfirmScreen extends Screen {
         });
     }
 
+    private Component promptTitle() {
+        return model.variant() == CardVariant.UPDATE && registration
+                ? Component.translatable("blockvault.card.register.title") : title(model.variant());
+    }
+
     @Override
     protected void init() {
         BlockVaultConfig.Settings config = BlockVaultConfig.current();
+        registration = model.variant() == CardVariant.REGISTER
+                || model.variant() == CardVariant.UPDATE && session.state() == SessionState.PROMPTED;
+        emailRequired = registration && model.emailRequired();
+        int baseHeight = emailRequired ? EMAIL_HEIGHT : BASE_HEIGHT;
+        remainingNanos = (long) BlockVaultConfig.current().cardDurationSeconds() * 1_000_000_000L;
+        lastTimerNanos = System.nanoTime();
+        scale = Math.min(1.0f, (float) (0.98 * Math.sqrt((width * (double) height * 0.30)
+                / (BASE_WIDTH * (double) baseHeight))));
+        scale = Math.min(scale, Math.min((width - 16.0f) / BASE_WIDTH, (height - 16.0f) / baseHeight));
+        if (scale <= 0) scale = 0.01f;
+        cardWidth = Math.round(BASE_WIDTH * scale);
+        cardHeight = Math.round(baseHeight * scale);
         cardX = switch (config.cardPosition()) {
             case "top_left", "bottom_left" -> 18;
-            default -> width - CARD_WIDTH - 18;
+            default -> width - cardWidth - 18;
         };
         cardY = switch (config.cardPosition()) {
-            case "bottom_left", "bottom_right" -> height - CARD_HEIGHT - 34;
+            case "bottom_left", "bottom_right" -> height - cardHeight - 18;
             default -> 18;
         };
-        cardX = Math.max(4, Math.min(cardX, width - CARD_WIDTH - 4));
-        cardY = Math.max(4, Math.min(cardY, height - CARD_HEIGHT - 4));
+        cardX = Math.max(4, Math.min(cardX, width - cardWidth - 4));
+        cardY = Math.max(4, Math.min(cardY, height - cardHeight - 4));
 
-        passwordBox = new EditBox(font, cardX + 18, cardY + 90, CARD_WIDTH - 36, 20,
+        int pad = scaled(12);
+        int fieldY = cardY + scaled(36);
+        passwordBox = new EditBox(font, cardX + pad, fieldY, cardWidth - pad * 2, scaled(20),
                 Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(64);
-        passwordBox.setValue(new String(password));
-        passwordBox.addFormatter((value, cursor) -> reveal
-                ? FormattedCharSequence.forward(value, Style.EMPTY)
-                : FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
+        passwordBox.setHint(Component.translatable("blockvault.card.password"));
+        passwordBox.setValue(model.variant() == CardVariant.REJECTED ? "" : new String(password));
+        passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
+                "\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(passwordBox);
 
-        boolean registration = model.variant() == CardVariant.REGISTER
-                || model.variant() == CardVariant.UPDATE && session.state() == SessionState.PROMPTED;
-        if (registration && model.emailRequired()) {
-            emailBox = new EditBox(font, cardX + 18, cardY + 116, CARD_WIDTH - 36, 20,
+        if (emailRequired) {
+            emailBox = new EditBox(font, cardX + pad, cardY + scaled(60), cardWidth - pad * 2, scaled(20),
                     Component.translatable("blockvault.card.email"));
             emailBox.setHint(Component.translatable("blockvault.card.email"));
             emailBox.setMaxLength(254);
@@ -93,59 +111,47 @@ final class CredentialConfirmScreen extends Screen {
 
         if (model.variant() == CardVariant.REJECTED) initRejectedButtons();
         else initSaveButtons(registration);
-        lastTimerNanos = System.nanoTime();
         scheduleTimer();
     }
 
     private void initSaveButtons(boolean registration) {
-        int actionY = cardY + 148;
         String actionKey = registration ? "blockvault.card.register"
                 : model.variant() == CardVariant.UPDATE ? "blockvault.card.update" : "blockvault.card.save";
-        addButton(cardX + 18, actionY, 156, "blockvault.card.accept", actionKey, button -> accept(registration));
-        addButton(cardX + 186, actionY, 156, "blockvault.card.cancel", null, button -> onClose());
-        addButton(cardX + 18, actionY + 26, 100, "blockvault.card.reveal", null,
-                button -> { reveal = !reveal; });
-        addButton(cardX + 130, actionY + 26, 100, "blockvault.card.copy", null,
-                button -> copyFromField());
-        if (registration) {
-            addButton(cardX + 242, actionY + 26, 100, "blockvault.card.regenerate", null,
-                    button -> regenerate());
-        } else {
-            addButton(cardX + 242, actionY + 26, 100, "blockvault.card.never_server", null,
-                    button -> {
-                        VaultRuntime.setNeverSave(model.host(), true);
-                        onClose();
-                    });
-        }
+        int pad = scaled(12);
+        int gap = scaled(6);
+        int buttonY = cardY + scaled(emailRequired ? 84 : 60);
+        int buttonWidth = (cardWidth - pad * 2 - gap) / 2;
+        addButton(cardX + pad, buttonY, buttonWidth, actionKey, button -> accept(registration));
+        addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.cancel", button -> onClose());
     }
 
     private void initRejectedButtons() {
-        int y = cardY + 148;
-        addButton(cardX + 18, y, 100, "blockvault.card.manual", null, button -> {
+        int pad = scaled(12);
+        int gap = scaled(4);
+        int buttonY = cardY + scaled(60);
+        int buttonWidth = (cardWidth - pad * 2 - gap * 2) / 3;
+        addButton(cardX + pad, buttonY, buttonWidth, "blockvault.card.manual", button -> {
             session.dismissRejectedPrompt();
             onClose();
         });
-        addButton(cardX + 130, y, 100, "blockvault.card.update", null, button -> {
+        addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.update", button -> {
+            if (passwordBox.getValue().isBlank()) return;
+            wipePassword();
             password = passwordBox.getValue().toCharArray();
             session.updateRejectedPassword(password);
             onClose();
         });
-        addButton(cardX + 242, y, 100, "blockvault.card.forget", null, button -> {
+        addButton(cardX + pad + (buttonWidth + gap) * 2, buttonY, buttonWidth, "blockvault.card.forget", button -> {
             session.forgetRejectedCredential();
             onClose();
         });
-        addButton(cardX + 18, y + 26, 156, "blockvault.card.reveal", null,
-                button -> { reveal = !reveal; });
-        addButton(cardX + 186, y + 26, 156, "blockvault.card.cancel", null, button -> onClose());
     }
 
-    private void addButton(int x, int y, int buttonWidth, String key, String actionKey, Button.OnPress action) {
-        Component label = actionKey == null ? Component.translatable(key)
-                : Component.translatable(key, Component.translatable(actionKey));
-        addRenderableWidget(Button.builder(label, pressed -> {
+    private void addButton(int x, int y, int buttonWidth, String key, Button.OnPress action) {
+        addRenderableWidget(Button.builder(Component.translatable(key), pressed -> {
             VaultRuntime.activity();
             action.onPress(pressed);
-        }).bounds(x, y, buttonWidth, 20).build());
+        }).bounds(x, y, buttonWidth, scaled(20)).build());
     }
 
     private void accept(boolean registration) {
@@ -156,36 +162,6 @@ final class CredentialConfirmScreen extends Screen {
         onClose();
     }
 
-    private void regenerate() {
-        char[] next = PasswordGenerator.generate(policy(BlockVaultConfig.current().generator()));
-        wipePassword();
-        password = next;
-        passwordBox.setValue(new String(password));
-    }
-
-    private void copyFromField() {
-        char[] copied = passwordBox.getValue().toCharArray();
-        String value = new String(copied);
-        Arrays.fill(copied, '\0');
-        Minecraft minecraft = Minecraft.getInstance();
-        minecraft.keyboardHandler.setClipboard(value);
-        VaultRuntime.showToast("blockvault.toast.copied");
-        BackgroundExecutor.scheduler().schedule(30_000, () -> {
-            BackgroundExecutor.onGameThread(() -> {
-                if (value.equals(minecraft.keyboardHandler.getClipboard())) minecraft.keyboardHandler.setClipboard("");
-            });
-        });
-    }
-
-    private static PasswordGenerator.Policy policy(String preset) {
-        return switch (preset) {
-            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
-            case "max" -> PasswordGenerator.Policy.max();
-            case "memorable" -> PasswordGenerator.Policy.memorable();
-            default -> PasswordGenerator.Policy.defaults();
-        };
-    }
-
     private void scheduleTimer() {
         timer = BackgroundExecutor.scheduler().schedule(250, () -> {
             BackgroundExecutor.onGameThread(() -> {
@@ -193,8 +169,8 @@ final class CredentialConfirmScreen extends Screen {
                 long now = System.nanoTime();
                 long elapsed = now - lastTimerNanos;
                 lastTimerNanos = now;
-                boolean hovering = mouseX >= cardX && mouseX < cardX + CARD_WIDTH
-                        && mouseY >= cardY && mouseY < cardY + CARD_HEIGHT;
+                boolean hovering = mouseX >= cardX && mouseX < cardX + cardWidth
+                        && mouseY >= cardY && mouseY < cardY + cardHeight;
                 boolean focused = passwordBox != null && passwordBox.isFocused()
                         || emailBox != null && emailBox.isFocused();
                 if (!hovering && !focused) remainingNanos -= elapsed;
@@ -208,14 +184,14 @@ final class CredentialConfirmScreen extends Screen {
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
-        drawNineSlice(graphics, CARD_TEXTURE, cardX, cardY, CARD_WIDTH, CARD_HEIGHT, 32, 8);
-        graphics.fill(cardX + 8, cardY, cardX + CARD_WIDTH - 8, cardY + 3, 0xff9b72ff);
+        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xf20d0c12);
+        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + scaled(2), 0xff9b72ff);
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.x() < cardX || event.x() >= cardX + CARD_WIDTH
-                || event.y() < cardY || event.y() >= cardY + CARD_HEIGHT) {
+        if (event.x() < cardX || event.x() >= cardX + cardWidth
+                || event.y() < cardY || event.y() >= cardY + cardHeight) {
             onClose();
             return true;
         }
@@ -225,51 +201,23 @@ final class CredentialConfirmScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        graphics.blit(ICON_TEXTURE, cardX + 18, cardX + 42, cardY + 17, cardY + 41, 0, 1, 0, 1);
-        graphics.text(font, Component.translatable("blockvault.card.title"), cardX + 52, cardY + 18, 0xffffffff);
-        graphics.text(font, Component.literal(model.username()), cardX + 52, cardY + 34, 0xffc7c3d3);
-        if (!BlockVaultConfig.current().streamerMode()) {
-            graphics.text(font, Component.literal(model.host()), cardX + 18, cardY + 59, 0xffb2adbe);
-        } else {
-            graphics.text(font, Component.translatable("blockvault.card.address_hidden"), cardX + 18, cardY + 59, 0xffb2adbe);
-        }
-        if (model.variant() == CardVariant.REJECTED) {
-            graphics.text(font, Component.translatable("blockvault.card.rejected.description"),
-                    cardX + 18, cardY + 77, 0xffff9b9b);
-        } else {
-            graphics.text(font, Component.translatable("blockvault.card.unique"), cardX + 18, cardY + 77, 0xffc7c3d3);
-        }
-        int barWidth = (int) ((CARD_WIDTH - 36) * Math.max(0, Math.min(1,
-                (double) remainingNanos / (BlockVaultConfig.current().cardDurationSeconds() * 1_000_000_000L))));
-        graphics.fill(cardX + 18, cardY + CARD_HEIGHT - 8, cardX + CARD_WIDTH - 18, cardY + CARD_HEIGHT - 6, 0xff393342);
-        graphics.fill(cardX + 18, cardY + CARD_HEIGHT - 8, cardX + 18 + barWidth, cardY + CARD_HEIGHT - 6, 0xff9b72ff);
+        int pad = scaled(12);
+        graphics.text(font, promptTitle(), cardX + pad, cardY + scaled(8), 0xffffffff);
+        String identity = BlockVaultConfig.current().streamerMode()
+                ? model.username() : model.username() + " · " + model.host();
+        int maxChars = Math.max(8, (cardWidth - pad * 2) / 6);
+        if (identity.length() > maxChars) identity = identity.substring(0, maxChars - 1) + "…";
+        graphics.text(font, Component.literal(identity), cardX + pad, cardY + scaled(22), 0xffb2adbe);
     }
 
-    private static void drawNineSlice(GuiGraphicsExtractor graphics, Identifier texture,
-                                      int x, int y, int width, int height, int textureSize, int edge) {
-        int middleWidth = textureSize - edge * 2;
-        int middleHeight = textureSize - edge * 2;
-        int[] dx = {x, x + edge, x + width - edge};
-        int[] dy = {y, y + edge, y + height - edge};
-        int[] dw = {edge, width - edge * 2, edge};
-        int[] dh = {edge, height - edge * 2, edge};
-        int[] sx = {0, edge, textureSize - edge};
-        int[] sy = {0, edge, textureSize - edge};
-        int[] sw = {edge, middleWidth, edge};
-        int[] sh = {edge, middleHeight, edge};
-        for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < 3; column++) {
-                graphics.blit(texture, dx[column], dx[column] + dw[column], dy[row], dy[row] + dh[row],
-                        (float) sx[column] / textureSize, (float) (sx[column] + sw[column]) / textureSize,
-                        (float) sy[row] / textureSize, (float) (sy[row] + sh[row]) / textureSize);
-            }
-        }
-    }
+    private int scaled(int value) { return Math.max(1, Math.round(value * scale)); }
 
     @Override public boolean isPauseScreen() { return false; }
 
     @Override
     public void onClose() {
+        if (closing) return;
+        closing = true;
         if (timer != null) timer.cancel();
         timer = null;
         if (model.variant() == CardVariant.REJECTED) session.dismissRejectedPrompt();

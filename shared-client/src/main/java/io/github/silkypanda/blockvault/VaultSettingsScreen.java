@@ -28,6 +28,13 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                 rebuildWidgets();
             });
         }
+        if (!settingsLoaded) {
+            addRenderableWidget(Button.builder(Component.translatable("blockvault.settings.back"), button -> onClose())
+                    .bounds(width / 2 - 100, height - 28, 200, 20).build());
+            return;
+        }
+        // OptionsSubScreen.init builds and stores its layout; run it only once,
+        // after the asynchronous settings load, to avoid duplicate option lists.
         super.init();
     }
 
