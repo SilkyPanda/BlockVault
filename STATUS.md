@@ -21,11 +21,11 @@ Updated: 2026-10-24
 - M5 changes are not yet compiled by CI. Trusted-device auto-unlock, deleting the trust file when disabled, password fallback, and the settings default need in-game verification after CI passes.
 - Commit `4f3ec79` fixes credential-card texture endpoints and suppresses duplicate registration prompts; CI/build and in-game verification are pending.
 - Commit `53071a9` adds `disableAutoLogin` and a NeoForge config-screen factory. The owner reports its CI failed because NeoForge could not disambiguate the `registerExtensionPoint` overload; that call is now explicitly typed. CI has not rerun this correction.
-- Current working changes add Fabric Mod Menu 21.0.0 using the owner-provided Modrinth coordinate and config entrypoint. They also contain the explicit NeoForge factory typing fix. These changes need CI.
+- Current working changes add Fabric Mod Menu 21.0.0 using the owner-provided Modrinth coordinate and config entrypoint, with plain `implementation` because Loom 1.18.2 lacks `modCompileOnly` and the plan specifies plain implementation for unobfuscated Minecraft 26.x. They also contain the explicit NeoForge factory typing fix. These changes need CI.
 - Nothing has been verified in-game.
 
 ## CI
 
 - Last owner-reported green commit: `be0f292` (`feat: add vault screens and settings`).
-- Latest commit reported by the owner: `53071a9` (`feat: add auto-login setting and NeoForge config screen`); its NeoForge compile failed as recorded above. New Mod Menu and overload fixes are uncommitted and need a CI run.
+- Latest commit reported by the owner: `72dd520` (`fix: register config screens on both mod loaders`); CI failed because `modCompileOnly` does not exist in Loom 1.18.2. That dependency is now plain `implementation` per the plan; a new CI run is needed. The NeoForge overload typing fix is also included in the pending changes.
 - API-dump artifacts remain out of the workflow; the owner supplied the exact Mod Menu artifact needed for the Fabric integration.
