@@ -69,16 +69,21 @@ tasks.register('dumpApi') {
         def cp = sourceSets.main.compileClasspath.asPath
         def classes = file('../tools/api-classes.txt').readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') }
         classes.each { c ->
-            // javap rejects combining -public and -protected; -protected includes both.
-            def proc = ['javap', '-protected', '-cp', cp, c].execute()
+            // CommandHistory's private members reveal the history persistence path.
+            def visibility = c == 'net.minecraft.client.CommandHistory' ? '-private' : '-protected'
+            def proc = ['javap', visibility, '-cp', cp, c].execute()
             def text = new StringBuilder()
             proc.consumeProcessOutput(text, text)
             proc.waitFor()
             new File(out, c + '.txt').text = text.toString()
         }
-        def mcJars = sourceSets.main.compileClasspath.files.findAll { it.name.toLowerCase().contains('minecraft') && it.name.endsWith('.jar') }
+        def apiJars = sourceSets.main.compileClasspath.files.findAll { jar ->
+            def name = jar.name.toLowerCase()
+            jar.isFile() && name.endsWith('.jar') &&
+                (name.contains('minecraft') || name.contains('fabric') || name.contains('brigadier'))
+        }
         def index = new StringBuilder()
-        mcJars.each { j ->
+        apiJars.each { j ->
             index.append('# ').append(j.name).append('\n')
             def p = ['jar', 'tf', j.absolutePath].execute()
             p.consumeProcessOutput(index, index)

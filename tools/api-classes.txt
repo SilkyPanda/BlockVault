@@ -2,7 +2,9 @@
 net.minecraft.client.Minecraft
 net.minecraft.client.User
 net.minecraft.client.KeyMapping
+net.minecraft.client.KeyMapping$Category
 net.minecraft.client.CommandHistory
+net.minecraft.util.thread.ReentrantBlockableEventLoop
 # Multiplayer / networking
 net.minecraft.client.multiplayer.ClientPacketListener
 net.minecraft.client.multiplayer.ServerData
@@ -16,7 +18,7 @@ net.minecraft.client.gui.screens.ChatScreen
 net.minecraft.network.chat.Component
 # GUI
 net.minecraft.client.gui.screens.Screen
-net.minecraft.client.gui.GuiGraphics
+net.minecraft.client.gui.GuiGraphicsExtractor
 net.minecraft.client.gui.components.EditBox
 net.minecraft.client.gui.components.Button
 net.minecraft.client.gui.components.AbstractWidget
@@ -31,9 +33,13 @@ com.mojang.brigadier.CommandDispatcher
 com.mojang.brigadier.tree.CommandNode
 # Fabric API
 net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
+net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents$Game
 net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
+net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents$Join
+net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents$Disconnect
 net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
 net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
+net.fabricmc.fabric.api.client.screen.v1.ScreenEvents$AfterInit
 net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 # NeoForge
 net.neoforged.neoforge.client.event.ClientChatReceivedEvent
