@@ -117,7 +117,8 @@ public final class VaultFile {
         if (dataLength < 16 || dataLength > MAX_BYTES || dataLength != input.remaining()) {
             throw new IllegalArgumentException("Invalid encrypted data length");
         }
-        byte[] aad = Arrays.copyOf(file, input.position() - dataLength);
+        // The input position is already at the end of the authenticated header.
+        byte[] aad = Arrays.copyOf(file, input.position());
         byte[] ciphertext = new byte[dataLength];
         input.get(ciphertext);
         return new Parsed(header, wrapped, nonce, ciphertext, aad);
