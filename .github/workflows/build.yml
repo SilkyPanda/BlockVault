@@ -1,0 +1,121 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '25'
+  FALLBACK_GRADLE_VERSION: '9.7.1'
+
+jobs:
+  rules:
+    name: Static rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check project rules
+        run: bash scripts/check-rules.sh
+
+  core:
+    name: Core unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Pick Gradle
+        id: gradle
+        run: |
+          if [ -f gradlew ]; then echo "version=wrapper" >> "$GITHUB_OUTPUT"; else echo "version=${FALLBACK_GRADLE_VERSION}" >> "$GITHUB_OUTPUT"; fi
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+      - name: Test
+        run: |
+          if [ -f gradlew ]; then chmod +x gradlew; ./gradlew --no-daemon test; else gradle --no-daemon test; fi
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-reports
+          path: core/build/reports/tests
+          if-no-files-found: ignore
+          retention-days: 14
+
+  loader:
+    name: Build ${{ matrix.loader }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        loader: [fabric, neoforge]
+    defaults:
+      run:
+        working-directory: ${{ matrix.loader }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Pick Gradle
+        id: gradle
+        run: |
+          if [ -f gradlew ]; then echo "version=wrapper" >> "$GITHUB_OUTPUT"; else echo "version=${FALLBACK_GRADLE_VERSION}" >> "$GITHUB_OUTPUT"; fi
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+      - name: Build
+        run: |
+          if [ -f gradlew ]; then chmod +x gradlew; ./gradlew --no-daemon build; else gradle --no-daemon build; fi
+      - name: Jar size budget
+        run: |
+          shopt -s nullglob
+          found=0
+          for f in build/libs/*.jar; do
+            case "$f" in *-sources.jar) continue;; esac
+            found=1
+            size=$(stat -c %s "$f")
+            echo "${f}: ${size} bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$size" -gt 262144 ]; then echo "::error::${f} exceeds the 256 KiB budget"; exit 1; fi
+          done
+          if [ "$found" -eq 0 ]; then echo "::error::no jar produced"; exit 1; fi
+      - name: Upload jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: blockvault-${{ matrix.loader }}-${{ github.sha }}
+          path: |
+            ${{ matrix.loader }}/build/libs/*.jar
+            !${{ matrix.loader }}/build/libs/*-sources.jar
+          if-no-files-found: error
+          retention-days: 30
+      - name: API dump (diagnostic only)
+        continue-on-error: true
+        run: |
+          if [ -f gradlew ]; then ./gradlew --no-daemon dumpApi; else gradle --no-daemon dumpApi; fi
+      - name: Upload API dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-dump-${{ matrix.loader }}
+          path: ${{ matrix.loader }}/build/api-dump
+          if-no-files-found: ignore
+          retention-days: 14

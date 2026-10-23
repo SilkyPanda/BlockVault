@@ -1,0 +1,88 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = "${mod_version}+${minecraft_version}"
+group = project.maven_group
+
+base {
+    archivesName = 'blockvault-fabric'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir '../core/src/main/java'
+            srcDir '../shared-client/src/main/java'
+        }
+        resources {
+            srcDir '../core/src/main/resources'
+            srcDir '../shared-client/src/main/resources'
+        }
+    }
+}
+
+loom {
+    mods {
+        "blockvault" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+processResources {
+    def v = project.version
+    inputs.property 'version', v
+    filesMatching('fabric.mod.json') {
+        expand 'version': v
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+    from('../LICENSE') {
+        rename { "${it}_blockvault" }
+    }
+}
+
+tasks.register('dumpApi') {
+    notCompatibleWithConfigurationCache('diagnostic task that shells out to javap')
+    doLast {
+        def out = layout.buildDirectory.dir('api-dump').get().asFile
+        out.mkdirs()
+        def cp = sourceSets.main.compileClasspath.asPath
+        def classes = file('../tools/api-classes.txt').readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') }
+        classes.each { c ->
+            def proc = ['javap', '-public', '-protected', '-cp', cp, c].execute()
+            def text = new StringBuilder()
+            proc.consumeProcessOutput(text, text)
+            proc.waitFor()
+            new File(out, c + '.txt').text = text.toString()
+        }
+        def mcJars = sourceSets.main.compileClasspath.files.findAll { it.name.toLowerCase().contains('minecraft') && it.name.endsWith('.jar') }
+        def index = new StringBuilder()
+        mcJars.each { j ->
+            index.append('# ').append(j.name).append('\n')
+            def p = ['jar', 'tf', j.absolutePath].execute()
+            p.consumeProcessOutput(index, index)
+            p.waitFor()
+        }
+        new File(out, '_class-index.txt').text = index.toString()
+    }
+}

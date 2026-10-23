@@ -1,0 +1,44 @@
+# Client core
+net.minecraft.client.Minecraft
+net.minecraft.client.User
+net.minecraft.client.KeyMapping
+net.minecraft.client.CommandHistory
+# Multiplayer / networking
+net.minecraft.client.multiplayer.ClientPacketListener
+net.minecraft.client.multiplayer.ServerData
+net.minecraft.network.protocol.game.ClientboundSystemChatPacket
+net.minecraft.network.protocol.game.ClientboundCommandsPacket
+net.minecraft.network.protocol.game.ServerboundChatCommandPacket
+net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket
+# Chat
+net.minecraft.client.gui.components.ChatComponent
+net.minecraft.client.gui.screens.ChatScreen
+net.minecraft.network.chat.Component
+# GUI
+net.minecraft.client.gui.screens.Screen
+net.minecraft.client.gui.GuiGraphics
+net.minecraft.client.gui.components.EditBox
+net.minecraft.client.gui.components.Button
+net.minecraft.client.gui.components.AbstractWidget
+net.minecraft.client.gui.components.toasts.ToastManager
+net.minecraft.client.gui.components.toasts.SystemToast
+net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen
+net.minecraft.client.gui.screens.options.OptionsSubScreen
+net.minecraft.client.input.KeyEvent
+net.minecraft.client.input.MouseButtonEvent
+# Brigadier (command tree)
+com.mojang.brigadier.CommandDispatcher
+com.mojang.brigadier.tree.CommandNode
+# Fabric API
+net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
+net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
+net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
+net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
+net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
+# NeoForge
+net.neoforged.neoforge.client.event.ClientChatReceivedEvent
+net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent
+net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent
+net.neoforged.neoforge.client.event.ScreenEvent
+net.neoforged.neoforge.client.gui.IConfigScreenFactory
+net.neoforged.fml.common.Mod

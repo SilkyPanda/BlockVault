@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "blockvault",
+  "version": "${version}",
+  "name": "BlockVault",
+  "description": "Client-side password manager for servers with login/register plugins. Generates, encrypts and autofills per-server passwords.",
+  "authors": ["SilkyPanda"],
+  "contact": {
+    "sources": "https://github.com/SilkyPanda/BlockVault"
+  },
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["io.github.silkypanda.blockvault.fabric.BlockVaultFabric"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
