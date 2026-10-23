@@ -37,6 +37,7 @@ public final class LoginSession {
     private Action action = Action.NONE;
     private long lastPromptAt = Long.MIN_VALUE;
     private PromptKind lastPromptKind;
+    private PromptKind dismissedPromptKind;
     private boolean attempted;
     private boolean registerRetry;
     private boolean canRegister;
@@ -78,6 +79,8 @@ public final class LoginSession {
     public void onSystemMessage(String plain) {
         if (host == null || state == SessionState.CONFIRMED) return;
         prompts.matchPrompt(plain).ifPresent(kind -> {
+            if (kind == dismissedPromptKind) return;
+            dismissedPromptKind = null;
             canRegister = kind == PromptKind.REGISTER;
             arm(kind, plain);
         });
@@ -166,7 +169,21 @@ public final class LoginSession {
 
     /** Dismisses a rejected-password prompt without changing the vault. */
     public void dismissRejectedPrompt() {
-        if (state == SessionState.REJECTED) state = SessionState.UNKNOWN;
+        if (state == SessionState.REJECTED) {
+            dismissedPromptKind = lastPromptKind;
+            state = SessionState.UNKNOWN;
+        }
+    }
+
+    /** Dismisses a pending save or registration card until the server shows a different prompt. */
+    public void dismissPrompt() {
+        if (state != SessionState.PROMPTED) return;
+        dismissedPromptKind = lastPromptKind;
+        state = SessionState.UNKNOWN;
+        action = Action.NONE;
+        promptRevision++;
+        cancelTimer();
+        wipePending();
     }
 
     /** Returns the current connection state. */
@@ -198,6 +215,7 @@ public final class LoginSession {
         canRegister = false;
         lastPromptAt = Long.MIN_VALUE;
         lastPromptKind = null;
+        dismissedPromptKind = null;
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
     }
@@ -205,6 +223,7 @@ public final class LoginSession {
     private boolean contains(String group, String command) { return pack.commandNames(group).contains(command); }
 
     private void arm(PromptKind kind, String plain) {
+        if (kind == dismissedPromptKind) return;
         long now = scheduler.nowMillis();
         if ((lastPromptKind == kind && lastPromptAt != Long.MIN_VALUE && now - lastPromptAt < DEBOUNCE_MILLIS)
                 || state == SessionState.SENT || action == Action.REGISTER || attempted

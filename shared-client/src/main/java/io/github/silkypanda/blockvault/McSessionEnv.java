@@ -50,7 +50,8 @@ final class McSessionEnv implements SessionEnv {
 
     private void showNext() {
         showing = false;
-        if (session != null && session.state() == SessionState.SENT) {
+        if (session != null && (session.state() == SessionState.SENT
+                || session.state() == SessionState.UNKNOWN)) {
             PromptModel stale;
             while ((stale = queuedPrompts.poll()) != null) stale.clearPassword();
             return;

@@ -5,6 +5,7 @@ import io.github.silkypanda.blockvault.core.session.LoginSession;
 import io.github.silkypanda.blockvault.core.session.PromptModel;
 import io.github.silkypanda.blockvault.core.session.Scheduler;
 import io.github.silkypanda.blockvault.core.session.SessionState;
+import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -18,9 +19,9 @@ import net.minecraft.util.FormattedCharSequence;
 
 /** Vanilla credential card shared by save, update, registration, and rejection prompts. */
 final class CredentialConfirmScreen extends Screen {
-    private static final int BASE_WIDTH = 300;
-    private static final int BASE_HEIGHT = 92;
-    private static final int EMAIL_HEIGHT = 116;
+    private static final int BASE_WIDTH = 400;
+    private static final int BASE_HEIGHT = 150;
+    private static final int EMAIL_HEIGHT = 174;
     private final PromptModel model;
     private final LoginSession session;
     private final Runnable closed;
@@ -30,6 +31,7 @@ final class CredentialConfirmScreen extends Screen {
     private boolean closing;
     private boolean registration;
     private boolean emailRequired;
+    private boolean reveal;
     private int cardWidth;
     private int cardHeight;
     private float scale;
@@ -91,18 +93,18 @@ final class CredentialConfirmScreen extends Screen {
         cardY = Math.max(4, Math.min(cardY, height - cardHeight - 4));
 
         int pad = scaled(12);
-        int fieldY = cardY + scaled(36);
+        int fieldY = cardY + scaled(52);
         passwordBox = new EditBox(font, cardX + pad, fieldY, cardWidth - pad * 2, scaled(20),
                 Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(64);
         passwordBox.setHint(Component.translatable("blockvault.card.password"));
         passwordBox.setValue(model.variant() == CardVariant.REJECTED ? "" : new String(password));
         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
-                "\u2022".repeat(value.length()), Style.EMPTY));
+                reveal ? value : "\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(passwordBox);
 
         if (emailRequired) {
-            emailBox = new EditBox(font, cardX + pad, cardY + scaled(60), cardWidth - pad * 2, scaled(20),
+            emailBox = new EditBox(font, cardX + pad, cardY + scaled(80), cardWidth - pad * 2, scaled(20),
                     Component.translatable("blockvault.card.email"));
             emailBox.setHint(Component.translatable("blockvault.card.email"));
             emailBox.setMaxLength(254);
@@ -119,16 +121,32 @@ final class CredentialConfirmScreen extends Screen {
                 : model.variant() == CardVariant.UPDATE ? "blockvault.card.update" : "blockvault.card.save";
         int pad = scaled(12);
         int gap = scaled(6);
-        int buttonY = cardY + scaled(emailRequired ? 84 : 60);
+        int buttonY = cardY + scaled(emailRequired ? 108 : 84);
         int buttonWidth = (cardWidth - pad * 2 - gap) / 2;
         addButton(cardX + pad, buttonY, buttonWidth, actionKey, button -> accept(registration));
         addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.cancel", button -> onClose());
+        int utilityY = buttonY + scaled(24);
+        int utilityWidth = (cardWidth - pad * 2 - gap * 2) / 3;
+        addButton(cardX + pad, utilityY, utilityWidth, "blockvault.card.reveal",
+                button -> { reveal = !reveal; });
+        addButton(cardX + pad + utilityWidth + gap, utilityY, utilityWidth, "blockvault.card.copy",
+                button -> copyFromField());
+        if (registration) {
+            addButton(cardX + pad + (utilityWidth + gap) * 2, utilityY, utilityWidth,
+                    "blockvault.card.regenerate", button -> regenerate());
+        } else {
+            addButton(cardX + pad + (utilityWidth + gap) * 2, utilityY, utilityWidth,
+                    "blockvault.card.never_server", button -> {
+                        VaultRuntime.setNeverSave(model.host(), true);
+                        onClose();
+                    });
+        }
     }
 
     private void initRejectedButtons() {
         int pad = scaled(12);
         int gap = scaled(4);
-        int buttonY = cardY + scaled(60);
+        int buttonY = cardY + scaled(84);
         int buttonWidth = (cardWidth - pad * 2 - gap * 2) / 3;
         addButton(cardX + pad, buttonY, buttonWidth, "blockvault.card.manual", button -> {
             session.dismissRejectedPrompt();
@@ -145,6 +163,11 @@ final class CredentialConfirmScreen extends Screen {
             session.forgetRejectedCredential();
             onClose();
         });
+        int utilityWidth = (cardWidth - pad * 2 - gap) / 2;
+        addButton(cardX + pad, buttonY + scaled(24), utilityWidth, "blockvault.card.reveal",
+                button -> { reveal = !reveal; });
+        addButton(cardX + pad + utilityWidth + gap, buttonY + scaled(24), utilityWidth,
+                "blockvault.card.cancel", button -> onClose());
     }
 
     private void addButton(int x, int y, int buttonWidth, String key, Button.OnPress action) {
@@ -152,6 +175,34 @@ final class CredentialConfirmScreen extends Screen {
             VaultRuntime.activity();
             action.onPress(pressed);
         }).bounds(x, y, buttonWidth, scaled(20)).build());
+    }
+
+    private void regenerate() {
+        char[] next = PasswordGenerator.generate(policy(BlockVaultConfig.current().generator()));
+        wipePassword();
+        password = next;
+        passwordBox.setValue(new String(password));
+    }
+
+    private void copyFromField() {
+        char[] copied = passwordBox.getValue().toCharArray();
+        String value = new String(copied);
+        Arrays.fill(copied, '\0');
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.keyboardHandler.setClipboard(value);
+        VaultRuntime.showToast("blockvault.toast.copied");
+        BackgroundExecutor.scheduler().schedule(30_000, () -> BackgroundExecutor.onGameThread(() -> {
+            if (value.equals(minecraft.keyboardHandler.getClipboard())) minecraft.keyboardHandler.setClipboard("");
+        }));
+    }
+
+    private static PasswordGenerator.Policy policy(String preset) {
+        return switch (preset) {
+            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
+            case "max" -> PasswordGenerator.Policy.max();
+            case "memorable" -> PasswordGenerator.Policy.memorable();
+            default -> PasswordGenerator.Policy.defaults();
+        };
     }
 
     private void accept(boolean registration) {
@@ -207,7 +258,7 @@ final class CredentialConfirmScreen extends Screen {
                 ? model.username() : model.username() + " · " + model.host();
         int maxChars = Math.max(8, (cardWidth - pad * 2) / 6);
         if (identity.length() > maxChars) identity = identity.substring(0, maxChars - 1) + "…";
-        graphics.text(font, Component.literal(identity), cardX + pad, cardY + scaled(22), 0xffb2adbe);
+        graphics.text(font, Component.literal(identity), cardX + pad, cardY + scaled(26), 0xffb2adbe);
     }
 
     private int scaled(int value) { return Math.max(1, Math.round(value * scale)); }
@@ -221,6 +272,7 @@ final class CredentialConfirmScreen extends Screen {
         if (timer != null) timer.cancel();
         timer = null;
         if (model.variant() == CardVariant.REJECTED) session.dismissRejectedPrompt();
+        else if (session.state() == SessionState.PROMPTED) session.dismissPrompt();
         wipePassword();
         if (passwordBox != null) passwordBox.setValue("");
         if (emailBox != null) emailBox.setValue("");

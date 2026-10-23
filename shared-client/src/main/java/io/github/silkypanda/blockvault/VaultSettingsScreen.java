@@ -4,6 +4,7 @@ import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.options.OptionsSubScreen;
 import net.minecraft.network.chat.Component;
 
@@ -89,7 +90,9 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                     pressed.setMessage(label(key, settingValue(key)));
                 } else VaultRuntime.showToast("blockvault.vault.error");
             });
-        }).width(300).build();
+        }).tooltip(Tooltip.create(Component.translatable(
+                "blockvault.settings.description." + key.substring("blockvault.settings.".length())))
+        ).width(300).build();
         list.addBig(button);
     }
 

@@ -4,7 +4,7 @@
   "blockvault.card.register": "Register",
   "blockvault.card.save": "Save",
   "blockvault.card.update": "Update",
-  "blockvault.card.reveal": "Reveal",
+  "blockvault.card.reveal": "Reveal password",
   "blockvault.card.cancel": "Not now",
   "blockvault.vault.title": "BlockVault",
   "blockvault.vault.empty": "No saved accounts",
@@ -77,5 +77,18 @@
   "blockvault.template.authme_noconfirm": "AuthMe (no confirmation)",
   "blockvault.template.nlogin": "nLogin",
   "blockvault.template.loginsecurity": "LoginSecurity",
-  "blockvault.settings.disable_auto_login": "Disable auto-login: %s"
+  "blockvault.settings.disable_auto_login": "Disable auto-login: %s",
+  "blockvault.card.copy": "Copy password",
+  "blockvault.card.regenerate": "Another password",
+  "blockvault.card.never_server": "Never save here",
+  "blockvault.settings.description.autofill": "Automatically enter a saved password when a login prompt is detected.",
+  "blockvault.settings.description.disable_auto_login": "Stop automatic login commands. You can still enter the saved password yourself.",
+  "blockvault.settings.description.delay": "Wait this long after a login prompt before automatic password entry.",
+  "blockvault.settings.description.auto_lock": "Lock the vault after this many minutes without activity. Zero disables auto-lock.",
+  "blockvault.settings.description.duration": "How long credential prompts stay open when you are not interacting with them.",
+  "blockvault.settings.description.position": "Choose which screen corner shows credential prompts.",
+  "blockvault.settings.description.streamer": "Hide server addresses in BlockVault prompts for streams and screenshots.",
+  "blockvault.settings.description.generator": "Password rules used when generating new passwords.",
+  "blockvault.settings.description.scrub_history": "Remove sensitive login commands from Minecraft command history when supported.",
+  "blockvault.settings.description.unlock_policy": "Trust this device to unlock automatically, or ask for the master password on each launch."
 }
