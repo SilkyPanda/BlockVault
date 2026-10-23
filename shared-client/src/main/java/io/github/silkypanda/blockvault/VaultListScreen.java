@@ -39,7 +39,7 @@ final class VaultListScreen extends Screen {
         page = Math.min(page, totalPages() - 1);
         rowButtonWidth = Math.max(1, Math.min(54, (contentWidth - 94) / ROW_ACTIONS));
         rowLabelWidth = Math.max(0, contentWidth - 14 - ROW_ACTIONS * rowButtonWidth);
-        footerButtonWidth = Math.max(1, Math.min(120, (contentWidth - 18) / 4));
+        footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 30) / 6));
         int searchWidth = Math.max(1, Math.min(320, width - 24));
         search = new EditBox(font, (width - searchWidth) / 2, 32, searchWidth, 20,
                 Component.translatable("blockvault.vault.search"));
@@ -83,12 +83,18 @@ final class VaultListScreen extends Screen {
         nextButton.active = page < totalPages() - 1;
         addRenderableWidget(previousButton);
         addRenderableWidget(nextButton);
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.settings"),
-                        button -> { VaultRuntime.activity(); VaultRuntime.openSettingsScreen(this); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.transfer.import.short"),
+                        button -> { VaultRuntime.activity(); MinecraftHolder.open(new VaultTransferScreen(this, true)); })
                 .bounds(contentLeft + (footerButtonWidth + 6) * 2, height - 34, footerButtonWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.lock"),
-                        button -> VaultRuntime.lock())
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.transfer.export.short"),
+                        button -> { VaultRuntime.activity(); MinecraftHolder.open(new VaultTransferScreen(this, false)); })
                 .bounds(contentLeft + (footerButtonWidth + 6) * 3, height - 34, footerButtonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.settings.short"),
+                        button -> { VaultRuntime.activity(); VaultRuntime.openSettingsScreen(this); })
+                .bounds(contentLeft + (footerButtonWidth + 6) * 4, height - 34, footerButtonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.lock.short"),
+                        button -> VaultRuntime.lock())
+                .bounds(contentLeft + (footerButtonWidth + 6) * 5, height - 34, footerButtonWidth, 20).build());
         updateVisibleRows();
     }
 
@@ -137,7 +143,9 @@ final class VaultListScreen extends Screen {
             VaultRow row = visible.get(rowIndex);
             if (!(row.serverName() + " " + row.host() + " " + row.username()).toLowerCase(java.util.Locale.ROOT).contains(query)) continue;
             int y = 72 + rowIndex * 34;
-            graphics.text(font, Component.literal(clip(row.serverName(), rowLabelWidth)), contentLeft, y, 0xffffffff);
+            String serverName = BlockVaultConfig.current().streamerMode()
+                    ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
+            graphics.text(font, Component.literal(clip(serverName, rowLabelWidth)), contentLeft, y, 0xffffffff);
             graphics.text(font, Component.literal(clip(row.username() + " · " + row.status().name(), rowLabelWidth)),
                     contentLeft, y + 12, 0xffb9b4c5);
         }

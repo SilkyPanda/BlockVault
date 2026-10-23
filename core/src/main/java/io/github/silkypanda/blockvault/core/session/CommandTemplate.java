@@ -20,6 +20,7 @@ public record CommandTemplate(String id, String login, String register) {
         return Map.of(
                 "authme", new CommandTemplate("authme", "login {password}", "register {password} {password}"),
                 "authme-noconfirm", new CommandTemplate("authme-noconfirm", "login {password}", "register {password}"),
+                "authme-totp", new CommandTemplate("authme-totp", "login {password} {totp}", "register {password} {password}"),
                 "nlogin", new CommandTemplate("nlogin", "login {password}", "register {password} {password}"),
                 "loginsecurity", new CommandTemplate("loginsecurity", "login {password}", "register {password} {password}"));
     }

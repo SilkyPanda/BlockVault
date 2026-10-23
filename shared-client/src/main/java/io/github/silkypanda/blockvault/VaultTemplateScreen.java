@@ -11,6 +11,7 @@ final class VaultTemplateScreen extends Screen {
     private static final Map<String, String> LABELS = Map.of(
             "authme", "blockvault.template.authme",
             "authme-noconfirm", "blockvault.template.authme_noconfirm",
+            "authme-totp", "blockvault.template.authme_totp",
             "nlogin", "blockvault.template.nlogin",
             "loginsecurity", "blockvault.template.loginsecurity");
     private final VaultRow row;
@@ -41,7 +42,9 @@ final class VaultTemplateScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        graphics.centeredText(font, Component.translatable("blockvault.template.server", row.serverName()),
+        String serverName = BlockVaultConfig.current().streamerMode()
+                ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
+        graphics.centeredText(font, Component.translatable("blockvault.template.server", serverName),
                 width / 2, height / 2 - 76, 0xffffffff);
     }
 

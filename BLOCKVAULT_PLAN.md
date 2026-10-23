@@ -55,7 +55,6 @@ What the mod is: a client-only password manager for servers that use login plugi
 - Vault lives OUTSIDE any Minecraft instance folder (section 7.4).
 - Autofill rules: only react to **system chat messages** (never signed player chat), at most **one autofill attempt per connection**, never retry after a failure message, only send to the server address the entry was saved for.
 - Keep login-type commands out of vanilla command history (verify the mechanism in 26.3, section 8.3).
-- Clipboard copy of a password clears after 5 minutes only if the current clipboard still contains that exact value. It cannot erase copies already recorded by OS or application clipboard history.
 - No networking APIs anywhere (CI enforced). No telemetry, no update checks.
 
 ### 2.2 Performance and size
@@ -784,7 +783,7 @@ Wrap AAD (for AES-GCM wrapping) = header bytes [0, 28).
 - Tests: length, class guarantees, forbidden characters never appear over 100k generations, chi-square uniformity sanity check over the character set, rejection sampling unit test with a fake random source.
 
 ### 7.6 `totp` - `Totp`
-RFC 6238, HMAC-SHA1 (and SHA256/SHA512 supported), 6 digits, 30 s step; base32 decode without dependencies. `static String code(String base32Secret, long epochSeconds)`. Tests use the RFC 6238 appendix vectors.
+RFC 6238, HMAC-SHA1 (and SHA256/SHA512 supported), 6 digits, 30 s step; base32 decode without dependencies. `static String code(String base32Secret, long epochSeconds)`. Tests use the RFC 6238 appendix vectors. When an account has a valid Base32 secret and its selected template includes `{totp}`, compute a fresh code at send time. The explicit AuthMe password-plus-TOTP template sends `login {password} {totp}`; servers with other syntax require a suitable template. If the selected template requires TOTP but the account has no valid secret, do not autofill.
 
 ### 7.7 `net`-free host handling - `HostKey`
 `static String normalize(String address)`: lowercase, trim, strip a trailing dot, strip IPv6 brackets handling correctly, default port 25565 -> keep canonical form `host:25565` always. Examples: `Play.Example.NET` -> `play.example.net:25565`; `play.example.net:25570` -> same with 25570; `[::1]:25565` -> `[::1]:25565`. Tests for all of these plus malformed input (returns empty Optional, never throws).
@@ -904,7 +903,7 @@ GUI rendering APIs were reworked repeatedly in the 26.x line: read the `Screen`/
 Toasts for short confirmations ("Saved", "Autofilled", "Vault locked") use the vanilla toast system.
 
 ### 8.6 Vault screen
-Keybind (default unbound or a rarely used key; verify no conflict) and the multiplayer-screen button open it. List of servers (search box), per server: accounts, reveal (requires re-confirming the master password in master mode), copy (5 minute current-clipboard clear if unchanged), edit, delete, generate new, edit command template, toggle autofill/neverSave. Footer: Lock now, Settings, Import, Export. Pagination and controls must stay within visible screen bounds; next/previous are clamped to valid pages.
+Keybind (default unbound or a rarely used key; verify no conflict) and the multiplayer-screen button open it. List of servers (search box), per server: accounts, reveal (requires re-confirming the master password in master mode), copy to the operating-system clipboard, edit, delete, generate new, edit command template, toggle autofill/neverSave. Footer: Lock now, Settings, Import, Export. Import accepts an encrypted vault file plus its master password and merges entries by modification time. Export writes a byte-for-byte encrypted copy to a new path. Pagination and controls must stay within visible screen bounds; next/previous are clamped to valid pages.
 
 ### 8.7 Settings screen
 Built on vanilla `OptionsSubScreen`/`OptionsList` (no config library). Options: autofill on/off, explicit disable auto-login override (default off), autofill delay, master-password prompt policy (`Ask every launch` or `Trust this device`, default trusted), auto-lock minutes, generator presets with descriptions, streamer mode, card position/duration, history scrub on/off, "Wipe vault" (double confirm). Each setting explains its effect on hover. Fabric: provide the settings screen through Mod Menu. For Minecraft 26.3 use the owner-supplied Mod Menu 21.0.0 artifact `maven.modrinth:mOgUt4GM:kyy7dbrZ` from `https://api.modrinth.com/maven`, as a plain `implementation` dependency; Minecraft 26.x is unobfuscated, and Loom 1.18.2 does not provide `modCompileOnly`. Mod Menu remains optional in `fabric.mod.json` and is not included inside the BlockVault jar. NeoForge: register an explicitly typed `IConfigScreenFactory` instance via the mod container to disambiguate its instance and supplier overloads.

@@ -26,14 +26,12 @@ import org.slf4j.LoggerFactory;
 
 /** Background-thread vault facade used by the login session. */
 public final class VaultRuntime implements VaultAccess {
-    private static final long CLIPBOARD_CLEAR_DELAY_MILLIS = 5 * 60 * 1000L;
     private static final Logger LOGGER = LoggerFactory.getLogger("BlockVault");
     private static final ArrayDeque<Runnable> WAITING = new ArrayDeque<>();
     private static VaultStore store;
     private static volatile boolean accessScreenOpen;
     private static volatile boolean trustedUnlockAttempted;
     private static Scheduler.Handle autoLockTimer;
-    private static long clipboardGeneration;
 
     /** Returns the shared vault facade. */
     public static VaultRuntime access() { return Holder.INSTANCE; }
@@ -199,7 +197,10 @@ public final class VaultRuntime implements VaultAccess {
                     if (store != null) store.lock();
                     BackgroundExecutor.onGameThread(() -> {
                         if (Minecraft.getInstance().gui.screen() instanceof VaultListScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultCredentialScreen) {
+                                || Minecraft.getInstance().gui.screen() instanceof VaultCredentialScreen
+                                || Minecraft.getInstance().gui.screen() instanceof VaultTemplateScreen
+                                || Minecraft.getInstance().gui.screen() instanceof VaultDeleteScreen
+                                || Minecraft.getInstance().gui.screen() instanceof VaultTransferScreen) {
                             Minecraft.getInstance().setScreenAndShow(null);
                         }
                         toast("blockvault.toast.locked");
@@ -238,6 +239,15 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
+    /** Returns the saved Base32 TOTP secret on the game thread; no secret is logged. */
+    static void revealTotpSecret(VaultRow row, Consumer<String> result) {
+        withVault(() -> {
+            Account account = findAccount(row.host(), row.username());
+            String secret = account == null ? null : account.totpSecret();
+            BackgroundExecutor.onGameThread(() -> result.accept(secret));
+        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(null)));
+    }
+
     static void requiresMasterPassword(Consumer<Boolean> result) {
         BackgroundExecutor.submit(() -> {
             try {
@@ -272,7 +282,7 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Copies one credential and clears the current clipboard after five minutes if unchanged. */
+    /** Copies one credential to the system clipboard. */
     static void copyPassword(VaultRow row) {
         withVault(() -> {
             Account account = findAccount(row.host(), row.username());
@@ -286,30 +296,49 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Copies a caller-provided password and clears it after five minutes only if it remains current. */
+    /** Copies a caller-provided password to the system clipboard. */
     static void copyToClipboard(String clipboardValue) {
         Minecraft minecraft = Minecraft.getInstance();
-        long generation = ++clipboardGeneration;
         minecraft.keyboardHandler.setClipboard(clipboardValue);
         toast("blockvault.toast.copied");
-        BackgroundExecutor.scheduler().schedule(CLIPBOARD_CLEAR_DELAY_MILLIS, () ->
-                BackgroundExecutor.onGameThread(() -> {
-                    if (generation == clipboardGeneration
-                            && clipboardValue.equals(minecraft.keyboardHandler.getClipboard())) {
-                        minecraft.keyboardHandler.setClipboard("");
-                    }
-                }));
+    }
+
+    static void exportVault(java.nio.file.Path destination, Consumer<Boolean> result) {
+        withVault(() -> {
+            boolean success = false;
+            try { store.exportEncrypted(destination); success = true; }
+            catch (IOException failure) { LOGGER.warn("BlockVault could not export the encrypted vault"); }
+            boolean exported = success;
+            BackgroundExecutor.onGameThread(() -> result.accept(exported));
+        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(false)));
+    }
+
+    static void importVault(java.nio.file.Path source, char[] masterPassword, Consumer<Boolean> result) {
+        char[] password = masterPassword.clone();
+        Arrays.fill(masterPassword, '\0');
+        withVault(() -> {
+            boolean success = false;
+            try { store.mergeEncrypted(source, password); success = true; }
+            catch (Exception failure) { LOGGER.warn("BlockVault could not import the encrypted vault"); }
+            finally { Arrays.fill(password, '\0'); }
+            boolean imported = success;
+            BackgroundExecutor.onGameThread(() -> result.accept(imported));
+        }, () -> {
+            Arrays.fill(password, '\0');
+            BackgroundExecutor.onGameThread(() -> result.accept(false));
+        });
     }
 
     /** Saves an edited credential as verified. */
-    static void updatePassword(VaultRow row, char[] password) {
+    static void updatePassword(VaultRow row, char[] password, String totpSecret) {
         char[] copy = password.clone();
         withVault(() -> {
             try {
                 changeAccount(row.host(), row.username(), old -> new Account(row.username(), copy,
                         Account.Status.VERIFIED, old == null ? System.currentTimeMillis() : old.createdAt(),
                         System.currentTimeMillis(), old == null ? 0 : old.lastUsedAt(),
-                        old == null ? null : old.totpSecret(), old == null ? null : withoutDeletedFlag(old)));
+                        totpSecret == null || totpSecret.isBlank() ? null : totpSecret.trim(),
+                        old == null ? null : withoutDeletedFlag(old)));
                 BackgroundExecutor.onGameThread(() -> toast("blockvault.toast.saved"));
             } finally { Arrays.fill(copy, '\0'); }
         });

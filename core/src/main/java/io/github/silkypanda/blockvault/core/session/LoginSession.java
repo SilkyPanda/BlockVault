@@ -6,6 +6,7 @@ import io.github.silkypanda.blockvault.core.detect.PromptMatcher;
 import io.github.silkypanda.blockvault.core.detect.ResultKind;
 import io.github.silkypanda.blockvault.core.detect.ResultMatcher;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
+import io.github.silkypanda.blockvault.core.totp.Totp;
 import io.github.silkypanda.blockvault.core.vault.Account;
 import java.util.Arrays;
 import java.util.Locale;
@@ -33,6 +34,7 @@ public final class LoginSession {
     private String host;
     private String username;
     private CommandTemplate template = CommandTemplate.builtins().get("authme");
+    private char[] totpSecret;
     private char[] pending;
     private Action action = Action.NONE;
     private long lastPromptAt = Long.MIN_VALUE;
@@ -218,6 +220,7 @@ public final class LoginSession {
         dismissedPromptKind = null;
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
+        wipeTotpSecret();
     }
 
     private boolean contains(String group, String command) { return pack.commandNames(group).contains(command); }
@@ -243,6 +246,8 @@ public final class LoginSession {
             if (token != generation || revision != promptRevision || state != SessionState.PROMPTED) return;
             if (saved != null && saved.template() != null) template = saved.template();
             Account account = saved == null ? null : saved.account();
+            wipeTotpSecret();
+            totpSecret = account == null || account.totpSecret() == null ? null : account.totpSecret().toCharArray();
             if (kind == PromptKind.REGISTER) {
                 if (saved != null && saved.neverSave()) return;
                 if (account != null && account.status() == Account.Status.PENDING) {
@@ -276,12 +281,35 @@ public final class LoginSession {
 
     private void send(boolean registration, String email, int token) {
         if (token != generation || pending == null) return;
+        String commandTemplate = registration ? template.register() : template.login();
+        String totp = null;
+        if (commandTemplate.contains("{totp}")) {
+            if (totpSecret == null) {
+                state = SessionState.UNKNOWN;
+                action = Action.NONE;
+                wipePending();
+                env.toast("blockvault.toast.totp_missing");
+                return;
+            }
+            try { totp = Totp.code(new String(totpSecret), System.currentTimeMillis() / 1000L); }
+            catch (IllegalArgumentException invalidSecret) {
+                state = SessionState.UNKNOWN;
+                action = Action.NONE;
+                wipePending();
+                env.toast("blockvault.toast.totp_invalid");
+                return;
+            }
+        }
         cancelTimer();
         attempted = true;
         state = SessionState.SENT;
         char[] copy = pending.clone();
-        try { env.sendCommand(template.render(registration, copy, email, username, null)); }
-        finally { Arrays.fill(copy, '\0'); }
+        try {
+            env.sendCommand(template.render(registration, copy, email, username, totp));
+        } finally {
+            Arrays.fill(copy, '\0');
+            wipeTotpSecret();
+        }
         timer = scheduler.schedule(RESULT_TIMEOUT_MILLIS, () -> {
             if (token == generation && state == SessionState.SENT) {
                 state = SessionState.UNKNOWN;
@@ -372,5 +400,10 @@ public final class LoginSession {
     private void wipePending() {
         if (pending != null) Arrays.fill(pending, '\0');
         pending = null;
+    }
+
+    private void wipeTotpSecret() {
+        if (totpSecret != null) Arrays.fill(totpSecret, '\0');
+        totpSecret = null;
     }
 }

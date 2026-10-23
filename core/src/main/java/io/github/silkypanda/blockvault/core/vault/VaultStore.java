@@ -161,6 +161,62 @@ public final class VaultStore {
         return vault;
     }
 
+    /** Exports a byte-for-byte copy of the encrypted vault; destination must not already exist. */
+    public void exportEncrypted(Path destination) throws IOException {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        Path target = destination.toAbsolutePath().normalize();
+        if (target.equals(path("vault.bv")) || !Files.isRegularFile(path("vault.bv"))) {
+            throw new IOException("Invalid encrypted vault export destination");
+        }
+        Path parent = target.getParent();
+        if (parent == null) throw new IOException("Export destination has no parent directory");
+        Files.createDirectories(parent);
+        Path temporary = Files.createTempFile(parent, ".blockvault-export-", ".tmp");
+        try {
+            setPermissions(temporary, false);
+            Files.copy(path("vault.bv"), temporary, StandardCopyOption.REPLACE_EXISTING);
+            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE)) { channel.force(true); }
+            try { Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE); }
+            catch (java.nio.file.AtomicMoveNotSupportedException unsupported) { Files.move(temporary, target); }
+            setPermissions(target, false);
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    /** Decrypts an encrypted export using its master password, merges it, and re-encrypts locally. */
+    public void mergeEncrypted(Path source, char[] masterPassword) throws Exception {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        Path normalized = source.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(normalized) || normalized.equals(path("vault.bv"))) {
+            throw new IOException("Invalid encrypted vault import source");
+        }
+        byte[] encoded = readBounded(normalized);
+        Path temporaryDirectory = Files.createTempDirectory("blockvault-import-");
+        VaultStore imported = null;
+        try {
+            setPermissions(temporaryDirectory, true);
+            Path importedFile = temporaryDirectory.resolve("vault.bv");
+            Files.write(importedFile, encoded, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            setPermissions(importedFile, false);
+            imported = VaultStore.open(temporaryDirectory);
+            imported.unlock(masterPassword);
+            byte[] mergedJson = VaultJson.write(VaultMerger.merge(vault, imported.vault(), System.currentTimeMillis()));
+            try {
+                Vault independent = VaultJson.read(mergedJson);
+                save(independent);
+            } finally {
+                SecureBytes.wipe(mergedJson);
+            }
+        } finally {
+            SecureBytes.wipe(encoded);
+            if (imported != null) imported.lock();
+            Files.deleteIfExists(temporaryDirectory.resolve("vault.bv"));
+            Files.deleteIfExists(temporaryDirectory.resolve("vault.bv.lock"));
+            Files.deleteIfExists(temporaryDirectory);
+        }
+    }
+
     /** Atomically encrypts and persists the supplied vault, rotating three backups. */
     public void save(Vault value) throws IOException {
         if (vaultKey == null || header == null || wrappedKey == null) throw new IllegalStateException("Vault is locked");

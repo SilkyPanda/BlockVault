@@ -38,6 +38,8 @@ The directory can also be overridden with the Java system property `blockvault.d
 
 `vault.bv` and the rotating `vault.bv.bak1` through `vault.bv.bak3` files hold the encrypted vault, including saved server passwords and any TOTP secrets. With `Trust this device` enabled, `vault.bv.trust` holds the random vault key, not the master password. `config.json` stores preferences only. `patterns.json` is optional custom prompt-detection data.
 
+The vault screen can export a byte-for-byte encrypted vault copy to a new file. Importing accepts that encrypted file and its master password, then merges server/account entries by modification time. Exports remain sensitive files: protect them as you would a password-protected vault and keep the master password separate.
+
 Deleting an account in the vault removes it from the current vault; older encrypted backups rotate out as later saves occur. BlockVault does not automatically erase its data directory when you uninstall the mod. To remove everything, exit Minecraft and delete the BlockVault data directory above. This also removes all saved accounts, backups, the trusted-device key, and settings.
 
-Copying a password schedules the current clipboard to clear after five minutes, but only if it still contains that exact password. This changes the active clipboard value; it cannot remove copies already saved by Windows clipboard history or third-party clipboard managers. If Minecraft exits before the timer runs, clear the active clipboard yourself. Disable clipboard history in your operating system or clipboard manager if you do not want copied passwords retained there.
+Copying a password places it on the operating-system clipboard. BlockVault does not clear it automatically. Clipboard history features or clipboard manager apps may retain additional copies; clear those separately if needed.

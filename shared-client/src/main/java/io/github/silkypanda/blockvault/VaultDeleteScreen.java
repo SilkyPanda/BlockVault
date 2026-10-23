@@ -28,8 +28,10 @@ final class VaultDeleteScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        String serverName = BlockVaultConfig.current().streamerMode()
+                ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
         graphics.centeredText(font, Component.translatable("blockvault.vault.delete.prompt",
-                Component.literal(row.username()), Component.literal(row.serverName())), width / 2,
+                Component.literal(row.username()), Component.literal(serverName)), width / 2,
                 height / 2 - 8, 0xffffffff);
     }
 
