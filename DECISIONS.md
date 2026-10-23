@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-10-23 — Repair API dump and refresh deprecated Actions
+
+The plan's `javap -public -protected` invocation fails on the installed JDK because those visibility selectors are mutually exclusive. Use `javap -protected`, which emits public and protected members, in both loader dump tasks. The supplied artifacts confirmed that every class dump had the same option error, so M3 API work remains blocked until CI regenerates both artifacts with this fix. The CI annotation report also showed Node.js 20 runtime and `setup-java@v4` deprecation warnings. Upgrade checkout to v7, setup-java to v6, setup-gradle to v6, and upload-artifact to v7; these upstream versions use Node.js 24. This changes build tooling only and leaves CI limited to build/test/artifact functions.
+
 ## 2026-10-23 — CI result reported by owner, but not attributable here
 
 The owner reports that the repository built successfully. The supplied workspace has an empty, read-only `.git` directory and no `gh` executable, so the run SHA, result, and API artifacts cannot be inspected and these workspace changes cannot be committed or pushed. M0 remains PARTIAL until its green run can be associated with a commit. M3 remains blocked on reading both API dumps; no Minecraft API names were added in this continuation.

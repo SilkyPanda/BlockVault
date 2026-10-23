@@ -83,7 +83,8 @@ tasks.register('dumpApi') {
         def cp = sourceSets.main.compileClasspath.asPath
         def classes = file('../tools/api-classes.txt').readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') }
         classes.each { c ->
-            def proc = ['javap', '-public', '-protected', '-cp', cp, c].execute()
+            // javap rejects combining -public and -protected; -protected includes both.
+            def proc = ['javap', '-protected', '-cp', cp, c].execute()
             def text = new StringBuilder()
             proc.consumeProcessOutput(text, text)
             proc.waitFor()

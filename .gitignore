@@ -10,3 +10,7 @@ run/
 .settings/
 *.log
 !gradle/wrapper/gradle-wrapper.jar
+/api-dump-fabric/
+/api-dump-neoforge/
+/test/
+/.ci-artifacts/

@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check project rules
         run: bash scripts/check-rules.sh
 
@@ -35,8 +35,8 @@ jobs:
       run:
         working-directory: core
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -44,7 +44,7 @@ jobs:
         id: gradle
         run: |
           if [ -f gradlew ]; then echo "version=wrapper" >> "$GITHUB_OUTPUT"; else echo "version=${FALLBACK_GRADLE_VERSION}" >> "$GITHUB_OUTPUT"; fi
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ steps.gradle.outputs.version }}
       - name: Test
@@ -52,7 +52,7 @@ jobs:
           if [ -f gradlew ]; then chmod +x gradlew; ./gradlew --no-daemon test; else gradle --no-daemon test; fi
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: core-test-reports
           path: core/build/reports/tests
@@ -71,8 +71,8 @@ jobs:
       run:
         working-directory: ${{ matrix.loader }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -80,7 +80,7 @@ jobs:
         id: gradle
         run: |
           if [ -f gradlew ]; then echo "version=wrapper" >> "$GITHUB_OUTPUT"; else echo "version=${FALLBACK_GRADLE_VERSION}" >> "$GITHUB_OUTPUT"; fi
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ steps.gradle.outputs.version }}
       - name: Build
@@ -99,7 +99,7 @@ jobs:
           done
           if [ "$found" -eq 0 ]; then echo "::error::no jar produced"; exit 1; fi
       - name: Upload jars
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blockvault-${{ matrix.loader }}-${{ github.sha }}
           path: |
@@ -113,7 +113,7 @@ jobs:
           if [ -f gradlew ]; then ./gradlew --no-daemon dumpApi; else gradle --no-daemon dumpApi; fi
       - name: Upload API dump
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: api-dump-${{ matrix.loader }}
           path: ${{ matrix.loader }}/build/api-dump
