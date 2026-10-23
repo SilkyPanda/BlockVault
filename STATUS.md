@@ -19,12 +19,13 @@ Updated: 2026-10-24
 - The NeoForge development-environment flag is also unverified and intentionally returns false pending a dump of the relevant loader API.
 - M4 credential card, vault list/editor, settings, clipboard clearing, and template selection compiled in the owner-reported green Actions run but still need in-game verification on both loaders.
 - M5 changes are not yet compiled by CI. Trusted-device auto-unlock, deleting the trust file when disabled, password fallback, and the settings default need in-game verification after CI passes.
-- Current working changes fix the card texture endpoint ordering found in the 26.3 client bytecode, widen the card controls, suppress duplicate registration prompts, add the `disableAutoLogin` override, and expose settings through the verified NeoForge config-screen extension point. These edits have not been compiled by CI.
-- Fabric Mod Menu still has no config entrypoint. The Mod Menu API artifact/version is not present in the workspace, API dumps, or local Gradle cache. Per the plan, its API must be read before adding the dependency or entrypoint; this part needs the exact Mod Menu API artifact/version.
+- Commit `4f3ec79` fixes credential-card texture endpoints and suppresses duplicate registration prompts; CI/build and in-game verification are pending.
+- Commit `53071a9` adds `disableAutoLogin` and a NeoForge config-screen factory. The owner reports its CI failed because NeoForge could not disambiguate the `registerExtensionPoint` overload; that call is now explicitly typed. CI has not rerun this correction.
+- Current working changes add Fabric Mod Menu 21.0.0 using the owner-provided Modrinth coordinate and config entrypoint. They also contain the explicit NeoForge factory typing fix. These changes need CI.
 - Nothing has been verified in-game.
 
 ## CI
 
 - Last owner-reported green commit: `be0f292` (`feat: add vault screens and settings`).
-- Latest local commit is `fa6e01d` (`feat: add trusted-device vault unlock`); it has not been reported green by CI.
-- CI status: the owner reports the M4 build passed on `be0f292`. The revised M5 changes and removal of diagnostic API-dump jobs are uncommitted and need a CI run. API dumps are no longer part of the workflow because M5 adds no loader API work.
+- Latest commit reported by the owner: `53071a9` (`feat: add auto-login setting and NeoForge config screen`); its NeoForge compile failed as recorded above. New Mod Menu and overload fixes are uncommitted and need a CI run.
+- API-dump artifacts remain out of the workflow; the owner supplied the exact Mod Menu artifact needed for the Fabric integration.

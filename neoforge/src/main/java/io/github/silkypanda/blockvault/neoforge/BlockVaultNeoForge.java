@@ -18,7 +18,7 @@ public final class BlockVaultNeoForge {
         BlockVault.init(new NeoForgePlatform());
         NeoForgeClientHooks.register(modBus);
         container.registerExtensionPoint(IConfigScreenFactory.class,
-                () -> (modContainer, parent) -> VaultRuntime.createSettingsScreen(parent));
+                (IConfigScreenFactory) (modContainer, parent) -> VaultRuntime.createSettingsScreen(parent));
     }
 
     private static final class NeoForgePlatform implements Platform {

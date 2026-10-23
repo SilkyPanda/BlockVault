@@ -12,12 +12,16 @@
   "mixins": ["blockvault.mixins.json"],
   "environment": "client",
   "entrypoints": {
-    "client": ["io.github.silkypanda.blockvault.fabric.BlockVaultFabric"]
+    "client": ["io.github.silkypanda.blockvault.fabric.BlockVaultFabric"],
+    "modmenu": ["io.github.silkypanda.blockvault.fabric.BlockVaultModMenu"]
   },
   "depends": {
     "fabricloader": ">=0.19.5",
     "minecraft": "~26.3",
     "java": ">=25",
     "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
   }
 }
