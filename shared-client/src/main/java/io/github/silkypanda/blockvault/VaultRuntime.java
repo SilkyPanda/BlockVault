@@ -218,6 +218,12 @@ public final class VaultRuntime implements VaultAccess {
         Minecraft.getInstance().setScreenAndShow(new VaultSettingsScreen(parent));
     }
 
+    /** Creates the settings screen for loader-provided config-screen entrypoints. */
+    public static net.minecraft.client.gui.screens.Screen createSettingsScreen(
+            net.minecraft.client.gui.screens.Screen parent) {
+        return new VaultSettingsScreen(parent);
+    }
+
     /** Reveals a selected credential only for the duration of the callback. */
     static void revealPassword(VaultRow row, Consumer<char[]> result) {
         withVault(() -> {

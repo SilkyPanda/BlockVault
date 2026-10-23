@@ -64,7 +64,7 @@ final class BlockVaultConfig {
                 integer(json, "cardDurationSeconds", 1, 60, defaults.cardDurationSeconds()),
                 string(json, "cardPosition", defaults.cardPosition()), bool(json, "streamerMode", defaults.streamerMode()),
                 string(json, "generator", defaults.generator()), bool(json, "scrubHistory", defaults.scrubHistory()),
-                bool(json, "trustDevice", defaults.trustDevice()));
+                bool(json, "trustDevice", defaults.trustDevice()), bool(json, "disableAutoLogin", defaults.disableAutoLogin()));
     }
 
     private static void write(Path path, Settings settings) throws Exception {
@@ -79,6 +79,7 @@ final class BlockVaultConfig {
         json.addProperty("generator", settings.generator());
         json.addProperty("scrubHistory", settings.scrubHistory());
         json.addProperty("trustDevice", settings.trustDevice());
+        json.addProperty("disableAutoLogin", settings.disableAutoLogin());
         Files.writeString(path, json.toString());
     }
 
@@ -99,16 +100,17 @@ final class BlockVaultConfig {
 
     record Settings(boolean autofill, int autofillDelayMillis, int autoLockMinutes, int cardDurationSeconds,
                     String cardPosition, boolean streamerMode, String generator, boolean scrubHistory,
-                    boolean trustDevice) {
-        static Settings defaults() { return new Settings(true, 400, 15, 10, "top_right", false, "defaults", true, true); }
-        Settings withAutofill(boolean value) { return new Settings(value, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withDelay(int value) { return new Settings(autofill, value, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withAutoLock(int value) { return new Settings(autofill, autofillDelayMillis, value, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withDuration(int value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, value, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withPosition(String value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, value, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withStreamer(boolean value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, value, generator, scrubHistory, trustDevice); }
-        Settings withGenerator(String value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, value, scrubHistory, trustDevice); }
-        Settings withScrubHistory(boolean value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, value, trustDevice); }
-        Settings withTrustDevice(boolean value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, value); }
+                    boolean trustDevice, boolean disableAutoLogin) {
+        static Settings defaults() { return new Settings(true, 400, 15, 10, "top_right", false, "defaults", true, true, false); }
+        Settings withAutofill(boolean value) { return new Settings(value, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice, disableAutoLogin); }
+        Settings withDisableAutoLogin(boolean value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice, value); }
+        Settings withDelay(int value) { return new Settings(autofill, value, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice, disableAutoLogin); }
+        Settings withAutoLock(int value) { return new Settings(autofill, autofillDelayMillis, value, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice, disableAutoLogin); }
+        Settings withDuration(int value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, value, cardPosition, streamerMode, generator, scrubHistory, trustDevice, disableAutoLogin); }
+        Settings withPosition(String value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, value, streamerMode, generator, scrubHistory, trustDevice, disableAutoLogin); }
+        Settings withStreamer(boolean value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, value, generator, scrubHistory, trustDevice, disableAutoLogin); }
+        Settings withGenerator(String value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, value, scrubHistory, trustDevice, disableAutoLogin); }
+        Settings withScrubHistory(boolean value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, value, trustDevice, disableAutoLogin); }
+        Settings withTrustDevice(boolean value) { return new Settings(autofill, autofillDelayMillis, autoLockMinutes, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, value, disableAutoLogin); }
     }
 }

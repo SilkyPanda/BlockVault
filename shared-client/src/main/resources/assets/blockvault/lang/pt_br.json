@@ -5,7 +5,7 @@
   "blockvault.card.register": "Register",
   "blockvault.card.save": "Save login",
   "blockvault.card.update": "Update login",
-  "blockvault.card.reveal": "Show or hide password",
+  "blockvault.card.reveal": "Reveal",
   "blockvault.card.cancel": "Not now",
   "blockvault.vault.title": "BlockVault",
   "blockvault.vault.empty": "No saved accounts",
@@ -31,8 +31,8 @@
   "blockvault.card.unlock.title": "Unlock vault",
   "blockvault.card.accept": "Continue: %s",
   "blockvault.card.copy": "Copy",
-  "blockvault.card.regenerate": "Generate new",
-  "blockvault.card.never_server": "Never save here",
+  "blockvault.card.regenerate": "New password",
+  "blockvault.card.never_server": "Never here",
   "blockvault.card.manual": "Enter manually",
   "blockvault.card.forget": "Forget",
   "blockvault.card.rejected.description": "The saved password was not accepted.",
@@ -84,5 +84,6 @@
   "blockvault.template.authme": "AuthMe (login and confirmation)",
   "blockvault.template.authme_noconfirm": "AuthMe (no confirmation)",
   "blockvault.template.nlogin": "nLogin",
-  "blockvault.template.loginsecurity": "LoginSecurity"
+  "blockvault.template.loginsecurity": "LoginSecurity",
+  "blockvault.settings.disable_auto_login": "Disable auto-login: %s"
 }
