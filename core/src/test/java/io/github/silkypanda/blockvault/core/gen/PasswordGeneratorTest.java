@@ -33,7 +33,8 @@ final class PasswordGeneratorTest {
     void rejectionSamplingRejectsHighUnsignedValue() {
         RandomGenerator fake = new RandomGenerator() {
             private int calls;
-            @Override public long nextLong() { return calls++ == 0 ? -1L : 1L; }
+            @Override public int nextInt() { return calls++ == 0 ? -1 : 1; }
+            @Override public long nextLong() { throw new UnsupportedOperationException(); }
         };
         assertEquals(1, PasswordGenerator.uniformIndex(fake, 10));
     }
