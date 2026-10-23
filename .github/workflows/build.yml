@@ -107,15 +107,3 @@ jobs:
             !${{ matrix.loader }}/build/libs/*-sources.jar
           if-no-files-found: error
           retention-days: 30
-      - name: API dump (diagnostic only)
-        continue-on-error: true
-        run: |
-          if [ -f gradlew ]; then ./gradlew --no-daemon dumpApi; else gradle --no-daemon dumpApi; fi
-      - name: Upload API dump
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: api-dump-${{ matrix.loader }}
-          path: ${{ matrix.loader }}/build/api-dump
-          if-no-files-found: ignore
-          retention-days: 14

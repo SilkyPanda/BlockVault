@@ -30,6 +30,7 @@ public final class VaultRuntime implements VaultAccess {
     private static final ArrayDeque<Runnable> WAITING = new ArrayDeque<>();
     private static VaultStore store;
     private static volatile boolean accessScreenOpen;
+    private static volatile boolean trustedUnlockAttempted;
     private static Scheduler.Handle autoLockTimer;
 
     /** Returns the shared vault facade. */
@@ -109,13 +110,24 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Creates or unlocks a master-password vault, then resumes operations waiting on it. */
     public static void openWithMasterPassword(char[] password, boolean create) {
-        BackgroundExecutor.submit(() -> {
+        BlockVaultConfig.load(settings -> BackgroundExecutor.submit(() -> {
             try {
                 ensureStore();
-                if (create) store.create(KeyMode.MASTER_PASSWORD, password, null);
+                if (create) store.create(password);
                 else {
-                    if (store.keyMode() != KeyMode.MASTER_PASSWORD) throw new IllegalStateException("Device vault requires a supported provider");
+                    if (store.keyMode() != KeyMode.MASTER_PASSWORD) throw new IllegalStateException("Unsupported vault key mode");
                     store.unlock(password);
+                }
+                trustedUnlockAttempted = true;
+                if (settings.trustDevice()) {
+                    try { store.trustThisDevice(); }
+                    catch (IOException failure) {
+                        LOGGER.warn("BlockVault could not save the trusted-device key");
+                        BackgroundExecutor.onGameThread(() -> toast("blockvault.toast.trust_failed"));
+                    }
+                } else {
+                    try { store.forgetTrustedDevice(); }
+                    catch (IOException failure) { LOGGER.warn("BlockVault could not remove its trusted-device key"); }
                 }
                 accessScreenOpen = false;
                 BackgroundExecutor.onGameThread(() -> {
@@ -133,7 +145,7 @@ public final class VaultRuntime implements VaultAccess {
                 });
             } finally { Arrays.fill(password, '\0'); }
             return null;
-        });
+        }));
     }
 
     /** Allows a dismissed access screen to be requested again on the next vault operation. */
@@ -141,37 +153,29 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Opens the vault view if unlocked, otherwise asks for its master password. */
     public static void openVaultScreen() {
-        BackgroundExecutor.submit(() -> {
+        BlockVaultConfig.load(settings -> BackgroundExecutor.submit(() -> {
             try {
                 ensureStore();
                 if (!store.exists()) {
                     requestAccessScreen(true);
                 } else {
-                    try {
-                        Vault vault = store.vault();
-                        List<VaultRow> rows = vault.servers().stream().flatMap(server ->
-                                server.accounts().stream().filter(account -> !isDeleted(account))
-                                        .map(account -> new VaultRow(server.name(), server.hosts().stream().findFirst().orElse(server.name()),
-                                                account.username(), account.status(), server.autofill(),
-                                                server.neverSave(), server.templateId()))).toList();
-                        BackgroundExecutor.onGameThread(() -> {
-                            Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows));
-                            activity();
-                        });
-                    } catch (IllegalStateException locked) {
+                    if (!isUnlocked() && !tryTrustedUnlock(settings)) {
                         requestAccessScreen(false);
+                    } else {
+                        showVaultRows();
                     }
                 }
             } catch (Exception failure) {
                 LOGGER.warn("BlockVault could not open its local vault");
             }
             return null;
-        });
+        }));
     }
 
     /** Locks and wipes the in-memory vault key. */
     public static void lock() {
         cancelAutoLock();
+        trustedUnlockAttempted = true;
         BackgroundExecutor.submit(() -> {
             if (store != null) store.lock();
             BackgroundExecutor.onGameThread(() -> {
@@ -361,21 +365,39 @@ public final class VaultRuntime implements VaultAccess {
 
     static void showToast(String key) { toast(key); }
 
+    /** Applies the explicit local-device trust preference without retaining the master password. */
+    static void setTrustedDevice(boolean trusted) {
+        trustedUnlockAttempted = true;
+        BackgroundExecutor.submit(() -> {
+            try {
+                ensureStore();
+                if (trusted) {
+                    try { store.vault(); store.trustThisDevice(); }
+                    catch (IllegalStateException locked) { /* The next password unlock will write the key. */ }
+                } else {
+                    store.forgetTrustedDevice();
+                }
+            } catch (Exception failure) {
+                LOGGER.warn(trusted ? "BlockVault could not trust this device" : "BlockVault could not remove its trusted-device key");
+                BackgroundExecutor.onGameThread(() -> toast("blockvault.toast.trust_failed"));
+            }
+            return null;
+        });
+    }
+
     private static void withVault(Runnable action) {
         withVault(action, () -> BackgroundExecutor.onGameThread(() -> toast("blockvault.vault.error")));
     }
 
     private static void withVault(Runnable action, Runnable failed) {
-        BackgroundExecutor.submit(() -> {
+        BlockVaultConfig.load(settings -> BackgroundExecutor.submit(() -> {
             try {
                 ensureStore();
                 if (!store.exists() || store.keyMode() == null) {
                     WAITING.addLast(action);
                     requestAccessScreen(true);
                 } else {
-                    boolean unlocked;
-                    try { store.vault(); unlocked = true; }
-                    catch (IllegalStateException locked) { unlocked = false; }
+                    boolean unlocked = isUnlocked() || tryTrustedUnlock(settings);
                     if (unlocked) action.run();
                     else {
                         WAITING.addLast(action);
@@ -387,6 +409,35 @@ public final class VaultRuntime implements VaultAccess {
                 failed.run();
             }
             return null;
+        }));
+    }
+
+    private static boolean isUnlocked() {
+        try { store.vault(); return true; }
+        catch (IllegalStateException locked) { return false; }
+    }
+
+    private static boolean tryTrustedUnlock(BlockVaultConfig.Settings settings) {
+        if (!settings.trustDevice() || trustedUnlockAttempted) return false;
+        trustedUnlockAttempted = true;
+        try {
+            store.unlockTrustedDevice();
+            return true;
+        } catch (Exception invalidOrMissingTrustFile) {
+            return false;
+        }
+    }
+
+    private static void showVaultRows() {
+        Vault vault = store.vault();
+        List<VaultRow> rows = vault.servers().stream().flatMap(server ->
+                server.accounts().stream().filter(account -> !isDeleted(account))
+                        .map(account -> new VaultRow(server.name(), server.hosts().stream().findFirst().orElse(server.name()),
+                                account.username(), account.status(), server.autofill(),
+                                server.neverSave(), server.templateId()))).toList();
+        BackgroundExecutor.onGameThread(() -> {
+            Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows));
+            activity();
         });
     }
 

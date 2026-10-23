@@ -2,7 +2,6 @@ package io.github.silkypanda.blockvault.core.vault;
 
 /** Identifies how the random vault key is protected. */
 public enum KeyMode {
-    DEVICE(1),
     MASTER_PASSWORD(2);
 
     private final int id;

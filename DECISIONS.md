@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-10-24 — Replace OS key providers with an explicit trusted-device preference
+
+The owner rejected DPAPI, macOS Keychain/`security`, Linux Secret Service/`secret-tool`, and all other OS-backed device providers. Keep the BVLT vault key mode master-password-only. Add a user preference that asks for the master password every launch or trusts the current OS account, with trust enabled by default. Trust mode must not save the master password; it stores only the random vault key in a separate owner-only file and clearly documents that access to the OS account grants vault access. Turning trust off removes that key file. No OS commands, foreign APIs, networking, or telemetry are allowed.
+
+The owner reports M4 CI passed on `be0f292`. Fabric and NeoForge API artifacts have already served their M3/M4 verification purpose; remove their production from CI and retain the no-guessing rule by checking the real toolchain whenever future loader API work is introduced.
+
 ## 2026-10-23 — Repair API dump and refresh deprecated Actions
 
 The plan's `javap -public -protected` invocation fails on the installed JDK because those visibility selectors are mutually exclusive. Use `javap -protected`, which emits public and protected members, in both loader dump tasks. The supplied artifacts confirmed that every class dump had the same option error, so M3 API work remains blocked until CI regenerates both artifacts with this fix. The CI annotation report also showed Node.js 20 runtime and `setup-java@v4` deprecation warnings. Upgrade checkout to v7, setup-java to v6, setup-gradle to v6, and upload-artifact to v7; these upstream versions use Node.js 24. This changes build tooling only and leaves CI limited to build/test/artifact functions.

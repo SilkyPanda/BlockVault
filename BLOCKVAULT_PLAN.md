@@ -13,7 +13,7 @@ Spec written: 2026-10-23. Version numbers below were checked against public sour
 3. **Only implement build functions in CI. Do NOT implement releasing or publishing.** No GitHub Releases, no tag-triggered jobs, no Modrinth/CurseForge upload, no maven publishing, no secrets or tokens in workflows. CI builds, tests and uploads jar files as workflow artifacts. The owner releases manually.
 4. Work in small commits directly on `main` and push after each logical commit (Conventional Commits: `feat:`, `fix:`, `build:`, `ci:`, `test:`, `docs:`, `refactor:`). After every push, follow the CI loop in section 5.3 until the run is green.
 5. Do not stop to ask the owner questions unless you are blocked by missing credentials or permissions. Make a reasonable decision, and record it in `DECISIONS.md` (date, decision, reason).
-6. **Never guess Minecraft/Fabric/NeoForge API names.** The game is unobfuscated in 26.x and names changed a lot in recent releases. Verify against the real jars using the `api-dump` CI artifact (section 5.4) or `genSources`. If you cannot verify something, isolate it in one small class, mark it `// TODO(verify-26.3)`, make any mixin `require = 0`, and keep CI green.
+6. **Never guess Minecraft/Fabric/NeoForge API names.** The game is unobfuscated in 26.x and names changed a lot in recent releases. Verify against real 26.3 jars or generated sources before using an API name. The M3 API dumps were a temporary diagnostic; they are not part of ongoing CI. If a later change needs an API that is not already verified, inspect the real toolchain first and record any toolchain decision. If it cannot be verified, isolate it in one small class, mark it `// TODO(verify-26.3)`, make any mixin `require = 0`, and keep CI green.
 7. Keep `STATUS.md` current: for each milestone say DONE / PARTIAL / TODO, and list everything that compiled but was **not verified in-game** (the owner tests in-game manually).
 8. Security and performance rules in section 2 are hard requirements. CI enforces some of them (`scripts/check-rules.sh`).
 
@@ -93,7 +93,6 @@ BlockVault/
 |- DECISIONS.md
 |- BLOCKVAULT_PLAN.md                 (this file)
 |- scripts/check-rules.sh
-|- tools/api-classes.txt
 |- core/                              standalone Gradle build, pure Java, unit-tested
 |  |- settings.gradle
 |  |- build.gradle
@@ -306,33 +305,7 @@ jar {
     }
 }
 
-// Diagnostic task used by CI to dump the real 26.3 API (see section 5.4).
-tasks.register('dumpApi') {
-    notCompatibleWithConfigurationCache('diagnostic task that shells out to javap')
-    doLast {
-        def out = layout.buildDirectory.dir('api-dump').get().asFile
-        out.mkdirs()
-        def cp = sourceSets.main.compileClasspath.asPath
-        def classes = file('../tools/api-classes.txt').readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') }
-        classes.each { c ->
-            def proc = ['javap', '-public', '-protected', '-cp', cp, c].execute()
-            def text = new StringBuilder()
-            proc.consumeProcessOutput(text, text)
-            proc.waitFor()
-            new File(out, c + '.txt').text = text.toString()
-        }
-        // Class name index of the Minecraft jars, so renamed classes can be found with grep.
-        def mcJars = sourceSets.main.compileClasspath.files.findAll { it.name.toLowerCase().contains('minecraft') && it.name.endsWith('.jar') }
-        def index = new StringBuilder()
-        mcJars.each { j ->
-            index.append('# ').append(j.name).append('\n')
-            def p = ['jar', 'tf', j.absolutePath].execute()
-            p.consumeProcessOutput(index, index)
-            p.waitFor()
-        }
-        new File(out, '_class-index.txt').text = index.toString()
-    }
-}
+
 ```
 
 ### 4.9 `fabric/src/main/resources/fabric.mod.json`
@@ -483,23 +456,7 @@ jar {
     }
 }
 
-// Diagnostic task used by CI to dump the real 26.3 API (see section 5.4).
-tasks.register('dumpApi') {
-    notCompatibleWithConfigurationCache('diagnostic task that shells out to javap')
-    doLast {
-        def out = layout.buildDirectory.dir('api-dump').get().asFile
-        out.mkdirs()
-        def cp = sourceSets.main.compileClasspath.asPath
-        def classes = file('../tools/api-classes.txt').readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') }
-        classes.each { c ->
-            def proc = ['javap', '-public', '-protected', '-cp', cp, c].execute()
-            def text = new StringBuilder()
-            proc.consumeProcessOutput(text, text)
-            proc.waitFor()
-            new File(out, c + '.txt').text = text.toString()
-        }
-    }
-}
+
 ```
 This follows the standard NeoForge MDK pattern: the manifest template lives at `neoforge/src/main/templates/META-INF/neoforge.mods.toml` (NOT in `src/main/resources`), and Gradle expands `${...}` properties into it. If the real 26.x MDK differs (task names, DSL), follow the MDK and note it in `DECISIONS.md`. Also consider NeoForge's `neoForge.runs.client` `systemProperty` entries only if needed.
 
@@ -653,18 +610,6 @@ jobs:
             !${{ matrix.loader }}/build/libs/*-sources.jar
           if-no-files-found: error
           retention-days: 30
-      - name: API dump (diagnostic only)
-        continue-on-error: true
-        run: |
-          if [ -f gradlew ]; then ./gradlew --no-daemon dumpApi; else gradle --no-daemon dumpApi; fi
-      - name: Upload API dump
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-dump-${{ matrix.loader }}
-          path: ${{ matrix.loader }}/build/api-dump
-          if-no-files-found: ignore
-          retention-days: 14
 ```
 Requirements for this workflow:
 - Triggers on every push (all branches), every PR, and manual dispatch.
@@ -700,9 +645,9 @@ scan 'import java\.net\.|import javax\.net\.|HttpClient|HttpURLConnection|URLCon
 scan 'System\.(out|err)\.|printStackTrace\(' \
   'Use the logger; never System.out/err/printStackTrace' '^$' $DIRS
 
-# External processes are allowed ONLY in the OS keystore providers.
+# External processes are forbidden in mod source.
 scan 'ProcessBuilder|Runtime\.getRuntime\(\)\.exec' \
-  'External processes are only allowed in core/.../core/os/' '/core/os/' $DIRS
+  'External process execution is forbidden' '^$' $DIRS
 
 # Mixins must declare require = 0
 if grep -rEn --include='*.java' '@(Inject|Redirect|ModifyArg|ModifyVariable|ModifyExpressionValue|WrapOperation)\(' shared-client/src 2>/dev/null | grep -v 'require *= *0' >/dev/null; then
@@ -730,70 +675,20 @@ exit $fail
 4. Never mark a milestone DONE while its last commit has no green run.
 5. A broken-on-purpose or red `main` must not persist: if you cannot fix within a reasonable effort, revert the offending commit and note it in `DECISIONS.md`.
 
-### 5.4 API dump (how to verify 26.3 names without guessing)
-`tools/api-classes.txt` (one fully qualified class per line, `#` comments allowed). Initial content; any line that does not exist in 26.3 simply produces an error file, which is itself useful (it tells you the class was renamed - grep `_class-index.txt` to find the new name):
-```
-# Client core
-net.minecraft.client.Minecraft
-net.minecraft.client.User
-net.minecraft.client.KeyMapping
-net.minecraft.client.CommandHistory
-# Multiplayer / networking
-net.minecraft.client.multiplayer.ClientPacketListener
-net.minecraft.client.multiplayer.ServerData
-net.minecraft.network.protocol.game.ClientboundSystemChatPacket
-net.minecraft.network.protocol.game.ClientboundCommandsPacket
-net.minecraft.network.protocol.game.ServerboundChatCommandPacket
-net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket
-# Chat
-net.minecraft.client.gui.components.ChatComponent
-net.minecraft.client.gui.screens.ChatScreen
-net.minecraft.network.chat.Component
-# GUI
-net.minecraft.client.gui.screens.Screen
-net.minecraft.client.gui.GuiGraphics
-net.minecraft.client.gui.components.EditBox
-net.minecraft.client.gui.components.Button
-net.minecraft.client.gui.components.AbstractWidget
-net.minecraft.client.gui.components.toasts.ToastManager
-net.minecraft.client.gui.components.toasts.SystemToast
-net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen
-net.minecraft.client.gui.screens.options.OptionsSubScreen
-net.minecraft.client.input.KeyEvent
-net.minecraft.client.input.MouseButtonEvent
-# Brigadier (command tree)
-com.mojang.brigadier.CommandDispatcher
-com.mojang.brigadier.tree.CommandNode
-# Fabric API (only meaningful in the fabric build; harmless in neoforge)
-net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
-net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
-net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
-net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
-net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
-# NeoForge (only meaningful in the neoforge build)
-net.neoforged.neoforge.client.event.ClientChatReceivedEvent
-net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent
-net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent
-net.neoforged.neoforge.client.event.ScreenEvent
-net.neoforged.neoforge.client.gui.IConfigScreenFactory
-net.neoforged.fml.common.Mod
-```
-Download the artifacts with `gh run download <id> -n api-dump-fabric -D /tmp/api-fabric` (and `-n api-dump-neoforge`), then read the `.txt` files before writing any code that touches those classes.
-
 ---------------------------------------------------------------------------
 ## 6. Milestones (do in order; each ends with green CI on its last commit)
 ---------------------------------------------------------------------------
 
 ### M0 - Skeleton and CI (FIRST DELIVERABLE)
 Tasks:
-- Create every file in sections 3-5: `.gitignore`, `.gitattributes`, `LICENSE`, `README.md` (what it is, how CI builds, where to get jars, the manual-release note, and the in-game test checklist from section 12), `STATUS.md`, `DECISIONS.md`, `scripts/check-rules.sh`, `tools/api-classes.txt`, workflow, three Gradle builds, manifests, entrypoints.
+- Create every file in sections 3-5: `.gitignore`, `.gitattributes`, `LICENSE`, `README.md` (what it is, how CI builds, where to get jars, the manual-release note, and the in-game test checklist from section 12), `STATUS.md`, `DECISIONS.md`, `scripts/check-rules.sh`, workflow, three Gradle builds, manifests, entrypoints.
 - `core`: class `core/BlockVaultInfo` with `static final String MOD_ID = "blockvault"` and a trivial JUnit test, so the test job has something to run.
 - `shared-client`: `BlockVault` (static `init(Platform)`, logger via SLF4J `LoggerFactory`, which Minecraft provides) and `Platform` interface (section 8.1).
 - Fabric and NeoForge entrypoints call `BlockVault.init(...)`.
 - Generate Gradle wrappers if possible.
 Acceptance:
 - CI jobs `rules`, `core`, `loader (fabric)`, `loader (neoforge)` are all green.
-- The Actions run contains artifacts `blockvault-fabric-<sha>`, `blockvault-neoforge-<sha>` (each a single jar `blockvault-<loader>-0.1.0+26.3.jar`, under 256 KiB), plus `api-dump-fabric` and `api-dump-neoforge`.
+- The Actions run contains artifacts `blockvault-fabric-<sha>`, `blockvault-neoforge-<sha>` (each a single jar `blockvault-<loader>-0.1.0+26.3.jar`, under 256 KiB), plus the core test reports. Do not keep API dump jobs in CI; if a future change needs a new unverified API, inspect the real toolchain for that change and remove any temporary diagnostic task afterward.
 - No release/publish/secrets in the workflow.
 
 ### M1 - Core: crypto and vault storage (section 7.1-7.4)
@@ -803,13 +698,13 @@ Acceptance: all unit tests green in CI; vault round-trips, rejects tampering, ha
 Generator, TOTP, host normalization, pattern pack matcher, command templates, `LoginSession` state machine with a fake scheduler. Acceptance: all unit tests green; coverage of every state transition.
 
 ### M3 - Client wiring (section 8.1-8.4)
-Read the API dumps first. Hooks, mixins, background executor, session listener, autofill sending `/login` and `/register` for real, history scrubbing, keybind. No fancy UI yet: use vanilla toasts and a minimal confirm screen. Acceptance: builds on both loaders; `STATUS.md` lists exactly which hooks were verified against dumps and which are unverified in-game.
+Verify every Minecraft, Fabric, and NeoForge API against the refreshed 26.3 dumps before implementing hooks, mixins, background executor, session listener, autofill sending `/login` and `/register`, history scrubbing, and keybinds. No fancy UI yet: use vanilla toasts and a minimal confirm screen. Acceptance: builds on both loaders; `STATUS.md` lists exactly which hooks were verified against dumps and which are unverified in-game.
 
 ### M4 - UI (section 8.5-8.7)
 Save/Update/Register/Unlock/Rejected card, vault screen, settings screen, translations. Acceptance: builds on both loaders; UI code uses only vanilla widgets.
 
-### M5 - Device-bound key providers (section 7.3)
-Windows DPAPI via `java.lang.foreign`; macOS via `security`; Linux via `secret-tool`; graceful fallback to master-password mode. Acceptance: unit tests for provider selection/fallback logic (OS calls themselves are tested manually); `check-rules.sh` still green.
+### M5 - Master password and trusted-device convenience (section 7.3)
+The vault has exactly one key mode: a master password. Do not add DPAPI, Java Foreign Function & Memory calls, macOS Keychain/`security`, Linux Secret Service/`secret-tool`, OS commands, or device key providers. Add a settings choice between `Ask for master password every launch` and `Trust this device`; `Trust this device` is the default. In trusted mode, after the user has entered the master password successfully, store only the random 32-byte vault key in a separate owner-only file under the BlockVault data directory. Do not store the master password. The vault retains its master-password wrapping format, while trusted mode deliberately adds a local unwrapping path. Trusting this device means granting anyone who can read the current OS account files access to the vault; it is not a second key mode or hardware-backed protection. Untrusted mode removes the local key file and requires the master password on every process launch. A bad/missing trust file falls back to the master-password screen without changing the vault. Trust file writes are atomic, limited to 0600 on POSIX, and wiped from memory when no longer needed. Acceptance: core tests cover trusted unlock, missing/corrupt trust-file fallback, and disabling trust; settings default and both launch choices are checked in-game. `check-rules.sh` remains green.
 
 ### M6 - Polish and hardening
 Import/export, streamer mode, auto-lock, TOTP wiring, docs, final performance review (section 2.2), jar-size review, `STATUS.md` final pass. Version stays `0.1.0`; the owner releases manually.
@@ -822,7 +717,7 @@ Import/export, streamer mode, auto-lock, TOTP wiring, docs, final performance re
 - `AesGcm`: `static byte[] encrypt(byte[] key32, byte[] nonce12, byte[] aad, byte[] plaintext)` and `static byte[] decrypt(...)` throwing `VaultAuthException` (checked or unchecked, your choice; document it) on tag failure. 128-bit tag. Key must be exactly 32 bytes.
 - `Kdf`: `static byte[] pbkdf2HmacSha512(char[] password, byte[] salt, int iterations, int dkLenBytes)` using `SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512")`. `static int calibrate(long targetMillis, int floor, int cap)` benchmarks once and returns an iteration count (default target 250 ms, floor 210_000, cap 2_000_000). Calibration runs only on the background thread, only when creating or changing a master password.
 - `SecureBytes`: tiny helper with `static void wipe(byte[])`, `static void wipe(char[])`, `static byte[] random(int n)` (shared `SecureRandom`).
-- `KeyMode` enum: `DEVICE(1)`, `MASTER_PASSWORD(2)`.
+- `KeyMode` has only `MASTER_PASSWORD(2)`; device and OS-provider modes are forbidden.
 
 ### 7.2 `vault` data model (immutable records + builders)
 ```
@@ -835,31 +730,26 @@ Account { String username; char[] password; Status status (VERIFIED|PENDING);
 `Account.toString()` never reveals the password. JSON field names are short and stable: `v`, `servers`, `id`, `name`, `hosts`, `neverSave`, `autofill`, `template`, `accounts`, `user`, `pass`, `status`, `created`, `modified`, `used`, `totp`. Unknown fields must be preserved on load/save (round-trip safe) so newer vaults are not damaged by older builds.
 
 ### 7.3 Key management
-- `KekProvider` interface: `String id()`, `boolean isAvailable()`, `byte[] wrap(byte[] vaultKey32)`, `byte[] unwrap(byte[] blob)`.
-- Key hierarchy: random 256-bit vault key (VK) encrypts the vault JSON. VK is wrapped by a key-encryption key (KEK). Changing the master password or mode only re-wraps VK; it never re-encrypts the data.
-- `MasterPasswordKek`: KEK = PBKDF2-HMAC-SHA512(masterPassword, salt, iterations, 32). Wrap = AES-GCM(KEK, random nonce, aad = header prefix, VK). Provider id `0` (none).
-- Device providers (M5), in package `core/os`:
-  - Windows: `java.lang.foreign` calls to `CryptProtectData` / `CryptUnprotectData` in `crypt32.dll`, with fixed entropy bytes `"BlockVault v1"`. The DPAPI blob IS the wrapped VK. Provider id 1.
-  - macOS: store a random 32-byte KEK in the login keychain through the `security` CLI. Feed secrets through `security -i` stdin or equivalent so they never appear in process arguments. Provider id 2.
-  - Linux: `secret-tool store` (secret on stdin) / `secret-tool lookup`. Provider id 3. If `secret-tool` is missing or no Secret Service is running, `isAvailable()` is false.
-  - `KekProviders.selectDefault()` returns the first available device provider, else empty, and the UI then asks the user to choose a master password.
-- Java 25 may print a one-time warning for restricted `java.lang.foreign` methods. Do not try to suppress it with hacks. Document it in README.
+- Key hierarchy: a random 256-bit vault key (VK) encrypts the vault JSON. `MasterPasswordKek` wraps VK with PBKDF2-HMAC-SHA512(masterPassword, salt, iterations, 32) and AES-GCM using the header prefix as AAD. Changing the master password only re-wraps VK; it never re-encrypts vault data.
+- The default `Trust this device` convenience stores a separate owner-only copy of VK after a successful master-password unlock. It stores no password and does not create another vault key mode. The file is `vault.bv.trust` in the BlockVault data directory; POSIX mode is 0600. Anyone with access to the current OS account and this file can unlock the vault, so the setting is explicitly a local trust decision, not a hardware-backed protection.
+- `Ask for master password every launch` deletes `vault.bv.trust` and requires password entry after every process start. If the trust key is missing, malformed, or fails authentication, fall back to the master-password screen and leave `vault.bv` untouched.
+- Do not use OS keystores, OS commands, `java.lang.foreign`, telemetry, or network access for trust mode.
 
 ### 7.4 `vault` file and storage
-**Location** (`DataDirs`): Windows `%APPDATA%\BlockVault`; macOS `~/Library/Application Support/BlockVault`; Linux `$XDG_DATA_HOME/blockvault` else `~/.local/share/blockvault`. Overridable by a system property `blockvault.dataDir` (used by tests). Files: `vault.bv`, `vault.bv.bak1..3`, `config.json`, optional `patterns.json`. On POSIX set owner-only permissions (0600 files, 0700 dir); on Windows rely on the per-user AppData ACL.
+**Location** (`DataDirs`): Windows `%APPDATA%\BlockVault`; macOS `~/Library/Application Support/BlockVault`; Linux `$XDG_DATA_HOME/blockvault` else `~/.local/share/blockvault`. Overridable by a system property `blockvault.dataDir` (used by tests). Files: `vault.bv`, `vault.bv.bak1..3`, optional `vault.bv.trust`, `config.json`, optional `patterns.json`. On POSIX set owner-only permissions (0600 files, 0700 dir); on Windows rely on the per-user AppData ACL.
 
 **Binary format v1** (all integers big-endian):
 ```
 off  size  field
 0    4     magic "BVLT"
 4    1     formatVersion = 1
-5    1     keyMode (1 DEVICE, 2 MASTER_PASSWORD)
-6    1     kdfId (0 none, 1 PBKDF2-HMAC-SHA512)
-7    1     providerId (0 none, 1 dpapi, 2 mac keychain, 3 secret service)
+5    1     keyMode (2 MASTER_PASSWORD; all other values unsupported)
+6    1     kdfId (1 PBKDF2-HMAC-SHA512)
+7    1     reserved providerId (must be 0)
 8    4     kdfIterations (0 if kdfId = 0)
-12   16    kdfSalt (zeros if kdfId = 0)
+12   16    kdfSalt
 28   2     wrapLen
-30   wrapLen  wrapped vault key  (AES-GCM: nonce12 || ciphertext32 || tag16, or provider blob)
+30   wrapLen  wrapped vault key (AES-GCM: nonce12 || ciphertext32 || tag16)
 ..   12    dataNonce
 ..   4     dataLen (ciphertext length including the 16-byte tag)
 ..   dataLen   ciphertext = AES-256-GCM(VK, dataNonce, aad = every header byte before the ciphertext, plaintext = UTF-8 JSON)
@@ -870,7 +760,7 @@ Wrap AAD (for AES-GCM wrapping) = header bytes [0, 28).
 
 **`VaultStore`** (thread-confined: call only from the background executor):
 - `static VaultStore open(Path dir)` (no key needed; reads header only), `boolean exists()`, `KeyMode keyMode()`.
-- `create(KeyMode, char[] masterPasswordOrNull, KekProvider)`, `unlock(char[] masterPasswordOrNull)`, `Vault vault()`, `save(Vault)`, `lock()`, `changeMasterPassword(char[] old, char[] new)`, `switchMode(...)`.
+- `create(char[] masterPassword)`, `unlock(char[] masterPassword)`, trusted-device enable/disable and trusted unlock methods, `Vault vault()`, `save(Vault)`, `lock()`, `changeMasterPassword(char[] old, char[] new)`. There is no mode-switch API.
 - Saving: write to `vault.bv.tmp`, `FileChannel.force(true)`, then `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)`. Before replacing, rotate backups (`.bak1` newest ... `.bak3`).
 - Locking: take an exclusive `FileChannel.lock()` on `vault.bv.lock` for read-merge-write. Merge rule when the file changed on disk since load: per server `id`, per account `username`, keep the entry with the greater `modifiedAt`; keep union of servers/accounts; deletions are tombstoned (add `deleted: true, modified: <ts>` in JSON and purge after 30 days).
 - If authentication fails on unlock: throw, leave the file untouched, never create a new empty vault over it.
@@ -971,7 +861,7 @@ public interface Platform {
 `BlockVault.init(Platform)`: store platform, create (not start) the background executor lazily, register nothing heavy. Provide static `BlockVault.platform()`.
 `BackgroundExecutor`: single daemon thread named `blockvault-io`; `submit(Callable)`; helper `onGameThread(Runnable)` -> `Minecraft.getInstance().execute(r)`. Created on first use.
 
-### 8.2 Hooks (the entire Minecraft-facing surface). VERIFY each against the API dumps first
+### 8.2 Hooks (the entire Minecraft-facing surface). Verify each against the already-read M3 API dumps or real generated 26.3 sources before use
 - Incoming **system** chat (not signed player chat): Fabric `ClientReceiveMessageEvents.GAME`; NeoForge `ClientChatReceivedEvent` (system variant). Loader glue calls `Hooks.onSystemMessage(Component)`.
 - Join/disconnect: Fabric `ClientPlayConnectionEvents.JOIN/DISCONNECT`; NeoForge `ClientPlayerNetworkEvent.LoggingIn/LoggingOut`. Glue calls `Hooks.onJoin()` / `Hooks.onDisconnect()`. Server address and icon come from `Minecraft.getInstance().getCurrentServer()` (singleplayer/LAN: `null` -> do nothing at all).
 - Minecraft username: `Minecraft.getInstance().getUser().getName()`.
@@ -1000,7 +890,7 @@ Keep `JAVA_21` (it is a minimum level; do not raise it). Register the config in 
 - Vault access via `BackgroundExecutor`; results delivered back on the game thread.
 - A master-password vault that is locked triggers the Unlock card first, then continues the pending action.
 - `showSavePrompt` opens the card screen (section 8.5). Never open a card while another BlockVault card is open: queue it.
-Config (`<dataDir>/config.json`, Gson tree API): `autofill` (true), `autofillDelayMillis` (400), `resultTimeoutMillis` (5000), `autoLockMinutes` (15, 0 = never), `cardDurationSeconds` (10), `cardPosition` ("top_right"), `streamerMode` (false), `generator` (policy fields), `scrubHistory` (true). Load lazily, write only when the user changes a setting.
+Config (`<dataDir>/config.json`, Gson tree API): `autofill` (true), `autofillDelayMillis` (400), `resultTimeoutMillis` (5000), `autoLockMinutes` (15, 0 = never), `cardDurationSeconds` (10), `cardPosition` ("top_right"), `streamerMode` (false), `generator` (policy fields), `scrubHistory` (true), `trustDevice` (true). Load lazily, write only when the user changes a setting.
 
 ### 8.4 Threading summary
 Game thread: hooks, UI. Background thread: KDF, vault IO, key provider calls. Never block the game thread on either. Timers for the session use the game thread via `Minecraft.execute` + a scheduled executor shared with `BackgroundExecutor`.
@@ -1017,7 +907,7 @@ Toasts for short confirmations ("Saved", "Autofilled", "Vault locked") use the v
 Keybind (default unbound or a rarely used key; verify no conflict) and the multiplayer-screen button open it. List of servers (search box), per server: accounts, reveal (requires re-confirming the master password in master mode), copy (30 s clipboard auto-clear), edit, delete, generate new, edit command template, toggle autofill/neverSave. Footer: Lock now, Settings, Import, Export.
 
 ### 8.7 Settings screen
-Built on vanilla `OptionsSubScreen`/`OptionsList` (no config library). Options: autofill on/off, autofill delay, key mode switch (device <-> master password), auto-lock minutes, generator defaults, streamer mode, card position/duration, history scrub on/off, "Wipe vault" (double confirm). Fabric: optional Mod Menu entrypoint is NOT required; add a Mod Menu `ModMenuApi` integration only if it adds no build dependency (use `compileOnly` of Mod Menu only if needed; otherwise skip). NeoForge: register `IConfigScreenFactory` via the mod container.
+Built on vanilla `OptionsSubScreen`/`OptionsList` (no config library). Options: autofill on/off, autofill delay, master-password prompt policy (`Ask every launch` or `Trust this device`, default trusted), auto-lock minutes, generator defaults, streamer mode, card position/duration, history scrub on/off, "Wipe vault" (double confirm). Fabric: optional Mod Menu entrypoint is NOT required; add a Mod Menu `ModMenuApi` integration only if it adds no build dependency (use `compileOnly` of Mod Menu only if needed; otherwise skip). NeoForge: register `IConfigScreenFactory` via the mod container.
 
 ### 8.8 Translations
 `assets/blockvault/lang/en_us.json` with every key. Add stub `es_es`, `pt_br`, `ru_ru`, `de_de`, `fr_fr`, `tr_tr`, `zh_cn` files that contain the same keys with English text (owner will translate later).
@@ -1056,7 +946,7 @@ Test server: Paper + AuthMe (offline-mode or with a cracked-friendly setup), plu
 4. Type `/login <right password>` manually -> Update card appears.
 5. Check the game folder: typed login/register commands are NOT present in the command history file.
 6. Kill the game right after `/register` -> relaunch -> vault shows the PENDING account (no lockout).
-7. Switch to master-password mode -> restart -> join -> Unlock card appears only when a prompt is detected.
+7. With `Trust this device` enabled (the default), unlock once with the master password, restart Minecraft, and confirm the vault opens without another prompt. Switch to `Ask for master password every launch`, restart, and confirm the password prompt returns.
 8. Join a vanilla server (no login plugin) -> nothing happens, no log spam.
 9. Join singleplayer -> nothing happens.
 10. Both jars: Fabric and NeoForge behave identically.

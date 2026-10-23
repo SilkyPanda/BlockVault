@@ -18,10 +18,10 @@ Test on Paper with AuthMe (offline-mode or a cracked-friendly setup), then on a 
 4. Type `/login <right password>` manually -> Update card appears.
 5. Check the game folder: typed login/register commands are NOT present in the command history file.
 6. Kill the game right after `/register` -> relaunch -> vault shows the PENDING account (no lockout).
-7. Switch to master-password mode -> restart -> join -> Unlock card appears only when a prompt is detected.
+7. With the default `Trust this device` setting, unlock once with the master password, restart Minecraft, and confirm the vault opens without asking again. Then select `Ask for master password every launch`, restart, and confirm it asks again.
 8. Join a vanilla server (no login plugin) -> nothing happens, no log spam.
 9. Join singleplayer -> nothing happens.
 10. Both jars: Fabric and NeoForge behave identically.
 11. Disconnect and watch `logs/latest.log`: no passwords, no secrets, no stack traces from BlockVault.
 
-Java 25 may emit a one-time warning when restricted Foreign Function & Memory APIs are used by the Windows device-key provider; this will be documented with that provider.
+`Trust this device` stores a 32-byte vault key file with owner-only permissions. It does not store the master password or use an operating-system keychain. Anyone with access to your OS account can access that trusted-device file; select `Ask for master password every launch` to remove it.

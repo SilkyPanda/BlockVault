@@ -49,11 +49,8 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                 current -> current.withGenerator(next(current.generator(), List.of("defaults", "pickyServer", "max", "memorable"))));
         addSettingButton("blockvault.settings.scrub_history", settings.scrubHistory(),
                 current -> current.withScrubHistory(!current.scrubHistory()));
-        Button keyMode = Button.builder(Component.translatable("blockvault.settings.key_mode",
-                        Component.translatable("blockvault.settings.key_mode.master")), button -> { })
-                .width(300).build();
-        keyMode.active = false;
-        list.addBig(keyMode);
+        addSettingButton("blockvault.settings.unlock_policy", unlockPolicyLabel(settings.trustDevice()),
+                current -> current.withTrustDevice(!current.trustDevice()));
         list.addBig(Button.builder(Component.translatable("blockvault.settings.vault"),
                 button -> VaultRuntime.openVaultScreen()).width(300).build());
     }
@@ -76,6 +73,9 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                 if (saved) {
                     settings = BlockVaultConfig.current();
                     Hooks.applySettings(settings);
+                    if (key.equals("blockvault.settings.unlock_policy")) {
+                        VaultRuntime.setTrustedDevice(settings.trustDevice());
+                    }
                     VaultRuntime.activity();
                     pressed.setMessage(label(key, settingValue(key)));
                 } else VaultRuntime.showToast("blockvault.vault.error");
@@ -94,8 +94,14 @@ final class VaultSettingsScreen extends OptionsSubScreen {
             case "blockvault.settings.streamer" -> settings.streamerMode();
             case "blockvault.settings.generator" -> settings.generator();
             case "blockvault.settings.scrub_history" -> settings.scrubHistory();
+            case "blockvault.settings.unlock_policy" -> unlockPolicyLabel(settings.trustDevice());
             default -> "";
         };
+    }
+
+    private static Component unlockPolicyLabel(boolean trusted) {
+        return Component.translatable(trusted ? "blockvault.settings.unlock_policy.trust"
+                : "blockvault.settings.unlock_policy.ask");
     }
 
     private static Component label(String key, Object value) { return Component.translatable(key, value); }

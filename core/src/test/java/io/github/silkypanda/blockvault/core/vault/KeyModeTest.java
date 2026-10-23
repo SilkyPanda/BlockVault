@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Test;
 
 final class KeyModeTest {
     @Test
-    void parsesStableIds() {
-        assertEquals(KeyMode.DEVICE, KeyMode.fromId(1));
+    void acceptsOnlyMasterPasswordMode() {
         assertEquals(KeyMode.MASTER_PASSWORD, KeyMode.fromId(2));
+        assertThrows(IllegalArgumentException.class, () -> KeyMode.fromId(1));
         assertThrows(IllegalArgumentException.class, () -> KeyMode.fromId(3));
     }
 }

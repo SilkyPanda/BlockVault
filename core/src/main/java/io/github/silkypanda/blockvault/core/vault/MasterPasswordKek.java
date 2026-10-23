@@ -5,7 +5,7 @@ import io.github.silkypanda.blockvault.core.crypto.Kdf;
 import io.github.silkypanda.blockvault.core.crypto.SecureBytes;
 
 /** PBKDF2-HMAC-SHA512 and AES-GCM provider for master-password vaults. */
-public final class MasterPasswordKek implements KekProvider {
+public final class MasterPasswordKek {
     private final char[] password;
     private final byte[] salt;
     private final int iterations;
@@ -22,17 +22,6 @@ public final class MasterPasswordKek implements KekProvider {
         this.aad = aad.clone();
     }
 
-    @Override
-    public int id() {
-        return 0;
-    }
-
-    @Override
-    public boolean isAvailable() {
-        return true;
-    }
-
-    @Override
     public byte[] wrap(byte[] vaultKey32) {
         byte[] key = derive();
         byte[] nonce = SecureBytes.random(12);
@@ -48,7 +37,6 @@ public final class MasterPasswordKek implements KekProvider {
         }
     }
 
-    @Override
     public byte[] unwrap(byte[] blob) throws Exception {
         if (blob.length != 60) {
             throw new IllegalArgumentException("Invalid wrapped key length");
@@ -78,7 +66,6 @@ public final class MasterPasswordKek implements KekProvider {
         SecureBytes.wipe(aad);
     }
 
-    @Override
     public String toString() {
         return "MasterPasswordKek[masked]";
     }

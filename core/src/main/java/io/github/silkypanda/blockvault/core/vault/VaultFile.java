@@ -17,10 +17,10 @@ public final class VaultFile {
     }
 
     /** Header fields authenticated by the vault format. */
-    public record Header(KeyMode keyMode, int kdfId, int providerId, int iterations, byte[] salt) {
+    public record Header(KeyMode keyMode, int kdfId, int reserved, int iterations, byte[] salt) {
         public Header {
-            if (salt == null || salt.length != 16 || kdfId < 0 || kdfId > 255 || providerId < 0 || providerId > 255
-                    || iterations < 0) {
+            if (keyMode != KeyMode.MASTER_PASSWORD || salt == null || salt.length != 16
+                    || kdfId != 1 || reserved != 0 || iterations <= 0) {
                 throw new IllegalArgumentException("Invalid vault header");
             }
             salt = salt.clone();
@@ -91,20 +91,14 @@ public final class VaultFile {
             throw new IllegalArgumentException("Invalid vault key mode", e);
         }
         int kdfId = Byte.toUnsignedInt(input.get());
-        int providerId = Byte.toUnsignedInt(input.get());
+        int reserved = Byte.toUnsignedInt(input.get());
         int iterations = input.getInt();
         byte[] salt = new byte[16];
         input.get(salt);
-        if (iterations < 0 || kdfId > 1 || providerId > 3
-                || (kdfId == 0 && iterations != 0) || (kdfId == 1 && iterations == 0)
-                || (mode == KeyMode.MASTER_PASSWORD && kdfId != 1)
-                || (mode == KeyMode.DEVICE && kdfId != 0)) {
+        if (iterations <= 0 || kdfId != 1 || reserved != 0) {
             throw new IllegalArgumentException("Invalid KDF header");
         }
-        if (kdfId == 0) {
-            for (byte value : salt) if (value != 0) throw new IllegalArgumentException("Invalid empty KDF salt");
-        }
-        Header header = new Header(mode, kdfId, providerId, iterations, salt);
+        Header header = new Header(mode, kdfId, reserved, iterations, salt);
         int wrapLength = Short.toUnsignedInt(input.getShort());
         if (wrapLength > input.remaining() - 16 - 12 - 4) {
             throw new IllegalArgumentException("Invalid wrapped key length");
@@ -126,6 +120,6 @@ public final class VaultFile {
 
     private static void putPrefix(ByteBuffer out, Header header) {
         out.put(MAGIC).put((byte) 1).put((byte) header.keyMode().id()).put((byte) header.kdfId())
-                .put((byte) header.providerId()).putInt(header.iterations()).put(header.salt());
+                .put((byte) header.reserved()).putInt(header.iterations()).put(header.salt());
     }
 }

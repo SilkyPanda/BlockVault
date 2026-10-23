@@ -18,7 +18,7 @@ scan() {
 DIRS="core/src/main shared-client/src/main fabric/src neoforge/src"
 scan 'import java\.net\.|import javax\.net\.|HttpClient|HttpURLConnection|URLConnection|java\.net\.Socket' 'Networking APIs are forbidden (the mod must make no network connections)' '^$' $DIRS
 scan 'System\.(out|err)\.|printStackTrace\(' 'Use the logger; never System.out/err/printStackTrace' '^$' $DIRS
-scan 'ProcessBuilder|Runtime\.getRuntime\(\)\.exec' 'External processes are only allowed in core/.../core/os/' '/core/os/' $DIRS
+scan 'ProcessBuilder|Runtime\.getRuntime\(\)\.exec' 'External process execution is forbidden' '^$' $DIRS
 
 if grep -rEn --include='*.java' '@(Inject|Redirect|ModifyArg|ModifyVariable|ModifyExpressionValue|WrapOperation)\(' shared-client/src 2>/dev/null | grep -v 'require *= *0' >/dev/null; then
   echo '::warning::Check that every mixin injector declares require = 0 (multi-line annotations may be false positives)'
