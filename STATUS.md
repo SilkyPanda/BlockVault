@@ -19,7 +19,7 @@ Updated: 2026-10-24
 - The NeoForge development-environment flag is also unverified and intentionally returns false pending a dump of the relevant loader API.
 - M4 dialogs, settings screens, clipboard clearing, and template selection compiled in the owner-reported green Actions run but still need in-game verification on both loaders.
 - M5 trusted-device auto-unlock, removing the trust file when disabled, password fallback, and the settings default need in-game verification.
-- Current working changes restore Reveal password, Copy password, Another password, and Never save here actions; dismissing registration suppresses duplicate queued prompts; settings options show hover descriptions. These changes have not yet compiled in CI or been tested in-game.
+- Current working changes restore Reveal password, Copy password, Another password, and Never save here actions; dismissing registration suppresses duplicate queued prompts; settings options show hover descriptions; vault pagination is clamped and layout adapts to window dimensions; password presets have descriptive labels; clipboard clear delay is five minutes. These changes have not yet compiled in CI or been tested in-game.
 - Nothing has been verified in-game.
 
 ## CI

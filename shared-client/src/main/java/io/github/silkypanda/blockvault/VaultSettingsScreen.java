@@ -55,7 +55,7 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                 current -> current.withPosition(next(current.cardPosition(), List.of("top_right", "bottom_right", "bottom_left", "top_left"))));
         addSettingButton("blockvault.settings.streamer", settings.streamerMode(),
                 current -> current.withStreamer(!current.streamerMode()));
-        addSettingButton("blockvault.settings.generator", settings.generator(),
+        addSettingButton("blockvault.settings.generator", generatorLabel(settings.generator()),
                 current -> current.withGenerator(next(current.generator(), List.of("defaults", "pickyServer", "max", "memorable"))));
         addSettingButton("blockvault.settings.scrub_history", settings.scrubHistory(),
                 current -> current.withScrubHistory(!current.scrubHistory()));
@@ -105,7 +105,7 @@ final class VaultSettingsScreen extends OptionsSubScreen {
             case "blockvault.settings.duration" -> settings.cardDurationSeconds();
             case "blockvault.settings.position" -> settings.cardPosition();
             case "blockvault.settings.streamer" -> settings.streamerMode();
-            case "blockvault.settings.generator" -> settings.generator();
+            case "blockvault.settings.generator" -> generatorLabel(settings.generator());
             case "blockvault.settings.scrub_history" -> settings.scrubHistory();
             case "blockvault.settings.unlock_policy" -> unlockPolicyLabel(settings.trustDevice());
             default -> "";
@@ -115,6 +115,10 @@ final class VaultSettingsScreen extends OptionsSubScreen {
     private static Component unlockPolicyLabel(boolean trusted) {
         return Component.translatable(trusted ? "blockvault.settings.unlock_policy.trust"
                 : "blockvault.settings.unlock_policy.ask");
+    }
+
+    private static Component generatorLabel(String preset) {
+        return Component.translatable("blockvault.settings.generator.preset." + preset);
     }
 
     private static Component label(String key, Object value) { return Component.translatable(key, value); }

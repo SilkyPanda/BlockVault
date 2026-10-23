@@ -188,12 +188,7 @@ final class CredentialConfirmScreen extends Screen {
         char[] copied = passwordBox.getValue().toCharArray();
         String value = new String(copied);
         Arrays.fill(copied, '\0');
-        Minecraft minecraft = Minecraft.getInstance();
-        minecraft.keyboardHandler.setClipboard(value);
-        VaultRuntime.showToast("blockvault.toast.copied");
-        BackgroundExecutor.scheduler().schedule(30_000, () -> BackgroundExecutor.onGameThread(() -> {
-            if (value.equals(minecraft.keyboardHandler.getClipboard())) minecraft.keyboardHandler.setClipboard("");
-        }));
+        VaultRuntime.copyToClipboard(value);
     }
 
     private static PasswordGenerator.Policy policy(String preset) {

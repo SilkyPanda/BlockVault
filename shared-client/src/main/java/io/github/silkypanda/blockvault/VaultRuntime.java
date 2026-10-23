@@ -26,12 +26,14 @@ import org.slf4j.LoggerFactory;
 
 /** Background-thread vault facade used by the login session. */
 public final class VaultRuntime implements VaultAccess {
+    private static final long CLIPBOARD_CLEAR_DELAY_MILLIS = 5 * 60 * 1000L;
     private static final Logger LOGGER = LoggerFactory.getLogger("BlockVault");
     private static final ArrayDeque<Runnable> WAITING = new ArrayDeque<>();
     private static VaultStore store;
     private static volatile boolean accessScreenOpen;
     private static volatile boolean trustedUnlockAttempted;
     private static Scheduler.Handle autoLockTimer;
+    private static long clipboardGeneration;
 
     /** Returns the shared vault facade. */
     public static VaultRuntime access() { return Holder.INSTANCE; }
@@ -270,7 +272,7 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Copies one credential and clears it after thirty seconds only if it is still present. */
+    /** Copies one credential and clears the current clipboard after five minutes if unchanged. */
     static void copyPassword(VaultRow row) {
         withVault(() -> {
             Account account = findAccount(row.host(), row.username());
@@ -279,18 +281,24 @@ public final class VaultRuntime implements VaultAccess {
             String clipboardValue = new String(password);
             Arrays.fill(password, '\0');
             BackgroundExecutor.onGameThread(() -> {
-                Minecraft minecraft = Minecraft.getInstance();
-                minecraft.keyboardHandler.setClipboard(clipboardValue);
-                toast("blockvault.toast.copied");
-                BackgroundExecutor.scheduler().schedule(30_000, () -> {
-                    BackgroundExecutor.onGameThread(() -> {
-                        if (clipboardValue.equals(minecraft.keyboardHandler.getClipboard())) {
-                            minecraft.keyboardHandler.setClipboard("");
-                        }
-                    });
-                });
+                copyToClipboard(clipboardValue);
             });
         });
+    }
+
+    /** Copies a caller-provided password and clears it after five minutes only if it remains current. */
+    static void copyToClipboard(String clipboardValue) {
+        Minecraft minecraft = Minecraft.getInstance();
+        long generation = ++clipboardGeneration;
+        minecraft.keyboardHandler.setClipboard(clipboardValue);
+        toast("blockvault.toast.copied");
+        BackgroundExecutor.scheduler().schedule(CLIPBOARD_CLEAR_DELAY_MILLIS, () ->
+                BackgroundExecutor.onGameThread(() -> {
+                    if (generation == clipboardGeneration
+                            && clipboardValue.equals(minecraft.keyboardHandler.getClipboard())) {
+                        minecraft.keyboardHandler.setClipboard("");
+                    }
+                }));
     }
 
     /** Saves an edited credential as verified. */

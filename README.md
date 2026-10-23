@@ -40,4 +40,4 @@ The directory can also be overridden with the Java system property `blockvault.d
 
 Deleting an account in the vault removes it from the current vault; older encrypted backups rotate out as later saves occur. BlockVault does not automatically erase its data directory when you uninstall the mod. To remove everything, exit Minecraft and delete the BlockVault data directory above. This also removes all saved accounts, backups, the trusted-device key, and settings.
 
-Copying a password to the clipboard schedules a clear after 30 seconds. If Minecraft exits before that timer runs, clear the operating-system clipboard yourself.
+Copying a password schedules the current clipboard to clear after five minutes, but only if it still contains that exact password. This changes the active clipboard value; it cannot remove copies already saved by Windows clipboard history or third-party clipboard managers. If Minecraft exits before the timer runs, clear the active clipboard yourself. Disable clipboard history in your operating system or clipboard manager if you do not want copied passwords retained there.

@@ -15,7 +15,15 @@ final class VaultListScreen extends Screen {
     private final List<Button> rowButtons = new ArrayList<>();
     private static final int ROW_ACTIONS = 6;
     private EditBox search;
+    private Button previousButton;
+    private Button nextButton;
     private int page;
+    private int pageSize;
+    private int contentLeft;
+    private int contentWidth;
+    private int rowLabelWidth;
+    private int rowButtonWidth;
+    private int footerButtonWidth;
 
     VaultListScreen(List<VaultRow> rows) {
         super(Component.translatable("blockvault.vault.title"));
@@ -25,45 +33,62 @@ final class VaultListScreen extends Screen {
     @Override
     protected void init() {
         rowButtons.clear();
-        search = new EditBox(font, width / 2 - 160, 32, 320, 20, Component.translatable("blockvault.vault.search"));
+        contentWidth = Math.max(1, Math.min(554, width - 24));
+        contentLeft = (width - contentWidth) / 2;
+        pageSize = Math.max(1, Math.min(PAGE_SIZE, (height - 122) / 34));
+        page = Math.min(page, totalPages() - 1);
+        rowButtonWidth = Math.max(1, Math.min(54, (contentWidth - 94) / ROW_ACTIONS));
+        rowLabelWidth = Math.max(0, contentWidth - 14 - ROW_ACTIONS * rowButtonWidth);
+        footerButtonWidth = Math.max(1, Math.min(120, (contentWidth - 18) / 4));
+        int searchWidth = Math.max(1, Math.min(320, width - 24));
+        search = new EditBox(font, (width - searchWidth) / 2, 32, searchWidth, 20,
+                Component.translatable("blockvault.vault.search"));
         search.setHint(Component.translatable("blockvault.vault.search"));
         search.setMaxLength(128);
         search.setResponder(ignored -> { VaultRuntime.activity(); updateVisibleRows(); });
         addRenderableWidget(search);
 
-        int left = width / 2 - 300;
         List<VaultRow> pageRows = pageRows();
         for (int index = 0; index < pageRows.size(); index++) {
             VaultRow row = pageRows.get(index);
             int y = 68 + index * 34;
-            addRowButton(left + 220, y, 54, "blockvault.vault.reveal", button ->
+            int actionsX = contentLeft + rowLabelWidth + 4;
+            addRowButton(actionsX, y, rowButtonWidth, "blockvault.vault.reveal", button ->
                     MinecraftHolder.open(new VaultCredentialScreen(row)));
-            addRowButton(left + 276, y, 54, "blockvault.vault.copy", button -> VaultRuntime.copyPassword(row));
-            addRowButton(left + 332, y, 54, row.autofill() ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off",
+            addRowButton(actionsX + rowButtonWidth + 2, y, rowButtonWidth, "blockvault.vault.copy", button -> VaultRuntime.copyPassword(row));
+            addRowButton(actionsX + (rowButtonWidth + 2) * 2, y, rowButtonWidth,
+                    row.autofill() ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off",
                     button -> VaultRuntime.updateServerPolicy(row, !row.autofill(), row.neverSave()));
-            addRowButton(left + 388, y, 54, row.neverSave() ? "blockvault.vault.save.on" : "blockvault.vault.save.off",
+            addRowButton(actionsX + (rowButtonWidth + 2) * 3, y, rowButtonWidth,
+                    row.neverSave() ? "blockvault.vault.save.on" : "blockvault.vault.save.off",
                     button -> VaultRuntime.updateServerPolicy(row, row.autofill(), !row.neverSave()));
-            addRowButton(left + 444, y, 54, "blockvault.vault.template.short", button ->
+            addRowButton(actionsX + (rowButtonWidth + 2) * 4, y, rowButtonWidth,
+                    "blockvault.vault.template.short", button ->
                     MinecraftHolder.open(new VaultTemplateScreen(row, this)));
-            addRowButton(left + 500, y, 54, "blockvault.vault.delete.short", button ->
+            addRowButton(actionsX + (rowButtonWidth + 2) * 5, y, rowButtonWidth,
+                    "blockvault.vault.delete.short", button ->
                     MinecraftHolder.open(new VaultDeleteScreen(row)));
         }
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.previous"), button -> {
+        previousButton = Button.builder(Component.translatable("blockvault.vault.previous"), button -> {
             VaultRuntime.activity();
             page = Math.max(0, page - 1);
             refresh();
-        }).bounds(left, height - 34, 78, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.next"), button -> {
+        }).bounds(contentLeft, height - 34, footerButtonWidth, 20).build();
+        nextButton = Button.builder(Component.translatable("blockvault.vault.next"), button -> {
             VaultRuntime.activity();
-            page++;
+            page = Math.min(totalPages() - 1, page + 1);
             refresh();
-        }).bounds(left + 84, height - 34, 78, 20).build());
+        }).bounds(contentLeft + footerButtonWidth + 6, height - 34, footerButtonWidth, 20).build();
+        previousButton.active = page > 0;
+        nextButton.active = page < totalPages() - 1;
+        addRenderableWidget(previousButton);
+        addRenderableWidget(nextButton);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.settings"),
                         button -> { VaultRuntime.activity(); VaultRuntime.openSettingsScreen(this); })
-                .bounds(width / 2 - 100, height - 34, 120, 20).build());
+                .bounds(contentLeft + (footerButtonWidth + 6) * 2, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.lock"),
                         button -> VaultRuntime.lock())
-                .bounds(width / 2 + 26, height - 34, 120, 20).build());
+                .bounds(contentLeft + (footerButtonWidth + 6) * 3, height - 34, footerButtonWidth, 20).build());
         updateVisibleRows();
     }
 
@@ -77,10 +102,14 @@ final class VaultListScreen extends Screen {
     }
 
     private List<VaultRow> pageRows() {
-        int from = page * PAGE_SIZE;
+        int from = page * pageSize;
         if (from >= rows.size()) return List.of();
-        return rows.subList(from, Math.min(rows.size(), from + PAGE_SIZE));
+        return rows.subList(from, Math.min(rows.size(), from + pageSize));
     }
+
+    private int totalPages() { return Math.max(1, (rows.size() + pageSizeForCurrentScreen() - 1) / pageSizeForCurrentScreen()); }
+
+    private int pageSizeForCurrentScreen() { return Math.max(1, Math.min(PAGE_SIZE, (height - 122) / 34)); }
 
     private void updateVisibleRows() {
         String query = search == null ? "" : search.getValue().toLowerCase(java.util.Locale.ROOT);
@@ -108,12 +137,18 @@ final class VaultListScreen extends Screen {
             VaultRow row = visible.get(rowIndex);
             if (!(row.serverName() + " " + row.host() + " " + row.username()).toLowerCase(java.util.Locale.ROOT).contains(query)) continue;
             int y = 72 + rowIndex * 34;
-            graphics.text(font, Component.literal(row.serverName()), left, y, 0xffffffff);
-            graphics.text(font, Component.literal(row.username() + " · " + row.status().name()), left, y + 12, 0xffb9b4c5);
+            graphics.text(font, Component.literal(clip(row.serverName(), rowLabelWidth)), contentLeft, y, 0xffffffff);
+            graphics.text(font, Component.literal(clip(row.username() + " · " + row.status().name(), rowLabelWidth)),
+                    contentLeft, y + 12, 0xffb9b4c5);
         }
         if (rows.isEmpty()) graphics.centeredText(font, Component.translatable("blockvault.vault.empty"), width / 2, 80, 0xffcccccc);
-        graphics.centeredText(font, Component.translatable("blockvault.vault.page", page + 1,
-                Math.max(1, (rows.size() + PAGE_SIZE - 1) / PAGE_SIZE)), width / 2, height - 50, 0xffaaaaaa);
+        graphics.centeredText(font, Component.translatable("blockvault.vault.page",
+                Math.min(page + 1, totalPages()), totalPages()), width / 2, height - 50, 0xffaaaaaa);
+    }
+
+    private static String clip(String value, int maxPixels) {
+        int maxChars = Math.max(0, maxPixels / 6);
+        return value.length() <= maxChars ? value : maxChars < 2 ? "…" : value.substring(0, maxChars - 1) + "…";
     }
 
     @Override public boolean isPauseScreen() { return false; }
