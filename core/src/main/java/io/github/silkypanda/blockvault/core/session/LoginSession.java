@@ -16,7 +16,6 @@ import java.util.regex.Pattern;
 /** Pure-Java login prompt state machine. Vault callbacks must return on the session thread. */
 public final class LoginSession {
     private static final long DEBOUNCE_MILLIS = 1500;
-    private static final long AUTOFILL_DELAY_MILLIS = 400;
     private static final long RESULT_TIMEOUT_MILLIS = 5000;
     private static final Pattern COMMAND = Pattern.compile("(?iu)^\\s*/?([\\p{L}0-9_]+)(?:\\s+(.*))?$");
 
@@ -28,6 +27,8 @@ public final class LoginSession {
     private final ResultMatcher results;
     private final PatternPack pack;
     private PasswordGenerator.Policy policy;
+    private boolean globalAutofill = true;
+    private long autofillDelayMillis = 400;
     private SessionState state = SessionState.IDLE;
     private String host;
     private String username;
@@ -144,10 +145,41 @@ public final class LoginSession {
         finally { Arrays.fill(staged, '\0'); }
     }
 
+    /** Updates the rejected server credential after an explicit user confirmation. */
+    public void updateRejectedPassword(char[] password) {
+        if (host == null || state != SessionState.REJECTED) return;
+        char[] staged = password.clone();
+        try { env.vault().saveVerified(host, username, staged); }
+        finally { Arrays.fill(staged, '\0'); }
+        state = SessionState.CONFIRMED;
+    }
+
+    /** Removes a rejected credential after an explicit user confirmation. */
+    public void forgetRejectedCredential() {
+        if (host == null || state != SessionState.REJECTED) return;
+        env.vault().delete(host, username);
+        state = SessionState.CONFIRMED;
+    }
+
+    /** Dismisses a rejected-password prompt without changing the vault. */
+    public void dismissRejectedPrompt() {
+        if (state == SessionState.REJECTED) state = SessionState.UNKNOWN;
+    }
+
     /** Returns the current connection state. */
     public SessionState state() { return state; }
     /** Returns whether an autofill or registration command has already been attempted. */
     public boolean attempted() { return attempted; }
+
+    /** Applies client preferences on the session thread before future prompt handling. */
+    public void configure(boolean autofill, long delayMillis, PasswordGenerator.Policy nextPolicy) {
+        if (delayMillis < 0 || delayMillis > 5000 || nextPolicy == null) {
+            throw new IllegalArgumentException("Invalid session preferences");
+        }
+        globalAutofill = autofill;
+        autofillDelayMillis = delayMillis;
+        policy = nextPolicy;
+    }
 
     /** Clears connection state and in-memory pending credentials. */
     public void onDisconnect() {
@@ -202,14 +234,14 @@ public final class LoginSession {
                 }
                 return;
             }
-            if (saved == null || account == null || account.status() != Account.Status.VERIFIED
+            if (!globalAutofill || saved == null || account == null || account.status() != Account.Status.VERIFIED
                     || !saved.autofill() || saved.neverSave()) return;
             char[] storedPassword = account.password();
             try { replacePending(storedPassword); }
             finally { Arrays.fill(storedPassword, '\0'); }
             action = Action.AUTOFILL;
             char[] forSend = pending.clone();
-            timer = scheduler.schedule(AUTOFILL_DELAY_MILLIS, () -> {
+            timer = scheduler.schedule(autofillDelayMillis, () -> {
                 try {
                     if (token != generation || revision != promptRevision || state != SessionState.PROMPTED || attempted) return;
                     replacePending(forSend);

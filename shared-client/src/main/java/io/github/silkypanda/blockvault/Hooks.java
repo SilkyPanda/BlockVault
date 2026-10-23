@@ -44,9 +44,14 @@ public final class Hooks {
                 patterns = PatternPack.load(defaults, null, warning -> LOGGER.warn("BlockVault skipped an invalid pattern"));
             }
             environment = new McSessionEnv();
-            session = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.defaults());
-            environment.attach(session);
-            session.onJoin(host, minecraft.getUser().getName());
+            LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.defaults());
+            session = active;
+            environment.attach(active);
+            active.onJoin(host, minecraft.getUser().getName());
+            BlockVaultConfig.load(settings -> {
+                if (session == active) active.configure(settings.autofill(), settings.autofillDelayMillis(),
+                        generatorPolicy(settings.generator()));
+            });
             MixinHealth.checkAfterJoin();
         } catch (Exception failure) {
             LOGGER.warn("BlockVault could not initialize login detection");
@@ -59,6 +64,12 @@ public final class Hooks {
         if (session != null) session.onDisconnect();
         session = null;
         environment = null;
+    }
+
+    static void applySettings(BlockVaultConfig.Settings settings) {
+        LoginSession active = session;
+        if (active != null) active.configure(settings.autofill(), settings.autofillDelayMillis(),
+                generatorPolicy(settings.generator()));
     }
 
     /** Delivers plain system chat to the login detector. */
@@ -99,4 +110,13 @@ public final class Hooks {
 
     /** Returns whether the outgoing-command hook is currently processing a BlockVault command. */
     static boolean isSelfSent() { return Boolean.TRUE.equals(SELF_SENT.get()); }
+
+    private static PasswordGenerator.Policy generatorPolicy(String preset) {
+        return switch (preset) {
+            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
+            case "max" -> PasswordGenerator.Policy.max();
+            case "memorable" -> PasswordGenerator.Policy.memorable();
+            default -> PasswordGenerator.Policy.defaults();
+        };
+    }
 }

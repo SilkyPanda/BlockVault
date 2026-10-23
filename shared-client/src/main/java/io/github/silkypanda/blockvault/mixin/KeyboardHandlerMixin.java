@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault.mixin;
 
 import io.github.silkypanda.blockvault.Keybinds;
+import io.github.silkypanda.blockvault.VaultRuntime;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.input.KeyEvent;
 import org.spongepowered.asm.mixin.Mixin;
@@ -15,6 +16,9 @@ public abstract class KeyboardHandlerMixin {
 
     @Inject(method = "keyPress", at = @At("HEAD"), require = 0)
     private void blockvault$keyPressed(long window, int action, KeyEvent event, CallbackInfo callback) {
-        if (action == GLFW_PRESS_ACTION) Keybinds.onKeyPress(event);
+        if (action == GLFW_PRESS_ACTION) {
+            VaultRuntime.activity();
+            Keybinds.onKeyPress(event);
+        }
     }
 }

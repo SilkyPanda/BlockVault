@@ -117,6 +117,30 @@ final class LoginSessionTest {
     }
 
     @Test
+    void rejectedCredentialCanBeUpdatedOrForgottenByExplicitAction() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("old-secret");
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please login with /login <password>");
+        clock.advance(400);
+        session.onSystemMessage("Wrong password!");
+        session.updateRejectedPassword("replacement".toCharArray());
+        assertEquals(1, env.savedVerified);
+        assertEquals(SessionState.CONFIRMED, session.state());
+
+        session.onDisconnect();
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please login with /login <password>");
+        clock.advance(400);
+        session.onSystemMessage("Wrong password!");
+        session.forgetRejectedCredential();
+        assertEquals(1, env.deleted);
+        assertEquals(SessionState.CONFIRMED, session.state());
+    }
+
+    @Test
     void registerFailureDeletesPendingAndRuleComplaintOffersOneAdjustedRetry() throws Exception {
         FakeEnv env = new FakeEnv();
         LoginSession session = session(env, new FakeScheduler());
@@ -213,6 +237,7 @@ final class LoginSessionTest {
         private SavedCredential credential;
         private int verified;
         private int deleted;
+        private int savedVerified;
         private char[] savedPasswordArgument;
         @Override public void sendCommand(String commandWithoutSlash) { order.add("send"); commands.add(commandWithoutSlash); }
         @Override public void showSavePrompt(PromptModel model) { card = model; }
@@ -224,7 +249,10 @@ final class LoginSessionTest {
         }
         @Override public void markVerified(String host, String username) { verified++; }
         @Override public void delete(String host, String username) { deleted++; credential = null; }
-        @Override public void saveVerified(String host, String username, char[] password) { savedPasswordArgument = password; }
+        @Override public void saveVerified(String host, String username, char[] password) {
+            savedPasswordArgument = password;
+            savedVerified++;
+        }
         void credential(String secret) { credential = new SavedCredential(account(secret, Account.Status.VERIFIED), true, false, null); }
         void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, false, null); }
         private static Account account(String secret, Account.Status status) {

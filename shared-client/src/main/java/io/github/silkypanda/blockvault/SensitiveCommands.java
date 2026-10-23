@@ -11,7 +11,7 @@ public final class SensitiveCommands {
     private SensitiveCommands() { }
 
     public static boolean isSensitive(String command) {
-        if (command == null) return false;
+        if (command == null || !BlockVaultConfig.current().scrubHistory()) return false;
         String normalized = command.strip();
         if (normalized.startsWith("/")) normalized = normalized.substring(1).stripLeading();
         int end = 0;
