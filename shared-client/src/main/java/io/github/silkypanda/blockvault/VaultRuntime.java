@@ -7,6 +7,7 @@ import io.github.silkypanda.blockvault.core.vault.Account;
 import io.github.silkypanda.blockvault.core.vault.DataDirs;
 import io.github.silkypanda.blockvault.core.vault.KeyMode;
 import io.github.silkypanda.blockvault.core.vault.ServerEntry;
+import io.github.silkypanda.blockvault.core.vault.UnsupportedVaultVersionException;
 import io.github.silkypanda.blockvault.core.vault.Vault;
 import io.github.silkypanda.blockvault.core.vault.VaultStore;
 import java.io.IOException;
@@ -208,7 +209,7 @@ public final class VaultRuntime implements VaultAccess {
         BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultAccessScreen(create)));
     }
 
-    private static void ensureStore() throws IOException {
+    private static void ensureStore() throws IOException, UnsupportedVaultVersionException {
         if (store == null) store = VaultStore.open(DataDirs.resolve());
     }
 

@@ -48,6 +48,10 @@ The supplied NeoForge API dump did not include the loader environment class, and
 
 The first M3 CI run (`6ba7793`) failed in both loader jobs because their compile classpaths do not expose `org.lwjgl.glfw`. Remove direct GLFW imports. The cached 26.3 Minecraft bytecode shows `InputConstants.UNKNOWN` is initialized from keyboard key code 0; use that verified Minecraft value for unbound key mappings. `KeyboardHandler.keyPress` receives the GLFW press action as integer 1, so compare that value without importing GLFW. This keeps shared code within the loader-provided Minecraft compile API.
 
+## 2026-10-23 — Declare unsupported-vault exception at the client boundary
+
+The next CI attempt (`aad7173`) compiled past the GLFW references but both loaders rejected `ensureStore()` because `VaultStore.open` also throws checked `UnsupportedVaultVersionException`. Declare this exception alongside `IOException`; callers already catch failures and report a generic vault error. `VaultStore.open` only reads and parses the header, so this path leaves newer-format vault files untouched.
+
 ## 2026-10-23 — Dump CommandHistory bytecode before history interception
 
 The refreshed API dump confirms `CommandHistory.addCommand(String)` and a private persistence method/path field, but the output does not include the constant value or method body. Extend the diagnostic dump to include private bytecode and constants for this one class so the M3 history hook can be checked against the actual persistence behavior before implementing it.
