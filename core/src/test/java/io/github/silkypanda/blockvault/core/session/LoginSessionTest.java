@@ -3,6 +3,7 @@ package io.github.silkypanda.blockvault.core.session;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.vault.Account;
@@ -109,6 +110,10 @@ final class LoginSessionTest {
         session.onOutgoingCommand("/login correctValue");
         session.onSystemMessage("Successful login!");
         assertEquals(CardVariant.SAVE, env.card.variant());
+        char[] accepted = env.card.password();
+        session.confirmCapturedSave(accepted);
+        assertArrayEquals(new char[accepted.length], env.savedPasswordArgument);
+        java.util.Arrays.fill(accepted, '\0');
     }
 
     @Test
@@ -208,6 +213,7 @@ final class LoginSessionTest {
         private SavedCredential credential;
         private int verified;
         private int deleted;
+        private char[] savedPasswordArgument;
         @Override public void sendCommand(String commandWithoutSlash) { order.add("send"); commands.add(commandWithoutSlash); }
         @Override public void showSavePrompt(PromptModel model) { card = model; }
         @Override public void toast(String translationKey) { }
@@ -218,7 +224,7 @@ final class LoginSessionTest {
         }
         @Override public void markVerified(String host, String username) { verified++; }
         @Override public void delete(String host, String username) { deleted++; credential = null; }
-        @Override public void saveVerified(String host, String username, char[] password) { }
+        @Override public void saveVerified(String host, String username, char[] password) { savedPasswordArgument = password; }
         void credential(String secret) { credential = new SavedCredential(account(secret, Account.Status.VERIFIED), true, false, null); }
         void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, false, null); }
         private static Account account(String secret, Account.Status status) {

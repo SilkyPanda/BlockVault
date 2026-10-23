@@ -138,7 +138,10 @@ public final class LoginSession {
 
     /** Saves a manually captured password after the owner confirms its card. */
     public void confirmCapturedSave(char[] password) {
-        if (host != null && state == SessionState.CONFIRMED) env.vault().saveVerified(host, username, password.clone());
+        if (host == null || state != SessionState.CONFIRMED) return;
+        char[] staged = password.clone();
+        try { env.vault().saveVerified(host, username, staged); }
+        finally { Arrays.fill(staged, '\0'); }
     }
 
     /** Returns the current connection state. */
