@@ -27,3 +27,11 @@ The updated Fabric class index contains `net.fabricmc.fabric.api.client.keymappi
 ## 2026-10-23 — Local Gradle test attempt unavailable
 
 `gradle --no-daemon test` failed before project configuration because the installed Gradle could not load `libnative-platform.so` for Linux amd64. Static rules and `git diff --check` pass. M2 remains PARTIAL until the updated tests compile and pass in GitHub Actions; this environment cannot provide that CI run.
+
+## 2026-10-23 — Classify registration failure responses
+
+The M2 CI run showed that `Registration failed!` did not match the default failure patterns, leaving a pending account undeleted. Add a narrow registration/account-creation failure expression and a matcher assertion so these responses enter the existing failure cleanup path.
+
+## 2026-10-23 — Classify registration failure responses
+
+The M2 CI run showed that `Registration failed!` did not match the default failure patterns, leaving a pending account undeleted. Add a narrow registration/account-creation failure expression and a matcher assertion so these responses enter the existing failure cleanup path.

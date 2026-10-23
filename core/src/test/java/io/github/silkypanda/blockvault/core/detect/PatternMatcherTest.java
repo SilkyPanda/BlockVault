@@ -22,6 +22,7 @@ final class PatternMatcherTest {
         assertTrue(prompts.matchPrompt("hello there").isEmpty());
         assertEquals(ResultKind.SUCCESS, results.classify("Successfully registered!"));
         assertEquals(ResultKind.FAILURE, results.classify("Wrong password!"));
+        assertEquals(ResultKind.FAILURE, results.classify("Registration failed!"));
         assertEquals(8, results.parseRuleHint("Password must be at least 8 characters").orElseThrow().minLength());
     }
 
