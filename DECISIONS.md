@@ -34,7 +34,7 @@ The M2 CI run showed that `Registration failed!` did not match the default failu
 
 ## 2026-10-23 — Implement client hooks from refreshed 26.3 API evidence
 
-The owner reports a green CI run at `f189cec`, so proceed with M3. Read the refreshed Fabric and NeoForge API dump artifacts from `/tmp/api-fabric` and `/tmp/api-neoforge` before implementation. Cross-check the cached 26.3 Minecraft jar where the public dumps omit bytecode: `CommandHistory.addCommand(String)` calls `save()` after appending and writes `command_history.txt`, so cancel at method HEAD prevents both memory and disk history entries. The `ClientPacketListener.sendCommand(String)` method handles command signing internally; hook this verified public method for manual capture. Use Fabric's dumped `KeyMappingHelper` spelling and `GLFW_KEY_UNKNOWN` for the plan's unbound default. This environment cannot compile: local Gradle exits before configuration because `libnative-platform.so` cannot load. Treat M3 as partial until CI passes.
+The owner reports a green CI run at `f189cec`, so proceed with M3. Read the refreshed Fabric and NeoForge API dump artifacts from `/tmp/api-fabric` and `/tmp/api-neoforge` before implementation. Cross-check the cached 26.3 Minecraft jar where the public dumps omit bytecode: `CommandHistory.addCommand(String)` calls `save()` after appending and writes `command_history.txt`, so cancel at method HEAD prevents both memory and disk history entries. The `ClientPacketListener.sendCommand(String)` method handles command signing internally; hook this verified public method for manual capture. Use Fabric's dumped `KeyMappingHelper` spelling and Minecraft's `InputConstants.UNKNOWN` for the unbound key. This environment cannot compile: local Gradle exits before configuration because `libnative-platform.so` cannot load. Treat M3 as partial until CI passes.
 
 ## 2026-10-23 — Wipe captured-save staging array
 
@@ -43,6 +43,10 @@ The owner reports a green CI run at `f189cec`, so proceed with M3. Read the refr
 ## 2026-10-23 — Defer NeoForge development-environment detection
 
 The supplied NeoForge API dump did not include the loader environment class, and Gradle cannot resolve/build the local NeoForge project in this environment. Avoid relying on an assumed API or a filesystem heuristic. `NeoForgePlatform.isDevEnvironment()` currently returns false with a verification TODO; no current feature reads the value. Add the specific loader class to the next diagnostic dump before wiring detection.
+
+## 2026-10-23 — Remove direct GLFW compile dependency
+
+The first M3 CI run (`6ba7793`) failed in both loader jobs because their compile classpaths do not expose `org.lwjgl.glfw`. Remove direct GLFW imports. The cached 26.3 Minecraft bytecode shows `InputConstants.UNKNOWN` is initialized from keyboard key code 0; use that verified Minecraft value for unbound key mappings. `KeyboardHandler.keyPress` receives the GLFW press action as integer 1, so compare that value without importing GLFW. This keeps shared code within the loader-provided Minecraft compile API.
 
 ## 2026-10-23 — Dump CommandHistory bytecode before history interception
 
