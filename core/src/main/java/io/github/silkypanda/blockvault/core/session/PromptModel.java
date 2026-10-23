@@ -11,5 +11,7 @@ public record PromptModel(CardVariant variant, String host, String username, cha
         password = password == null ? new char[0] : password.clone();
     }
     @Override public char[] password() { return password.clone(); }
+    /** Wipes the password retained by this presentation model after the UI no longer needs it. */
+    public void clearPassword() { java.util.Arrays.fill(password, '\0'); }
     @Override public String toString() { return "PromptModel[variant=" + variant + ", host=" + host + ", password=****]"; }
 }

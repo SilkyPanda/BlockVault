@@ -11,6 +11,7 @@ public final class BlockVaultFabric implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         BlockVault.init(new FabricPlatform());
+        FabricClientHooks.register();
     }
 
     private static final class FabricPlatform implements Platform {

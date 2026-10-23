@@ -1,10 +1,12 @@
 # Client core
 net.minecraft.client.Minecraft
 net.minecraft.client.User
+net.minecraft.client.KeyboardHandler
 net.minecraft.client.KeyMapping
 net.minecraft.client.KeyMapping$Category
 net.minecraft.client.CommandHistory
 net.minecraft.util.thread.ReentrantBlockableEventLoop
+net.minecraft.util.thread.BlockableEventLoop
 # Multiplayer / networking
 net.minecraft.client.multiplayer.ClientPacketListener
 net.minecraft.client.multiplayer.ServerData
@@ -19,15 +21,20 @@ net.minecraft.network.chat.Component
 # GUI
 net.minecraft.client.gui.screens.Screen
 net.minecraft.client.gui.GuiGraphicsExtractor
+net.minecraft.client.gui.Gui
 net.minecraft.client.gui.components.EditBox
+net.minecraft.client.gui.components.EditBox$TextFormatter
 net.minecraft.client.gui.components.Button
+net.minecraft.client.gui.components.Button$Builder
 net.minecraft.client.gui.components.AbstractWidget
 net.minecraft.client.gui.components.toasts.ToastManager
 net.minecraft.client.gui.components.toasts.SystemToast
+net.minecraft.client.gui.components.toasts.SystemToast$SystemToastId
 net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen
 net.minecraft.client.gui.screens.options.OptionsSubScreen
 net.minecraft.client.input.KeyEvent
 net.minecraft.client.input.MouseButtonEvent
+com.mojang.blaze3d.platform.InputConstants
 # Brigadier (command tree)
 com.mojang.brigadier.CommandDispatcher
 com.mojang.brigadier.tree.CommandNode

@@ -83,9 +83,11 @@ tasks.register('dumpApi') {
         def cp = sourceSets.main.compileClasspath.asPath
         def classes = file('../tools/api-classes.txt').readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') }
         classes.each { c ->
-            // CommandHistory's private members reveal the history persistence path.
-            def visibility = c == 'net.minecraft.client.CommandHistory' ? '-private' : '-protected'
-            def proc = ['javap', visibility, '-cp', cp, c].execute()
+            // Disassemble CommandHistory to confirm whether addCommand persists immediately.
+            def args = c == 'net.minecraft.client.CommandHistory'
+                    ? ['javap', '-c', '-constants', '-private', '-cp', cp, c]
+                    : ['javap', '-protected', '-cp', cp, c]
+            def proc = args.execute()
             def text = new StringBuilder()
             proc.consumeProcessOutput(text, text)
             proc.waitFor()

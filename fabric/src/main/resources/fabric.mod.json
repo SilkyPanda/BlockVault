@@ -9,6 +9,7 @@
     "sources": "https://github.com/SilkyPanda/BlockVault"
   },
   "license": "All-Rights-Reserved",
+  "mixins": ["blockvault.mixins.json"],
   "environment": "client",
   "entrypoints": {
     "client": ["io.github.silkypanda.blockvault.fabric.BlockVaultFabric"]

@@ -14,6 +14,7 @@ import net.neoforged.fml.loading.FMLPaths;
 public final class BlockVaultNeoForge {
     public BlockVaultNeoForge(IEventBus modBus, ModContainer container) {
         BlockVault.init(new NeoForgePlatform());
+        NeoForgeClientHooks.register(modBus);
     }
 
     private static final class NeoForgePlatform implements Platform {
@@ -29,7 +30,8 @@ public final class BlockVaultNeoForge {
 
         @Override
         public boolean isDevEnvironment() {
-            return !FMLPaths.GAMEDIR.get().resolve(".fabric").toFile().exists();
+            // TODO(verify-26.3): connect this to the verified NeoForge loader environment API.
+            return false;
         }
     }
 }

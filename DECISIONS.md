@@ -32,6 +32,22 @@ The updated Fabric class index contains `net.fabricmc.fabric.api.client.keymappi
 
 The M2 CI run showed that `Registration failed!` did not match the default failure patterns, leaving a pending account undeleted. Add a narrow registration/account-creation failure expression and a matcher assertion so these responses enter the existing failure cleanup path.
 
+## 2026-10-23 — Implement client hooks from refreshed 26.3 API evidence
+
+The owner reports a green CI run at `f189cec`, so proceed with M3. Read the refreshed Fabric and NeoForge API dump artifacts from `/tmp/api-fabric` and `/tmp/api-neoforge` before implementation. Cross-check the cached 26.3 Minecraft jar where the public dumps omit bytecode: `CommandHistory.addCommand(String)` calls `save()` after appending and writes `command_history.txt`, so cancel at method HEAD prevents both memory and disk history entries. The `ClientPacketListener.sendCommand(String)` method handles command signing internally; hook this verified public method for manual capture. Use Fabric's dumped `KeyMappingHelper` spelling and `GLFW_KEY_UNKNOWN` for the plan's unbound default. This environment cannot compile: local Gradle exits before configuration because `libnative-platform.so` cannot load. Treat M3 as partial until CI passes.
+
+## 2026-10-23 — Wipe captured-save staging array
+
+`LoginSession.confirmCapturedSave` passes a temporary password clone into the asynchronous vault facade. Wipe that staging array immediately after the facade call; the shared client facade takes its own copy synchronously before queuing background work. Add a unit assertion for the handoff buffer. CI must validate this follow-up with M3.
+
+## 2026-10-23 — Defer NeoForge development-environment detection
+
+The supplied NeoForge API dump did not include the loader environment class, and Gradle cannot resolve/build the local NeoForge project in this environment. Avoid relying on an assumed API or a filesystem heuristic. `NeoForgePlatform.isDevEnvironment()` currently returns false with a verification TODO; no current feature reads the value. Add the specific loader class to the next diagnostic dump before wiring detection.
+
+## 2026-10-23 — Dump CommandHistory bytecode before history interception
+
+The refreshed API dump confirms `CommandHistory.addCommand(String)` and a private persistence method/path field, but the output does not include the constant value or method body. Extend the diagnostic dump to include private bytecode and constants for this one class so the M3 history hook can be checked against the actual persistence behavior before implementing it.
+
 ## 2026-10-23 — Classify registration failure responses
 
 The M2 CI run showed that `Registration failed!` did not match the default failure patterns, leaving a pending account undeleted. Add a narrow registration/account-creation failure expression and a matcher assertion so these responses enter the existing failure cleanup path.
