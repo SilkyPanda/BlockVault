@@ -62,6 +62,7 @@
   "blockvault.settings.vault": "Vault",
   "blockvault.data.open": "Open BlockVault data folder",
   "blockvault.data.opened": "Opened the BlockVault data folder.",
+  "blockvault.data.open.copied": "Could not open the folder. Its path was copied to your clipboard.",
   "blockvault.data.open.failed": "Could not open the BlockVault data folder.",
   "blockvault.data.erase": "Uninstall: erase BlockVault data…",
   "blockvault.data.erase.title": "Erase all BlockVault data?",

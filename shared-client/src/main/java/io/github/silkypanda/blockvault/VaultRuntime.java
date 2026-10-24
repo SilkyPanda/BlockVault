@@ -292,16 +292,34 @@ public final class VaultRuntime implements VaultAccess {
     static void openDataDirectory() {
         BackgroundExecutor.submit(() -> {
             boolean opened = false;
+            java.nio.file.Path directory = null;
             try {
-                java.nio.file.Path directory = DataDirs.createDirectory();
-                if (!Desktop.isDesktopSupported()) throw new IOException("Desktop file browser is unavailable");
-                Desktop.getDesktop().open(directory.toFile());
-                opened = true;
+                directory = DataDirs.createDirectory();
+                if (Desktop.isDesktopSupported()) {
+                    Desktop desktop = Desktop.getDesktop();
+                    try {
+                        if (!desktop.isSupported(Desktop.Action.OPEN)) throw new UnsupportedOperationException();
+                        desktop.open(directory.toFile());
+                        opened = true;
+                    } catch (Exception openFailure) {
+                        if (desktop.isSupported(Desktop.Action.BROWSE)) {
+                            desktop.browse(directory.toUri());
+                            opened = true;
+                        }
+                    }
+                }
             } catch (Exception failure) {
                 LOGGER.warn("BlockVault could not open its data directory ({})", failure.getClass().getSimpleName());
             }
             boolean result = opened;
-            BackgroundExecutor.onGameThread(() -> toast(result ? "blockvault.data.opened" : "blockvault.data.open.failed"));
+            String path = directory == null ? null : directory.toString();
+            BackgroundExecutor.onGameThread(() -> {
+                if (result) toast("blockvault.data.opened");
+                else if (path != null) {
+                    Minecraft.getInstance().keyboardHandler.setClipboard(path);
+                    toast("blockvault.data.open.copied");
+                } else toast("blockvault.data.open.failed");
+            });
             return null;
         });
     }

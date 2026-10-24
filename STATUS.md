@@ -32,6 +32,7 @@ Implemented but not yet verified by CI:
 - Adjust memorable-password word count to fit server length rules; legacy `authme` entries now use automatic prompt detection; skip automatic backups for vaults with no accounts; enforce a 200 ms autofill-delay minimum.
 - Add settings actions to open the BlockVault data directory and erase its contents after a warning and master-password verification; this does not uninstall the launcher-managed mod jar.
 - The Vault action in settings now continues to the vault list after first-time creation or master-password unlock. This navigation fix is not yet verified by CI or in-game testing.
+- Opening the data folder now tries Java's open and browse desktop actions, then copies the resolved path to the clipboard if both fail. Windows behavior remains unverified by CI and in-game testing.
 
 ## TODO / unresolved review work
 
