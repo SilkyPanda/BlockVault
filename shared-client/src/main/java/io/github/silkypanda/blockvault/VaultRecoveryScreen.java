@@ -15,6 +15,7 @@ final class VaultRecoveryScreen extends Screen {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
     private final Screen parent;
+    private final boolean recoveryMode;
     private List<BackupSummary> backups = List.of();
     private int page;
     private int pageSize;
@@ -24,8 +25,13 @@ final class VaultRecoveryScreen extends Screen {
     private boolean loadingStarted;
 
     VaultRecoveryScreen(Screen parent) {
+        this(parent, false);
+    }
+
+    VaultRecoveryScreen(Screen parent, boolean recoveryMode) {
         super(Component.translatable("blockvault.backup.title"));
         this.parent = parent;
+        this.recoveryMode = recoveryMode;
     }
 
     @Override protected void init() {
@@ -37,33 +43,50 @@ final class VaultRecoveryScreen extends Screen {
         List<BackupSummary> visible = pageBackups();
         for (int i = 0; i < visible.size(); i++) {
             BackupSummary summary = visible.get(i);
-            Button button = Button.builder(Component.literal(backupLabel(summary)), ignored -> inspect(summary))
+            Button button = Button.builder(Component.literal(backupLabel(summary)), ignored -> {
+                        VaultRuntime.activity();
+                        if (recoveryMode) net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
+                                new VaultBackupRecoveryScreen(summary, this));
+                        else inspect(summary);
+                    })
                     .bounds(center - buttonWidth / 2, firstRowY + i * 25, buttonWidth, 20).build();
             addRenderableWidget(button);
         }
         int controlsY = Math.min(height - 48, firstRowY + pageSize * 25 + 3);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.previous"), button -> {
+            VaultRuntime.activity();
             page = Math.max(0, page - 1);
             rebuildWidgets();
         }).bounds(center - 150, controlsY, 92, 20).build()).active = page > 0;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.next"), button -> {
+            VaultRuntime.activity();
             page = Math.min(totalPages() - 1, page + 1);
             rebuildWidgets();
         }).bounds(center + 58, controlsY, 92, 20).build()).active = page < totalPages() - 1;
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.manual.create"), button -> createManual())
+        if (!recoveryMode) addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.manual.create"), button -> createManual())
                 .bounds(center - 150, height - 30, 148, 20).build()).active = !busy;
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button ->
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent))
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> {
+                VaultRuntime.activity();
+                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+            })
                 .bounds(center + 2, height - 30, 148, 20).build());
         if (!loadingStarted) {
             loadingStarted = true;
-            VaultRuntime.listBackups(loaded -> {
+            if (recoveryMode) VaultRuntime.listRecoveryBackups(loaded -> acceptBackups(loaded));
+            else VaultRuntime.listBackups(loaded -> acceptBackups(loaded));
+        }
+    }
+
+    private void acceptBackups(List<BackupSummary> loaded) {
                 if (net.minecraft.client.Minecraft.getInstance().gui.screen() != this) return;
                 backups = loaded;
                 page = Math.min(page, totalPages() - 1);
                 rebuildWidgets();
-            });
-        }
+    }
+
+    void refreshBackups() {
+        if (recoveryMode) VaultRuntime.listRecoveryBackups(this::acceptBackups);
+        else VaultRuntime.listBackups(this::acceptBackups);
     }
 
     private void inspect(BackupSummary summary) {
@@ -119,7 +142,8 @@ final class VaultRecoveryScreen extends Screen {
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, 14, 0xffffffff);
-        graphics.centeredText(font, Component.translatable("blockvault.backup.help"), width / 2, 34, 0xffc5c0cf);
+        graphics.centeredText(font, Component.translatable(recoveryMode ? "blockvault.backup.recovery.help"
+                : "blockvault.backup.help"), width / 2, 34, 0xffc5c0cf);
         graphics.centeredText(font, Component.translatable("blockvault.backup.page", Math.min(page + 1, totalPages()), totalPages()),
                 width / 2, Math.min(height - 56, firstRowY + pageSize * 25 + 27), 0xffaaaaaa);
         if (busy || statusKey != null) graphics.centeredText(font, Component.translatable(busy

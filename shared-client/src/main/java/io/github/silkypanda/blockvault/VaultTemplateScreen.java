@@ -30,6 +30,7 @@ final class VaultTemplateScreen extends Screen {
         int y = height / 2 - 48;
         for (Map.Entry<String, String> template : LABELS) {
             boolean selected = template.getKey().equals(row.templateId())
+                    || ("auto".equals(template.getKey()) && "authme".equals(row.templateId()))
                     || ("authme".equals(template.getKey()) && "authme-explicit".equals(row.templateId()));
             Component label = selected
                     ? Component.translatable("blockvault.template.current", Component.translatable(template.getValue()))

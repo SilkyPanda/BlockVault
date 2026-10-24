@@ -3,12 +3,10 @@ package io.github.silkypanda.blockvault.neoforge;
 import io.github.silkypanda.blockvault.BlockVault;
 import io.github.silkypanda.blockvault.Platform;
 import io.github.silkypanda.blockvault.VaultRuntime;
-import java.nio.file.Path;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
 /** NeoForge client entrypoint. */
@@ -27,15 +25,5 @@ public final class BlockVaultNeoForge {
             return "neoforge";
         }
 
-        @Override
-        public Path gameDir() {
-            return FMLPaths.GAMEDIR.get();
-        }
-
-        @Override
-        public boolean isDevEnvironment() {
-            // TODO(verify-26.3): connect this to the verified NeoForge loader environment API.
-            return false;
-        }
     }
 }

@@ -44,7 +44,7 @@ final class VaultSettingsScreen extends OptionsSubScreen {
         if (!settingsLoaded) return;
         addSettingButton("blockvault.settings.autofill", settings.autofill(), current -> current.withAutofill(!current.autofill()));
         addSettingButton("blockvault.settings.delay", settings.autofillDelayMillis(),
-                current -> current.withDelay(next(current.autofillDelayMillis(), List.of(0, 400, 800, 1500, 3000))));
+                current -> current.withDelay(next(current.autofillDelayMillis(), List.of(200, 400, 800, 1500, 3000))));
         addSettingButton("blockvault.settings.auto_lock", settings.autoLockMinutes(),
                 current -> current.withAutoLock(next(current.autoLockMinutes(), List.of(0, 5, 15, 30, 60))));
         addSettingButton("blockvault.settings.duration", settings.cardDurationSeconds(),

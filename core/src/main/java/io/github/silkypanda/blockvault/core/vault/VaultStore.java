@@ -16,6 +16,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 /** Thread-confined encrypted vault storage. Call file and crypto methods off the game thread. */
 public final class VaultStore {
@@ -26,6 +29,7 @@ public final class VaultStore {
     private byte[] wrappedKey;
     private byte[] vaultKey;
     private Vault vault;
+    private byte[] diskDigest;
 
     private VaultStore(Path directory) {
         this.directory = directory.toAbsolutePath().normalize();
@@ -36,15 +40,17 @@ public final class VaultStore {
         VaultStore store = new VaultStore(dir);
         Path file = store.path("vault.bv");
         if (Files.exists(file)) {
+            byte[] encoded = readBounded(file);
             try {
-                VaultFile.Parsed parsed = VaultFile.parse(readBounded(file));
+                VaultFile.Parsed parsed = VaultFile.parse(encoded);
                 store.header = parsed.header();
                 store.wrappedKey = parsed.wrappedKey();
+                store.diskDigest = digest(encoded);
             } catch (UnsupportedVaultVersionException version) {
                 throw version;
             } catch (Exception malformed) {
                 throw new VaultCorruptException(malformed);
-            }
+            } finally { SecureBytes.wipe(encoded); }
         }
         return store;
     }
@@ -58,8 +64,8 @@ public final class VaultStore {
     /** Creates and unlocks a new vault. Master-password work runs on the caller's background thread. */
     public void create(char[] masterPassword) throws IOException {
         if (exists()) throw new IllegalStateException("Vault already exists");
-        if (masterPassword == null || masterPassword.length == 0) {
-            throw new IllegalArgumentException("A master password is required");
+        if (masterPassword == null || masterPassword.length < 8) {
+            throw new IllegalArgumentException("Master password must contain at least 8 characters");
         }
         byte[] salt = SecureBytes.random(16);
         try {
@@ -97,7 +103,7 @@ public final class VaultStore {
         } finally {
             kek.clear();
         }
-        try { activateKey(parsed, candidate); }
+        try { activateKey(parsed, candidate); diskDigest = digest(file); }
         catch (VaultAuthException damaged) { throw new VaultCorruptException(damaged); }
         catch (IllegalArgumentException malformed) { throw new VaultCorruptException(malformed); }
     }
@@ -179,16 +185,35 @@ public final class VaultStore {
     /** Refreshes decrypted state from the atomically replaced vault file for another game instance's writes. */
     public void reload() throws Exception {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
-        VaultFile.Parsed parsed = VaultFile.parse(readBounded(path("vault.bv")));
+        byte[] encoded = readVaultSnapshot();
         byte[] plaintext = null;
         try {
+            byte[] currentDigest = digest(encoded);
+            if (diskDigest != null && Arrays.equals(diskDigest, currentDigest)) return;
+            VaultFile.Parsed parsed = VaultFile.parse(encoded);
             plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
             Vault refreshed = VaultJson.read(plaintext);
             clearVaultPasswords(vault);
             header = parsed.header();
             wrappedKey = parsed.wrappedKey();
             vault = refreshed;
-        } finally { SecureBytes.wipe(plaintext); }
+            diskDigest = currentDigest;
+        } finally {
+            SecureBytes.wipe(plaintext);
+            SecureBytes.wipe(encoded);
+        }
+    }
+
+    private byte[] readVaultSnapshot() throws IOException {
+        Files.createDirectories(directory);
+        setPermissions(directory, true);
+        try (FileChannel lockChannel = FileChannel.open(path("vault.bv.lock"), StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE);
+             FileLock lock = lockChannel.lock()) {
+            if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
+            setPermissions(path("vault.bv.lock"), false);
+            return readBounded(path("vault.bv"));
+        }
     }
 
     /** Returns the unlocked vault or throws while locked. */
@@ -209,16 +234,21 @@ public final class VaultStore {
         Path parent = target.getParent();
         if (parent == null) throw new IOException("Export destination has no parent directory");
         byte[] encrypted = readBounded(path("vault.bv"));
+        boolean created = false;
         try {
             Files.createDirectories(parent);
             try (FileChannel channel = FileChannel.open(target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                created = true;
                 setPermissions(target, false);
                 java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(encrypted);
                 while (buffer.hasRemaining()) channel.write(buffer);
                 channel.force(true);
             }
             setPermissions(target, false);
-        } catch (IOException failure) { Files.deleteIfExists(target); throw failure; }
+        } catch (IOException failure) {
+            if (created) Files.deleteIfExists(target);
+            throw failure;
+        }
         finally { SecureBytes.wipe(encrypted); }
     }
 
@@ -257,6 +287,15 @@ public final class VaultStore {
 
     /** Atomically encrypts and persists the supplied vault, rotating at most one backup per day. */
     public void save(Vault value) throws IOException {
+        save(value, true);
+    }
+
+    /** Saves a deliberate local edit only if the on-disk vault has not changed since reload. */
+    public void saveExplicit(Vault value) throws IOException {
+        save(value, false);
+    }
+
+    private void save(Vault value, boolean mergeWithDisk) throws IOException {
         if (vaultKey == null || header == null || wrappedKey == null) throw new IllegalStateException("Vault is locked");
         Vault toSave = value;
         byte[] json = null;
@@ -268,17 +307,31 @@ public final class VaultStore {
              FileLock lock = lockChannel.lock()) {
             if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
             setPermissions(lockPath, false);
+            if (!mergeWithDisk && diskDigest != null && !Files.exists(path("vault.bv"))) {
+                throw new IOException("Vault changed on disk; reload before applying this edit");
+            }
             if (Files.exists(path("vault.bv"))) {
-                try {
-                    VaultFile.Parsed disk = VaultFile.parse(readBounded(path("vault.bv")));
-                    byte[] diskJson = AesGcm.decrypt(vaultKey, disk.dataNonce(), disk.headerAad(), disk.ciphertext());
+                byte[] diskBytes = readBounded(path("vault.bv"));
+                byte[] currentDigest = digest(diskBytes);
+                if (!mergeWithDisk && (diskDigest == null || !Arrays.equals(diskDigest, currentDigest))) {
+                    SecureBytes.wipe(diskBytes);
+                    throw new IOException("Vault changed on disk; reload before applying this edit");
+                }
+                if (!mergeWithDisk) SecureBytes.wipe(diskBytes);
+                if (mergeWithDisk) {
                     try {
-                        toSave = VaultMerger.merge(toSave, VaultJson.read(diskJson), System.currentTimeMillis());
+                        VaultFile.Parsed disk = VaultFile.parse(diskBytes);
+                        byte[] diskJson = AesGcm.decrypt(vaultKey, disk.dataNonce(), disk.headerAad(), disk.ciphertext());
+                        try {
+                            toSave = VaultMerger.merge(toSave, VaultJson.read(diskJson), System.currentTimeMillis());
+                        } finally {
+                            SecureBytes.wipe(diskJson);
+                        }
+                    } catch (Exception e) {
+                        throw new IOException("Existing vault could not be authenticated; file was left untouched", e);
                     } finally {
-                        SecureBytes.wipe(diskJson);
+                        SecureBytes.wipe(diskBytes);
                     }
-                } catch (Exception e) {
-                    throw new IOException("Existing vault could not be authenticated; file was left untouched", e);
                 }
             }
             json = VaultJson.write(toSave);
@@ -297,16 +350,16 @@ public final class VaultStore {
                 Files.move(temp, path("vault.bv"), StandardCopyOption.REPLACE_EXISTING);
             }
             vault = toSave;
+            diskDigest = digest(encoded);
         } finally {
             SecureBytes.wipe(json);
             SecureBytes.wipe(encoded);
         }
     }
 
-    /** Returns whether a numbered encrypted recovery point exists (1 is newest). */
-    public boolean backupExists(int slot) {
-        checkBackupSlot(slot);
-        return Files.isRegularFile(path("vault.bv.bak" + slot));
+    private static byte[] digest(byte[] value) throws IOException {
+        try { return MessageDigest.getInstance("SHA-256").digest(value); }
+        catch (NoSuchAlgorithmException impossible) { throw new IOException("SHA-256 is unavailable", impossible); }
     }
 
     /** Returns all available automatic and manual backups, newest first within each group. */
@@ -324,6 +377,64 @@ public final class VaultStore {
         }
         result.sort(Comparator.comparingLong(BackupSummary::createdAt).reversed());
         return List.copyOf(result);
+    }
+
+    /** Lists recovery points without requiring the main vault to exist or unlock. */
+    public static List<BackupSummary> availableBackups(Path directory) throws IOException {
+        VaultStore store = new VaultStore(directory);
+        List<BackupSummary> result = new ArrayList<>();
+        store.addBackupSummaries(result, false, 3);
+        store.addBackupSummaries(result, true, MANUAL_BACKUP_SLOTS);
+        result.sort(Comparator.comparingLong(BackupSummary::createdAt).reversed());
+        return List.copyOf(result);
+    }
+
+    /** Validates and restores an encrypted backup directly when the main vault is missing or damaged. */
+    public static void restoreFromBackup(Path directory, BackupSummary backupInfo, char[] password) throws Exception {
+        VaultStore store = new VaultStore(directory);
+        Path backup = store.backupPath(backupInfo);
+        byte[] bytes = store.readBackup(backupInfo, backup);
+        byte[] plaintext = null;
+        byte[] candidateKey = null;
+        try {
+            VaultFile.Parsed parsed;
+            try { parsed = VaultFile.parse(bytes); }
+            catch (UnsupportedVaultVersionException version) { throw version; }
+            catch (Exception malformed) { throw new VaultCorruptException(malformed); }
+            if (parsed.header().keyMode() != KeyMode.MASTER_PASSWORD) {
+                throw new VaultCorruptException(new IllegalArgumentException("Backup key mode is unsupported"));
+            }
+            if (password == null || password.length == 0) throw new IllegalArgumentException("A backup password is required");
+            byte[] wrapAad = java.util.Arrays.copyOf(parsed.headerAad(), 28);
+            MasterPasswordKek kek = masterKek(password, parsed.header().salt(), parsed.header().iterations(), wrapAad);
+            try {
+                candidateKey = kek.unwrap(parsed.wrappedKey());
+            } catch (VaultAuthException wrongPassword) {
+                throw new WrongMasterPasswordException(wrongPassword);
+            } finally { kek.clear(); }
+            try {
+                plaintext = AesGcm.decrypt(candidateKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+                Vault decoded = VaultJson.read(plaintext);
+                clearVaultPasswords(decoded);
+            } catch (Exception invalidBackup) {
+                throw new VaultCorruptException(invalidBackup);
+            }
+            Files.createDirectories(store.directory);
+            Path temporary = store.path("vault.bv.recovery.tmp");
+            try {
+                Files.write(temporary, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.WRITE);
+                setPermissions(temporary, false);
+                try { Files.move(temporary, store.path("vault.bv"), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+                catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                    Files.move(temporary, store.path("vault.bv"), StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally { Files.deleteIfExists(temporary); }
+        } finally {
+            SecureBytes.wipe(bytes);
+            SecureBytes.wipe(plaintext);
+            SecureBytes.wipe(candidateKey);
+        }
     }
 
     /** Makes a manually requested encrypted snapshot, retaining the ten newest. */
@@ -353,11 +464,6 @@ public final class VaultStore {
             SecureBytes.wipe(bytes);
             SecureBytes.wipe(plaintext);
         }
-    }
-
-    /** Restores an encrypted recovery point while retaining the current master-password wrapper. */
-    public void restoreBackup(int slot) throws Exception {
-        restoreBackup(new BackupSummary(false, slot, 0));
     }
 
     /** Restores an automatic or manual backup while retaining the current master-password wrapper. */
@@ -406,6 +512,7 @@ public final class VaultStore {
                 }
                 clearVaultPasswords(vault);
                 vault = restored;
+                diskDigest = digest(encoded);
             }
         } finally {
             SecureBytes.wipe(json);
@@ -424,6 +531,10 @@ public final class VaultStore {
     /** Re-wraps the same vault key with a new master password. */
     public void changeMasterPassword(char[] oldPassword, char[] newPassword) throws Exception {
         if (vaultKey == null || header.keyMode() != KeyMode.MASTER_PASSWORD) throw new IllegalStateException("Vault is not unlocked in master mode");
+        if (newPassword == null || newPassword.length < 8) throw new IllegalArgumentException("Master password must contain at least 8 characters");
+        if (oldPassword == null || java.util.Arrays.equals(oldPassword, newPassword)) {
+            throw new IllegalArgumentException("New master password must differ from the current password");
+        }
         byte[] oldAad = prefix(header);
         MasterPasswordKek oldProvider = masterKek(oldPassword, header.salt(), header.iterations(), oldAad);
         byte[] verifiedKey;
@@ -458,14 +569,57 @@ public final class VaultStore {
                 SecureBytes.wipe(nextWrapped);
                 throw failure;
             }
+            reencryptBackups();
         } finally {
             SecureBytes.wipe(salt);
+        }
+    }
+
+    /** Re-encrypts every recovery point with the new master-password wrapper and current vault key. */
+    private void reencryptBackups() throws BackupReencryptionException {
+        Path lockPath = path("vault.bv.lock");
+        try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = lockChannel.lock()) {
+            if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
+            for (int slot = 1; slot <= 3; slot++) reencryptBackup(path("vault.bv.bak" + slot));
+            for (int slot = 1; slot <= MANUAL_BACKUP_SLOTS; slot++) reencryptBackup(manualBackupPath(slot));
+        } catch (Exception failure) {
+            throw new BackupReencryptionException(failure);
+        }
+    }
+
+    private void reencryptBackup(Path backup) throws Exception {
+        if (!Files.isRegularFile(backup)) return;
+        java.nio.file.attribute.FileTime createdAt = Files.getLastModifiedTime(backup);
+        byte[] encoded = readBounded(backup);
+        byte[] plaintext = null;
+        byte[] replacement = null;
+        try {
+            VaultFile.Parsed parsed = VaultFile.parse(encoded);
+            plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+            replacement = VaultFile.encode(header, wrappedKey, vaultKey, plaintext);
+            Path temporary = backup.resolveSibling(backup.getFileName() + ".tmp");
+            try {
+                Files.write(temporary, replacement, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.WRITE);
+                setPermissions(temporary, false);
+                try { Files.move(temporary, backup, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+                catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                    Files.move(temporary, backup, StandardCopyOption.REPLACE_EXISTING);
+                }
+                Files.setLastModifiedTime(backup, createdAt);
+            } finally { Files.deleteIfExists(backup.resolveSibling(backup.getFileName() + ".tmp")); }
+        } finally {
+            SecureBytes.wipe(encoded);
+            SecureBytes.wipe(plaintext);
+            SecureBytes.wipe(replacement);
         }
     }
 
     private void rotateBackupsIfDue() throws IOException {
         Path current = path("vault.bv");
         if (!Files.isRegularFile(current)) return;
+        if (vault == null || vault.servers().stream().allMatch(server -> server.accounts().isEmpty())) return;
         Path newest = path("vault.bv.bak1");
         long now = System.currentTimeMillis();
         if (Files.isRegularFile(newest) && now - Files.getLastModifiedTime(newest).toMillis() < BACKUP_INTERVAL_MILLIS) return;

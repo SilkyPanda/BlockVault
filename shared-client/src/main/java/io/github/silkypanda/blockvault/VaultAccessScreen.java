@@ -41,6 +41,9 @@ final class VaultAccessScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable(create
                         ? "blockvault.vault.create" : "blockvault.vault.unlock"), button -> submit())
                 .bounds(center - 100, height / 2 + (create ? 34 : 8), 200, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.open"), button ->
+                        VaultRuntime.openRecoveryScreen(this))
+                .bounds(center - 100, height / 2 + (create ? 58 : 34), 200, 20).build());
         setInitialFocus(password);
     }
 
@@ -53,6 +56,13 @@ final class VaultAccessScreen extends Screen {
             failed = true;
             password.setValue("");
             if (confirmation != null) confirmation.setValue("");
+            return;
+        }
+        if (create && entered.length() < 8) {
+            failed = true;
+            failureKey = "blockvault.vault.password.too_short";
+            password.setValue("");
+            confirmation.setValue("");
             return;
         }
         char[] secret = entered.toCharArray();

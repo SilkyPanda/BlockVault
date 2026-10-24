@@ -74,8 +74,6 @@ final class McSessionEnv implements SessionEnv {
         PromptModel queued;
         while ((queued = queuedPrompts.poll()) != null) queued.clearPassword();
         showing = false;
-        if (Minecraft.getInstance().gui.screen() instanceof CredentialConfirmScreen) {
-            Minecraft.getInstance().setScreenAndShow(null);
-        }
+        if (Minecraft.getInstance().gui.screen() instanceof CredentialConfirmScreen screen) screen.disconnect();
     }
 }

@@ -8,7 +8,6 @@ import java.io.InputStream;
 import java.util.Set;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +37,7 @@ public final class Hooks {
             onDisconnect();
             return;
         }
+        VaultRuntime.deliverPendingTrustNotice();
         onDisconnect();
         try {
             if (patterns == null) {
@@ -83,17 +83,6 @@ public final class Hooks {
     public static void onSystemMessage(Component message) {
         LoginSession active = session;
         if (active != null && message != null) guard(active, () -> active.onSystemMessage(message.getString()));
-    }
-
-    /** Delivers the server command roots after their packet has been applied. */
-    public static void onCommandTree(ClientPacketListener connection) {
-        LoginSession active = session;
-        if (active == null || connection == null) return;
-        guard(active, () -> {
-            Set<String> roots = connection.getCommands().getRoot().getChildren().stream()
-                    .map(node -> node.getName()).collect(Collectors.toUnmodifiableSet());
-            active.onCommandTree(roots);
-        });
     }
 
     /** Captures an outgoing command without logging or retaining it outside the session. */

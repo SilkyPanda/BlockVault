@@ -2,6 +2,8 @@ package io.github.silkypanda.blockvault.core.detect;
 
 import java.util.Locale;
 import java.util.Optional;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Cheap-prefiltered matching for plain system-message text. */
@@ -13,14 +15,22 @@ public final class PromptMatcher {
 
     /** Matches a prompt after stripping residual legacy color codes. */
     public Optional<PromptKind> matchPrompt(String plain) {
+        Set<PromptKind> matches = matchingPrompts(plain);
+        if (matches.contains(PromptKind.REGISTER)) return Optional.of(PromptKind.REGISTER);
+        if (matches.contains(PromptKind.LOGIN)) return Optional.of(PromptKind.LOGIN);
+        return Optional.empty();
+    }
+
+    /** Returns all matching prompt kinds so session state can resolve messages mentioning both. */
+    public Set<PromptKind> matchingPrompts(String plain) {
         String text = clean(plain);
         String lower = text.toLowerCase(Locale.ROOT);
         boolean candidate = text.indexOf('/') >= 0;
         for (String keyword : KEYWORDS) candidate |= lower.contains(keyword);
-        if (!candidate) return Optional.empty();
-        if (matches(pack.prompt(PromptKind.REGISTER), text)) return Optional.of(PromptKind.REGISTER);
-        if (matches(pack.prompt(PromptKind.LOGIN), text)) return Optional.of(PromptKind.LOGIN);
-        return Optional.empty();
+        if (!candidate) return Set.of();
+        EnumSet<PromptKind> result = EnumSet.noneOf(PromptKind.class);
+        for (PromptKind kind : PromptKind.values()) if (matches(pack.prompt(kind), text)) result.add(kind);
+        return Set.copyOf(result);
     }
 
     static boolean matches(java.util.List<Pattern> patterns, String text) {

@@ -17,19 +17,43 @@ public final class PasswordGenerator {
 
     /** Password policy. Disabled classes are excluded; symbols are filtered to safe printable ASCII. */
     public record Policy(int length, boolean upper, boolean lower, boolean digits, boolean symbols,
-                         String symbolSet, boolean excludeAmbiguous) {
+                         String symbolSet, boolean excludeAmbiguous, int memorableWordCount) {
+        public Policy(int length, boolean upper, boolean lower, boolean digits, boolean symbols,
+                      String symbolSet, boolean excludeAmbiguous) {
+            this(length, upper, lower, digits, symbols, symbolSet, excludeAmbiguous, 0);
+        }
         public Policy {
-            if (length < 8 || length > 64 || symbolSet == null || !(upper || lower || digits || symbols)) {
+            if (length < 8 || length > 64 || symbolSet == null || !(upper || lower || digits || symbols)
+                    || memorableWordCount < 0 || memorableWordCount == 1 || memorableWordCount > 12) {
                 throw new IllegalArgumentException("Invalid password policy");
             }
         }
         public static Policy defaults() { return new Policy(20, true, true, true, true, "!@#$%^&*-_", false); }
         public static Policy pickyServer() { return new Policy(16, true, true, true, false, "", false); }
         public static Policy max() { return new Policy(32, true, true, true, true, "!@#$%^&*-_", false); }
-        public static Policy memorable() { return new Policy(20, false, false, false, true, "\u0000", false); }
+        public static Policy memorable() { return memorable(4); }
+        private static Policy memorable(int words) {
+            return new Policy(5 * words + 1, false, false, false, true, "", false, words);
+        }
 
         /** Tightens length and character constraints using a parsed server rule. */
         public Policy adjustFor(ServerRuleHint hint) {
+            if (memorableWordCount > 0) {
+                if (hint.alphanumericOnly()) throw new IllegalArgumentException("Memorable passwords require hyphens");
+                int min = hint.minLength() == null ? 8 : hint.minLength();
+                int max = hint.maxLength() == null ? 64 : hint.maxLength();
+                if (min > max) throw new IllegalArgumentException("Server password length rules conflict");
+                int selected = -1;
+                for (int words = 2; words <= 12; words++) {
+                    int candidateLength = 5 * words + 1;
+                    if (candidateLength >= min && candidateLength <= max
+                            && (selected < 0 || Math.abs(words - memorableWordCount) < Math.abs(selected - memorableWordCount))) {
+                        selected = words;
+                    }
+                }
+                if (selected < 0) throw new IllegalArgumentException("Server length rule cannot fit the memorable preset");
+                return memorable(selected);
+            }
             int adjusted = length;
             if (hint.minLength() != null) adjusted = Math.max(adjusted, hint.minLength());
             if (hint.maxLength() != null) adjusted = Math.min(adjusted, hint.maxLength());
@@ -41,10 +65,6 @@ public final class PasswordGenerator {
                 throw new IllegalArgumentException("Server password length is outside the supported range");
             }
             adjusted = Math.max(8, Math.min(64, adjusted));
-            if (symbols && "\u0000".equals(symbolSet)) {
-                if (hint.alphanumericOnly()) return new Policy(adjusted, false, true, true, false, "", excludeAmbiguous);
-                return new Policy(adjusted, false, false, false, true, "\u0000", excludeAmbiguous);
-            }
             boolean nextUpper = upper;
             boolean nextLower = lower;
             boolean nextDigits = digits;
@@ -59,7 +79,7 @@ public final class PasswordGenerator {
 
     /** Generates a secret as a caller-owned character array. */
     public static char[] generate(Policy policy) {
-        if (policy.equals(Policy.memorable())) return generateMemorable();
+        if (policy.memorableWordCount() > 0) return generateMemorable(policy.memorableWordCount());
         List<String> classes = new ArrayList<>();
         if (policy.upper()) classes.add(filter(UPPER, policy.excludeAmbiguous()));
         if (policy.lower()) classes.add(filter(LOWER, policy.excludeAmbiguous()));
@@ -77,17 +97,6 @@ public final class PasswordGenerator {
             char swap = result[i]; result[i] = result[j]; result[j] = swap;
         }
         return result;
-    }
-
-    /** Computes the policy's idealized Shannon entropy in bits. */
-    public static double entropyBits(Policy policy) {
-        if (policy.equals(Policy.memorable())) return 4 * (Math.log(1024) / Math.log(2)) + (Math.log(100) / Math.log(2));
-        int alphabet = 0;
-        if (policy.upper()) alphabet += filter(UPPER, policy.excludeAmbiguous()).length();
-        if (policy.lower()) alphabet += filter(LOWER, policy.excludeAmbiguous()).length();
-        if (policy.digits()) alphabet += filter(DIGITS, policy.excludeAmbiguous()).length();
-        if (policy.symbols()) alphabet += filter(policy.symbolSet(), policy.excludeAmbiguous()).length();
-        return policy.length() * (Math.log(alphabet) / Math.log(2));
     }
 
     /** Rejection sampling avoids modulo bias and accepts a testable random source. */
@@ -113,10 +122,10 @@ public final class PasswordGenerator {
         return result.toString();
     }
 
-    private static char[] generateMemorable() {
+    private static char[] generateMemorable(int wordCount) {
         List<String> words = WordList.VALUE;
         StringBuilder result = new StringBuilder();
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < wordCount; i++) {
             if (i > 0) result.append('-');
             result.append(words.get(uniformIndex(RANDOM, words.size())));
         }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.random.RandomGenerator;
+import io.github.silkypanda.blockvault.core.detect.ServerRuleHint;
 import org.junit.jupiter.api.Test;
 
 final class PasswordGeneratorTest {
@@ -46,5 +47,20 @@ final class PasswordGeneratorTest {
         assertEquals(4, value.chars().filter(c -> c == '-').count());
         assertTrue(value.matches("[a-z]{4}(?:-[a-z]{4}){3}-[0-9]{2}"));
         java.util.Arrays.fill(generated, '\0');
+    }
+
+    @Test
+    void memorablePresetChangesWordCountToFitServerLengthRules() {
+        char[] shortPassword = PasswordGenerator.generate(PasswordGenerator.Policy.memorable()
+                .adjustFor(new ServerRuleHint(null, 12, false)));
+        assertEquals(11, shortPassword.length);
+        assertEquals(2, new String(shortPassword).chars().filter(c -> c == '-').count());
+        java.util.Arrays.fill(shortPassword, '\0');
+
+        char[] longPassword = PasswordGenerator.generate(PasswordGenerator.Policy.memorable()
+                .adjustFor(new ServerRuleHint(24, null, false)));
+        assertEquals(26, longPassword.length);
+        assertEquals(5, new String(longPassword).chars().filter(c -> c == '-').count());
+        java.util.Arrays.fill(longPassword, '\0');
     }
 }

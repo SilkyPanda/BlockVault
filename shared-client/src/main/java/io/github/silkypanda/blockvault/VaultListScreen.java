@@ -47,41 +47,33 @@ final class VaultListScreen extends Screen {
         search.setValue(searchQuery);
         search.setHint(Component.translatable("blockvault.vault.search"));
         search.setMaxLength(128);
-        search.setResponder(value -> { VaultRuntime.activity(); searchQuery = value; page = 0; refresh(); });
+        search.setResponder(value -> { VaultRuntime.activity(); searchQuery = value; page = 0; updateVisibleRows(); });
         addRenderableWidget(search);
 
-        List<VaultRow> pageRows = pageRows();
-        for (int index = 0; index < pageRows.size(); index++) {
-            VaultRow row = pageRows.get(index);
+        for (int index = 0; index < pageSize; index++) {
             int y = 68 + index * 34;
             int actionsX = contentLeft + rowLabelWidth + 4;
-            Button reveal = addRowButton(actionsX, y, rowButtonWidth, "blockvault.vault.reveal", button ->
+            addRowButton(index, actionsX, y, "blockvault.vault.reveal", row ->
                     MinecraftHolder.open(new VaultCredentialScreen(row)));
-            Button copy = addRowButton(actionsX + rowButtonWidth + 2, y, rowButtonWidth, "blockvault.vault.copy", button -> VaultRuntime.copyPassword(row));
-            reveal.active = !row.serverOnly();
-            copy.active = !row.serverOnly();
-            addRowButton(actionsX + (rowButtonWidth + 2) * 2, y, rowButtonWidth,
-                    row.autofill() ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off",
-                    button -> VaultRuntime.updateServerPolicy(row, !row.autofill(), row.neverSave()));
-            addRowButton(actionsX + (rowButtonWidth + 2) * 3, y, rowButtonWidth,
-                    row.neverSave() ? "blockvault.vault.save.on" : "blockvault.vault.save.off",
-                    button -> VaultRuntime.updateServerPolicy(row, row.autofill(), !row.neverSave()));
-            addRowButton(actionsX + (rowButtonWidth + 2) * 4, y, rowButtonWidth,
-                    "blockvault.vault.template.short", button ->
+            addRowButton(index, actionsX + rowButtonWidth + 2, y, "blockvault.vault.copy", VaultRuntime::copyPassword);
+            addRowButton(index, actionsX + (rowButtonWidth + 2) * 2, y, "blockvault.vault.autofill.off", row ->
+                    VaultRuntime.updateServerPolicy(row, !row.autofill(), row.neverSave()));
+            addRowButton(index, actionsX + (rowButtonWidth + 2) * 3, y, "blockvault.vault.save.off", row ->
+                    VaultRuntime.updateServerPolicy(row, row.autofill(), !row.neverSave()));
+            addRowButton(index, actionsX + (rowButtonWidth + 2) * 4, y, "blockvault.vault.template.short", row ->
                     MinecraftHolder.open(new VaultTemplateScreen(row, this)));
-            addRowButton(actionsX + (rowButtonWidth + 2) * 5, y, rowButtonWidth,
-                    "blockvault.vault.delete.short", button ->
+            addRowButton(index, actionsX + (rowButtonWidth + 2) * 5, y, "blockvault.vault.delete.short", row ->
                     MinecraftHolder.open(new VaultDeleteScreen(row, this)));
         }
         previousButton = Button.builder(Component.translatable("blockvault.vault.previous"), button -> {
             VaultRuntime.activity();
             page = Math.max(0, page - 1);
-            refresh();
+            updateVisibleRows();
         }).bounds(contentLeft, height - 34, footerButtonWidth, 20).build();
         nextButton = Button.builder(Component.translatable("blockvault.vault.next"), button -> {
             VaultRuntime.activity();
             page = Math.min(totalPages() - 1, page + 1);
-            refresh();
+            updateVisibleRows();
         }).bounds(contentLeft + footerButtonWidth + 6, height - 34, footerButtonWidth, 20).build();
         previousButton.active = page > 0;
         nextButton.active = page < totalPages() - 1;
@@ -102,11 +94,12 @@ final class VaultListScreen extends Screen {
         updateVisibleRows();
     }
 
-    private Button addRowButton(int x, int y, int buttonWidth, String key, Button.OnPress onPress) {
+    private Button addRowButton(int rowIndex, int x, int y, String key, java.util.function.Consumer<VaultRow> action) {
         Button button = Button.builder(Component.translatable(key), pressed -> {
             VaultRuntime.activity();
-            onPress.onPress(pressed);
-        }).bounds(x, y, buttonWidth, 20).build();
+            List<VaultRow> currentRows = pageRows();
+            if (rowIndex < currentRows.size()) action.accept(currentRows.get(rowIndex));
+        }).bounds(x, y, rowButtonWidth, 20).build();
         rowButtons.add(button);
         addRenderableWidget(button);
         return button;
@@ -124,14 +117,22 @@ final class VaultListScreen extends Screen {
     private int pageSizeForCurrentScreen() { return Math.max(1, Math.min(PAGE_SIZE, (height - 122) / 34)); }
 
     private void updateVisibleRows() {
-        String query = search == null ? "" : search.getValue().toLowerCase(java.util.Locale.ROOT);
         List<VaultRow> visible = pageRows();
-        for (int rowIndex = 0; rowIndex < visible.size(); rowIndex++) {
-            VaultRow row = visible.get(rowIndex);
-            boolean matches = (row.serverName() + " " + row.host() + " " + row.username())
-                    .toLowerCase(java.util.Locale.ROOT).contains(query);
-            for (int column = 0; column < ROW_ACTIONS; column++) rowButtons.get(rowIndex * ROW_ACTIONS + column).visible = matches;
+        for (int rowIndex = 0; rowIndex < pageSize; rowIndex++) {
+            boolean hasRow = rowIndex < visible.size();
+            VaultRow row = hasRow ? visible.get(rowIndex) : null;
+            for (int column = 0; column < ROW_ACTIONS; column++) {
+                Button button = rowButtons.get(rowIndex * ROW_ACTIONS + column);
+                button.visible = hasRow;
+                button.active = hasRow && (column != 0 && column != 1 || !row.serverOnly());
+                if (hasRow && column == 2) button.setMessage(Component.translatable(row.autofill()
+                        ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off"));
+                if (hasRow && column == 3) button.setMessage(Component.translatable(row.neverSave()
+                        ? "blockvault.vault.save.on" : "blockvault.vault.save.off"));
+            }
         }
+        if (previousButton != null) previousButton.active = page > 0;
+        if (nextButton != null) nextButton.active = page < totalPages() - 1;
     }
 
     private List<VaultRow> filteredRows() {
@@ -145,14 +146,10 @@ final class VaultListScreen extends Screen {
         return value.toLowerCase(java.util.Locale.ROOT);
     }
 
-    private void refresh() {
-        rebuildWidgets();
-    }
-
     void updateRows(List<VaultRow> updated) {
         rows = List.copyOf(updated);
         page = Math.min(page, totalPages() - 1);
-        refresh();
+        updateVisibleRows();
     }
 
     @Override

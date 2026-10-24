@@ -2,9 +2,7 @@ package io.github.silkypanda.blockvault.fabric;
 
 import io.github.silkypanda.blockvault.BlockVault;
 import io.github.silkypanda.blockvault.Platform;
-import java.nio.file.Path;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
 
 /** Fabric client entrypoint. */
 public final class BlockVaultFabric implements ClientModInitializer {
@@ -20,14 +18,5 @@ public final class BlockVaultFabric implements ClientModInitializer {
             return "fabric";
         }
 
-        @Override
-        public Path gameDir() {
-            return FabricLoader.getInstance().getGameDir();
-        }
-
-        @Override
-        public boolean isDevEnvironment() {
-            return FabricLoader.getInstance().isDevelopmentEnvironment();
-        }
     }
 }

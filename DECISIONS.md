@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-10-24 — Resolve round-two review choices
+
+Follow the owner's selected behavior for review findings: use explicit local edits guarded by an encrypted-file SHA-256 conflict check for rollbacks and removals; recover a missing or damaged main vault by validating and restoring the selected backup with the password that encrypted that backup; re-encrypt all automatic and manual backups after a master-password change; remove password reauthentication from reveal/copy/edit flows after vault unlock; allow trusted-device unlock to run again after inactivity auto-lock during the same session; keep registration Cancel suppression through disconnect and make Never save here a persistent per-server policy; remove duplicate English locale stubs; cap user regexes at 256 characters; require at least 8 characters for a new master password and reject the current password as the replacement. The owner also chose variable memorable-preset word count to fit parsed server length bounds, automatic prompt detection for legacy `authme` template IDs, skipping automatic backups when the current vault has no accounts, and a 200 ms minimum autofill delay.
+
+An older mod build can discard newer vault fields that it does not understand. The owner has been asked whether to preserve unknown fields, reject edits, or retain the current drop behavior; do not change this until answered.
+
+These are product decisions supplied by the owner in response to the review questions. CI and in-game validation are still required before treating the implementation as complete.
+
+## 2026-10-24 — Preserve trusted key after unreadable settings
+
+A transient `config.json` read failure must fail closed for trusted unlock without deleting `vault.bv.trust` or marking settings loaded. Retry loading on a later access and do not overwrite preferences until they can be read.
+
+## 2026-10-24 — Remove command-tree prompt signal
+
+The review reproduced that command-tree contents can incorrectly disable registration. Prompt text is the sole readiness signal; remove the commands-packet injection while retaining the outgoing-command capture mixin.
+
 ## 2026-10-24 — Replace OS key providers with an explicit trusted-device preference
 
 The owner rejected DPAPI, macOS Keychain/`security`, Linux Secret Service/`secret-tool`, and all other OS-backed device providers. Keep the BVLT vault key mode master-password-only. Add a user preference that asks for the master password every launch or trusts the current OS account, with trust enabled by default. Trust mode must not save the master password; it stores only the random vault key in a separate file and clearly documents that access to the OS account grants vault access. POSIX permissions are restricted; Windows relies on profile ACLs without dedicated validation. Turning trust off removes that key file. No OS commands, foreign APIs, networking, or telemetry are allowed.
@@ -75,57 +91,29 @@ The M2 CI run showed that `Registration failed!` did not match the default failu
 - Compact the credential card to username/server, masked password, optional required email, and essential actions, using a plain fill with an area cap of 30%; remove its bundled textures and secondary controls. Defer `OptionsSubScreen.init()` until settings finish loading: rebuilding the options layout after an initial empty initialization appended a second list/footer and interfered with pointer and scroll events.
 - Storage clarification: vault data remains in the OS data directory after uninstall. Documented exact locations, file contents, backup rotation, trust-key exposure, and full-directory deletion in README.
 
-- Follow-up UI decisions from owner testing: retain Reveal/Copy/Another password/Never save here actions in the compact card; suppress and discard duplicate pending registration prompts after Not now; clamp pagination and size the vault list/footer to the available window; clarify the two auto-login controls and document each password preset in settings help.
+- Follow-up UI decisions from owner testing: retain Reveal/Copy/Another password/Never save here actions in the compact card; suppress matching registration prompts through disconnect after Not now; clamp pagination and size the vault list/footer to the available window; clarify the two auto-login controls and document each password preset in settings help.
 - Owner later requested that BlockVault never clear copied clipboard contents automatically. Copy actions now only set the OS clipboard; README notes clipboard-history retention is controlled separately by the OS or clipboard manager.
 - M6 import/export uses byte-for-byte encrypted `vault.bv` copies; import asks for the source vault's master password, merges into the current vault, and re-encrypts with the current local vault key. This avoids introducing any plaintext interchange format.
 - M6 review found no local loader jars to measure; the existing GitHub Actions workflow enforces the 256 KiB per-loader jar limit. Static rule checks cover network imports, unsafe console output, and other repository security constraints.
 
-## 2026-10-24 — Code-review hardening decisions
+## First code-review pass — historical record
 
-The owner supplied `BlockVault code review.md` and authorized implementation changes. Treat its reproduced issues as actionable and its loader/runtime concerns as unverified until checked in game. Do not report current workspace changes as built or CI-green without an Actions run.
-
-Implemented in the current, unverified workspace:
-
-- Prevent lookup cleanup from zeroing the live vault account. A temporary account copy is returned to the session and wiped after the callback.
-- Preserve the prior verified account inside the encrypted vault while a replacement registration is pending; restore it on registration failure and drop the prior copy on success.
-- Give successful result text precedence over broad rule text, narrow default password-rule patterns, prioritize registration prompt matching, and expire prompt dismissal suppression after five seconds.
-- Enforce the KDF iteration range, merge imported server records by shared host as well as id, refuse export to existing files, parse the current vault JSON schema strictly without unknown-field preservation, and make template replacement single-pass.
-- Handle memorable-password policy adjustments, increase the captured-password UI limit, avoid common `/l` and `/log` aliases in built-in detection, and allow keybinds only with no screen open.
-- Bound/clear queued vault operations, catch individual queue failures, separate timer execution from vault I/O, discard canceled timers, fail closed for trusted unlock when settings cannot be read, validate settings values, and allow zero autofill delay.
-- Load optional `patterns.json` and ignore a malformed user file while retaining built-in patterns. Filter search before pagination and avoid searching hidden server addresses in streamer mode. Registration and rejected cards no longer auto-dismiss or close on outside clicks.
-- Add visible server-only policy rows, preserve vault-list page/search state after edits, refresh from disk before each unlocked operation, bound queued credential prompts, and clear queued prompts on disconnect.
-- Default new servers to prompt-derived templates; explicit selections override detection. Mark the selected template and validate required email fields.
-- Remove the misleading one-shot mixin-health warning, whose timing generated false warnings before relevant hooks had a chance to run.
-
-Product choices and remaining limits:
-
-- Keep `Trust this device` enabled by default because the owner explicitly requested that default earlier. Document that its local trust file contains the plaintext vault key and that it weakens at-rest protection. If the owner changes that preference, update the default separately.
-- On Windows, the code relies on the per-user data-directory ACL; it does not create or validate a dedicated owner-only ACL. README claims have been narrowed accordingly.
-- Remove the distinct `disableAutoLogin` setting because the owner explicitly requested its complete removal. Keep global and per-server autofill controls only.
-- Keep the duplicate English locale stubs because the implementation plan explicitly requires those locale files. Do not describe them as translations.
-- Keep clipboard copy behavior and document that BlockVault never clears the clipboard automatically, matching the owner's explicit request.
-- Keep the license as All Rights Reserved and keep the implementation plan/status/decision artifacts in the repository root, as the owner specified.
-
-Not implemented in this pass: dedicated Windows ACL enforcement or changing the explicitly requested trusted-device default; server-policy merge precedence; full screen lifecycle and Minecraft in-memory history guarantees; IDN host support; Gradle wrapper generation and SHA-pinning dependencies/actions. Preserve the proprietary license and English locale stubs required by the plan. These items need separate validation or product design. Do not mark M6 complete while high-severity data-loss/security findings remain unresolved.
-
-Regression tests have been added for the storage and matcher/template fixes below. No CI or in-game verification is available for this follow-up yet. Require a green GitHub Actions run before calling these changes built.
+The first review pass led to storage, matcher, backup, UI, and security work. Its temporary five-second prompt suppression, duplicate English locale requirement, command-tree behavior, and reauthentication wording were superseded by the owner's round-two choices recorded above. These historical items are not the current product specification.
 
 ## 2026-10-24 — Recovery, password management, and trust notice
 
-- Backups rotate at most once per 24-hour interval during ordinary saves, keep three encrypted recovery points, and expose an in-game restore screen. Restore validates the selected backup with the active vault key, snapshots the current state so restore is reversible, writes the selected contents atomically, and retains the current password wrapper.
-- Reserve the three daily automatic backup slots for automatic rotation. Keep a separate ten-slot manual backup set so explicit snapshots do not displace scheduled recovery points. Show backup type and local creation time, decrypt snapshots only after unlock for inspection, and reveal each password only after the player selects Reveal.
-- Unlock now distinguishes an incorrect master password, malformed/authentication-failing vault contents, and unsupported future format. Failed unlock does not rewrite the vault.
-- A failed authentication of the password-wrapped key is reported as an incorrect password because this format has no independent verifier that can distinguish a typo from tampering of that wrapped-key blob. Once the wrapped key authenticates, malformed or unauthenticated vault payload data is reported as damaged.
-- Add an in-game master-password change screen; the core operation verifies the current password, rewraps the same random vault key, and refreshes the trusted-device key when applicable.
-- Keep `Trust this device` enabled by default as previously requested. After successful new-vault creation, send a chat notice explaining the local key storage and that the behavior can be changed in settings.
-- Add core regression tests for the error distinction, backup interval/restore, password change, success-vs-rule classification, and one-pass placeholder replacement. Tests and loader UI remain unverified until CI and in-game checks.
-- The owner supplied a CI run with three failures: command-tree arming showed a registration card without a registration prompt; the second password-rule complaint left the session unknown; and a restore test assumed server-list ordering instead of checking recovered contents. Command trees now pre-arm login only and wait for registration text, a repeated rule rejection enters a rejected state and reports a toast, and restore tests verify exact selected-backup replacement plus recovery of the pre-restore contents independent of ordering. These fixes still need a green CI rerun.
+- Backups keep three automatic slots and ten separate manual slots. A normal restore validates the selected snapshot with the active vault key, captures the current state so restore can be undone, and retains the current master-password wrapper.
+- If the main vault is missing or damaged, recovery lists backup files without opening the main vault and asks for the password used to encrypt the chosen backup. Recovery validates the complete backup and restores its encrypted file as the main vault.
+- A new master password must have at least 8 characters. A password change rejects the old password as the replacement, verifies the current password, rewraps the same vault key, and re-encrypts every automatic and manual backup so the old password no longer unlocks backups.
+- Unlock distinguishes a wrong master password, damaged/authentication-failing vault content, unsupported format, and ordinary file I/O failures where the format permits. Failed unlock does not rewrite the vault.
+- Keep `Trust this device` enabled by default. Inactivity auto-lock closes sensitive screens; trusted mode may unlock silently again on the next vault action during the same session. Manual Lock now still requires password entry.
+- Once the vault is unlocked, reveal, copy, edit, and backup inspection do not require reauthentication. Document this explicitly as the chosen access model.
 
 ## 2026-10-24 — Pending credential recovery and login UI clarification
 
 - `PENDING` means BlockVault safely wrote a registration credential before sending it, but did not observe server confirmation. Show a localized status label instead of the raw enum. If the player manually logs in successfully with the same pending password, promote the saved entry to `VERIFIED`; this addresses the observed case where autofill only became possible after a manual login. Add regression coverage and retain the rule that only a successful server result confirms a login.
 - Report automatic login in chat only after a matched successful result, with a green `[BlockVault]` prefix and localized text.
 - Remove the separate “Safety Override / Disable auto-login” setting at the owner's latest request. `autofill` remains the single global switch, with per-server policy unchanged. Migrate existing settings by dropping the obsolete JSON key while preserving other preferences.
-- For saved-entry editing, label the master-password prompt as reauthentication to unlock the selected entry, and arrange the unlock/delete/back controls deliberately.
+- Superseded on 2026-10-24: after the vault is unlocked, saved-entry reveal, copy, and edit do not ask for the master password again.
 - Clarify the initial trusted-device chat notice: state the setting is enabled by default, explain BlockVault stores the local vault key rather than the master password, state the local-access implication, give the settings path, and use an identifiable colored BlockVault sender.
-- Owner reported Fabric checks 1–6 and 8–9 passed on the prior build; auto-login check 7 and checks 10+ remain unchecked. NeoForge remains untested. These new source edits need CI and both-loader game verification before being called complete.
+- Owner reported Fabric checks 1–7 and 10–13 passed on a prior build; checks 8, 9, and 14 remain unchecked. These results predate the current edits. NeoForge remains untested. These new source edits need CI and both-loader game verification before being called complete.

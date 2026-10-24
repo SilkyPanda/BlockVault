@@ -14,11 +14,6 @@ import net.minecraft.util.FormattedCharSequence;
 /** Per-account reveal, edit, copy, and delete controls. */
 final class VaultCredentialScreen extends Screen {
     private final VaultRow row;
-    private boolean checkStarted;
-    private boolean checked;
-    private boolean masterRequired;
-    private boolean revealed;
-    private boolean revealFailed;
     private boolean showPassword;
     private EditBox passwordBox;
 
@@ -29,67 +24,30 @@ final class VaultCredentialScreen extends Screen {
 
     @Override
     protected void init() {
-        if (!checkStarted) {
-            checkStarted = true;
-            VaultRuntime.requiresMasterPassword(required -> {
-                masterRequired = required;
-                checked = true;
-                if (!required) revealPassword();
-                if (Minecraft.getInstance().gui.screen() == this) rebuildWidgets();
-            });
-            return;
-        }
+        revealPassword();
         int x = width / 2 - 150;
         int top = Math.max(42, height / 2 - 54);
         passwordBox = new EditBox(font, x, top, 300, 20,
-                Component.translatable(masterRequired && !revealed
-                        ? "blockvault.vault.master_unlock.prompt" : "blockvault.card.password"));
+                Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(256);
         passwordBox.addFormatter((value, cursor) -> showPassword
                 ? FormattedCharSequence.forward(value, Style.EMPTY)
                 : FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(passwordBox);
-        if (masterRequired && !revealed) {
-            addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.unlock"), button -> { VaultRuntime.activity(); reauthenticate(); })
-                    .bounds(x, top + 28, 300, 20).build());
-        } else {
-            Button saveButton = Button.builder(Component.translatable("blockvault.vault.save"), button -> { VaultRuntime.activity(); save(); })
-                    .bounds(x, top + 52, 94, 20).build();
-            addRenderableWidget(saveButton);
-            addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.generate"), button -> { VaultRuntime.activity(); generate(); })
-                    .bounds(x + 103, top + 52, 94, 20).build());
-            addRenderableWidget(Button.builder(Component.translatable("blockvault.card.reveal"), button -> { VaultRuntime.activity(); showPassword = !showPassword; })
-                    .bounds(x + 206, top + 52, 94, 20).build());
-        }
-        if (!masterRequired || revealed) {
-            addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.activity(); VaultRuntime.copyPassword(row); })
-                    .bounds(x, top + 78, 94, 20).build());
-        }
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.save"), button -> { VaultRuntime.activity(); save(); })
+                .bounds(x, top + 52, 94, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.generate"), button -> { VaultRuntime.activity(); generate(); })
+                .bounds(x + 103, top + 52, 94, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.card.reveal"), button -> { VaultRuntime.activity(); showPassword = !showPassword; })
+                .bounds(x + 206, top + 52, 94, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.activity(); VaultRuntime.copyPassword(row); })
+                .bounds(x, top + 78, 94, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete"), button ->
                         Minecraft.getInstance().setScreenAndShow(new VaultDeleteScreen(row, this)))
-                .bounds(masterRequired && !revealed ? x : x + 103, masterRequired && !revealed ? top + 54 : top + 78,
-                        masterRequired && !revealed ? 144 : 94, 20).build());
+                .bounds(x + 103, top + 78, 94, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { VaultRuntime.activity(); VaultRuntime.openVaultScreen(); })
-                .bounds(masterRequired && !revealed ? x + 156 : x + 206,
-                        masterRequired && !revealed ? top + 54 : top + 78,
-                        masterRequired && !revealed ? 144 : 94, 20).build());
+                .bounds(x + 206, top + 78, 94, 20).build());
         setInitialFocus(passwordBox);
-    }
-
-    private void reauthenticate() {
-        char[] password = passwordBox.getValue().toCharArray();
-        passwordBox.setValue("");
-        VaultRuntime.reauthenticateForReveal(password, success -> {
-            Arrays.fill(password, '\0');
-            if (success) {
-                revealed = true;
-                revealPassword();
-                rebuildWidgets();
-            } else {
-                revealFailed = true;
-                if (passwordBox != null) passwordBox.setValue("");
-            }
-        });
     }
 
     private void revealPassword() {
@@ -130,16 +88,9 @@ final class VaultCredentialScreen extends Screen {
                 ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
         graphics.centeredText(font, Component.literal(serverName + " · " + row.username()), width / 2,
                 height / 2 - 92, 0xffffffff);
-        if (!BlockVaultConfig.current().streamerMode() && !(masterRequired && !revealed)) {
+        if (!BlockVaultConfig.current().streamerMode()) {
             graphics.centeredText(font, Component.literal(row.host()), width / 2, height / 2 - 76, 0xffb9b4c5);
         }
-        if (masterRequired && !revealed) graphics.centeredText(font,
-                Component.translatable("blockvault.vault.master_unlock.explanation"), width / 2,
-                Math.max(24, height / 2 - 68), 0xffdddddd);
-        if (!checked) graphics.centeredText(font, Component.translatable("blockvault.settings.loading"), width / 2,
-                height / 2 + 64, 0xffaaaaaa);
-        if (revealFailed) graphics.centeredText(font, Component.translatable("blockvault.vault.unlock.failed"),
-                width / 2, height / 2 + 64, 0xffff7777);
     }
 
     @Override public boolean isPauseScreen() { return false; }

@@ -56,7 +56,6 @@ final class CredentialConfirmScreen extends Screen {
             case REGISTER -> "blockvault.card.register.title";
             case UPDATE -> "blockvault.card.update.title";
             case REJECTED -> "blockvault.card.rejected.title";
-            case UNLOCK -> "blockvault.card.unlock.title";
             case SAVE -> "blockvault.card.save.title";
         });
     }
@@ -113,7 +112,7 @@ final class CredentialConfirmScreen extends Screen {
 
         if (model.variant() == CardVariant.REJECTED) initRejectedButtons();
         else initSaveButtons(registration);
-        if (model.variant() != CardVariant.REGISTER && model.variant() != CardVariant.REJECTED) scheduleTimer();
+        if (!registration && model.variant() != CardVariant.REJECTED) scheduleTimer();
     }
 
     private void initSaveButtons(boolean registration) {
@@ -126,7 +125,8 @@ final class CredentialConfirmScreen extends Screen {
         addButton(cardX + pad, buttonY, buttonWidth, actionKey, button -> accept(registration));
         addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.cancel", button -> onClose());
         int utilityY = buttonY + scaled(24);
-        int utilityWidth = (cardWidth - pad * 2 - gap * 2) / 3;
+        int utilityCount = registration ? 4 : 3;
+        int utilityWidth = (cardWidth - pad * 2 - gap * (utilityCount - 1)) / utilityCount;
         addButton(cardX + pad, utilityY, utilityWidth, "blockvault.card.reveal",
                 button -> { reveal = !reveal; });
         addButton(cardX + pad + utilityWidth + gap, utilityY, utilityWidth, "blockvault.card.copy",
@@ -134,13 +134,33 @@ final class CredentialConfirmScreen extends Screen {
         if (registration) {
             addButton(cardX + pad + (utilityWidth + gap) * 2, utilityY, utilityWidth,
                     "blockvault.card.regenerate", button -> regenerate());
+            addButton(cardX + pad + (utilityWidth + gap) * 3, utilityY, utilityWidth,
+                    "blockvault.card.never_server", button -> neverSaveHere());
         } else {
             addButton(cardX + pad + (utilityWidth + gap) * 2, utilityY, utilityWidth,
-                    "blockvault.card.never_server", button -> {
-                        VaultRuntime.setNeverSave(model.host(), true);
-                        onClose();
-                    });
+                    "blockvault.card.never_server", button -> neverSaveHere());
         }
+    }
+
+    private void neverSaveHere() {
+        VaultRuntime.setNeverSave(model.host(), true);
+        onClose();
+    }
+
+    private void regenerate() {
+        char[] next = PasswordGenerator.generate(policy(BlockVaultConfig.current().generator()));
+        wipePassword();
+        password = next;
+        passwordBox.setValue(new String(password));
+    }
+
+    private static PasswordGenerator.Policy policy(String preset) {
+        return switch (preset) {
+            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
+            case "max" -> PasswordGenerator.Policy.max();
+            case "memorable" -> PasswordGenerator.Policy.memorable();
+            default -> PasswordGenerator.Policy.defaults();
+        };
     }
 
     private void initRejectedButtons() {
@@ -177,27 +197,11 @@ final class CredentialConfirmScreen extends Screen {
         }).bounds(x, y, buttonWidth, scaled(20)).build());
     }
 
-    private void regenerate() {
-        char[] next = PasswordGenerator.generate(policy(BlockVaultConfig.current().generator()));
-        wipePassword();
-        password = next;
-        passwordBox.setValue(new String(password));
-    }
-
     private void copyFromField() {
         char[] copied = passwordBox.getValue().toCharArray();
         String value = new String(copied);
         Arrays.fill(copied, '\0');
         VaultRuntime.copyToClipboard(value);
-    }
-
-    private static PasswordGenerator.Policy policy(String preset) {
-        return switch (preset) {
-            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
-            case "max" -> PasswordGenerator.Policy.max();
-            case "memorable" -> PasswordGenerator.Policy.memorable();
-            default -> PasswordGenerator.Policy.defaults();
-        };
     }
 
     private void accept(boolean registration) {
@@ -241,7 +245,7 @@ final class CredentialConfirmScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (event.x() < cardX || event.x() >= cardX + cardWidth
                 || event.y() < cardY || event.y() >= cardY + cardHeight) {
-            if (model.variant() == CardVariant.REGISTER || model.variant() == CardVariant.REJECTED) return true;
+            if (registration || model.variant() == CardVariant.REJECTED) return true;
             onClose();
             return true;
         }
@@ -267,6 +271,21 @@ final class CredentialConfirmScreen extends Screen {
     @Override
     public void onClose() {
         if (closing) return;
+        finishClose();
+        super.onClose();
+    }
+
+    /** Wipes this card when the network screen replaces it during a disconnect. */
+    void disconnect() { finishClose(); }
+
+    @Override
+    public void removed() {
+        finishClose();
+        super.removed();
+    }
+
+    private void finishClose() {
+        if (closing) return;
         closing = true;
         if (timer != null) timer.cancel();
         timer = null;
@@ -276,7 +295,6 @@ final class CredentialConfirmScreen extends Screen {
         if (passwordBox != null) passwordBox.setValue("");
         if (emailBox != null) emailBox.setValue("");
         model.clearPassword();
-        super.onClose();
         closed.run();
     }
 

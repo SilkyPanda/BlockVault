@@ -24,14 +24,16 @@ final class BlockVaultConfig {
         BackgroundExecutor.submit(() -> {
             if (!loaded) {
                 Path path = DataDirs.resolve().resolve("config.json");
+                boolean success = true;
                 if (Files.isRegularFile(path)) {
                     try { current = read(JsonParser.parseString(Files.readString(path)).getAsJsonObject()); }
                     catch (Exception failure) {
                         current = Settings.defaults().withTrustDevice(false);
+                        success = false;
                         LOGGER.warn("BlockVault could not read its settings; trusted-device unlock is disabled");
                     }
                 }
-                loaded = true;
+                loaded = success;
             }
             BackgroundExecutor.onGameThread(() -> result.accept(current));
             return null;
@@ -56,12 +58,15 @@ final class BlockVaultConfig {
 
     private static void loadOnBackgroundThread() throws Exception {
         Path path = DataDirs.resolve().resolve("config.json");
+        boolean success = true;
         try {
             if (Files.isRegularFile(path)) current = read(JsonParser.parseString(Files.readString(path)).getAsJsonObject());
         } catch (Exception failure) {
             current = Settings.defaults().withTrustDevice(false);
+            success = false;
             LOGGER.warn("BlockVault could not read its settings; trusted-device unlock is disabled");
-        } finally { loaded = true; }
+            throw new java.io.IOException("BlockVault settings could not be read", failure);
+        } finally { loaded = success; }
     }
 
     private static Settings read(JsonObject json) {
@@ -70,7 +75,7 @@ final class BlockVaultConfig {
         if (!java.util.Set.of("top_left", "top_right", "bottom_left", "bottom_right").contains(position)) position = defaults.cardPosition();
         String generator = string(json, "generator", defaults.generator());
         if (!java.util.Set.of("defaults", "pickyServer", "max", "memorable").contains(generator)) generator = defaults.generator();
-        return new Settings(bool(json, "autofill", defaults.autofill()), integer(json, "autofillDelayMillis", 0, 5000,
+        return new Settings(bool(json, "autofill", defaults.autofill()), integer(json, "autofillDelayMillis", 200, 5000,
                 defaults.autofillDelayMillis()), integer(json, "autoLockMinutes", 0, 1440, defaults.autoLockMinutes()),
                 integer(json, "cardDurationSeconds", 1, 60, defaults.cardDurationSeconds()),
                 position, bool(json, "streamerMode", defaults.streamerMode()),

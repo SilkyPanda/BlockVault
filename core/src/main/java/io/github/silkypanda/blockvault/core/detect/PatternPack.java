@@ -48,17 +48,17 @@ public final class PatternPack {
             catch (RuntimeException | IOException malformedUserFile) { warning.accept("Invalid BlockVault pattern file ignored"); }
         }
         Map<PromptKind, List<Pattern>> prompts = new EnumMap<>(PromptKind.class);
-        addPatterns(prompts, PromptKind.LOGIN, getArray(base, "prompt", "login"), ignored -> { });
-        addPatterns(prompts, PromptKind.REGISTER, getArray(base, "prompt", "register"), ignored -> { });
-        addPatterns(prompts, PromptKind.LOGIN, getArray(user, "prompt", "login"), warning);
-        addPatterns(prompts, PromptKind.REGISTER, getArray(user, "prompt", "register"), warning);
+        addPatterns(prompts, PromptKind.LOGIN, getArray(base, "prompt", "login", ignored -> { }), ignored -> { });
+        addPatterns(prompts, PromptKind.REGISTER, getArray(base, "prompt", "register", ignored -> { }), ignored -> { });
+        addPatterns(prompts, PromptKind.LOGIN, getArray(user, "prompt", "login", warning), warning);
+        addPatterns(prompts, PromptKind.REGISTER, getArray(user, "prompt", "register", warning), warning);
         Map<ResultKind, List<Pattern>> results = new EnumMap<>(ResultKind.class);
-        addPatterns(results, ResultKind.SUCCESS, getArray(base, "result", "success"), ignored -> { });
-        addPatterns(results, ResultKind.FAILURE, getArray(base, "result", "failure"), ignored -> { });
-        addPatterns(results, ResultKind.PASSWORD_RULE, getArray(base, "result", "passwordRules"), ignored -> { });
-        addPatterns(results, ResultKind.SUCCESS, getArray(user, "result", "success"), warning);
-        addPatterns(results, ResultKind.FAILURE, getArray(user, "result", "failure"), warning);
-        addPatterns(results, ResultKind.PASSWORD_RULE, getArray(user, "result", "passwordRules"), warning);
+        addPatterns(results, ResultKind.SUCCESS, getArray(base, "result", "success", ignored -> { }), ignored -> { });
+        addPatterns(results, ResultKind.FAILURE, getArray(base, "result", "failure", ignored -> { }), ignored -> { });
+        addPatterns(results, ResultKind.PASSWORD_RULE, getArray(base, "result", "passwordRules", ignored -> { }), ignored -> { });
+        addPatterns(results, ResultKind.SUCCESS, getArray(user, "result", "success", warning), warning);
+        addPatterns(results, ResultKind.FAILURE, getArray(user, "result", "failure", warning), warning);
+        addPatterns(results, ResultKind.PASSWORD_RULE, getArray(user, "result", "passwordRules", warning), warning);
         Map<String, Set<String>> names = new java.util.HashMap<>();
         if (base.has("commandNames") && base.get("commandNames").isJsonObject()) {
             base.getAsJsonObject("commandNames").entrySet().forEach(entry ->
@@ -85,16 +85,36 @@ public final class PatternPack {
     private static <T> void addPatterns(Map<T, List<Pattern>> map, T key, JsonArray values, Consumer<String> warning) {
         List<Pattern> list = new ArrayList<>(map.getOrDefault(key, List.of()));
         for (JsonElement value : values) {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+                warning.accept("Invalid BlockVault pattern skipped");
+                continue;
+            }
             String regex = value.getAsString();
+            if (regex.length() > 256) {
+                warning.accept("BlockVault pattern exceeds the 256-character limit");
+                continue;
+            }
             try { list.add(Pattern.compile(regex)); }
             catch (PatternSyntaxException e) { warning.accept("Invalid BlockVault pattern skipped"); }
         }
         map.put(key, List.copyOf(list));
     }
 
-    private static JsonArray getArray(JsonObject object, String parent, String key) {
-        if (!object.has(parent) || !object.getAsJsonObject(parent).has(key)) return new JsonArray();
-        return object.getAsJsonObject(parent).getAsJsonArray(key);
+    private static JsonArray getArray(JsonObject object, String parent, String key, Consumer<String> warning) {
+        if (!object.has(parent)) return new JsonArray();
+        JsonElement group = object.get(parent);
+        if (!group.isJsonObject()) {
+            warning.accept("Invalid BlockVault pattern group ignored");
+            return new JsonArray();
+        }
+        JsonObject values = group.getAsJsonObject();
+        if (!values.has(key)) return new JsonArray();
+        JsonElement array = values.get(key);
+        if (!array.isJsonArray()) {
+            warning.accept("Invalid BlockVault pattern list ignored");
+            return new JsonArray();
+        }
+        return array.getAsJsonArray();
     }
 
     private static void addCommandNames(Map<String, Set<String>> names, String kind, JsonElement value) {

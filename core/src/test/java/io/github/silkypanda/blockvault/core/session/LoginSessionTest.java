@@ -75,10 +75,27 @@ final class LoginSessionTest {
         FakeEnv env = new FakeEnv();
         LoginSession session = session(env, new FakeScheduler());
         session.onJoin("example.org:25565", "Alex");
-        session.onCommandTree(Set.of("login", "register"));
         assertEquals(null, env.card);
         session.onSystemMessage("Please register with /register <password>");
         assertEquals(CardVariant.REGISTER, env.card.variant());
+    }
+
+    @Test
+    void promptMentioningLoginAndRegisterUsesVerifiedVaultState() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("saved-secret");
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Use /login <password> or /register <password>");
+        clock.advance(400);
+        assertEquals(List.of("login saved-secret"), env.commands);
+
+        FakeEnv newAccountEnv = new FakeEnv();
+        LoginSession newAccountSession = session(newAccountEnv, new FakeScheduler());
+        newAccountSession.onJoin("example.org:25565", "Alex");
+        newAccountSession.onSystemMessage("Use /login <password> or /register <password>");
+        assertEquals(CardVariant.REGISTER, newAccountEnv.card.variant());
     }
 
     @Test

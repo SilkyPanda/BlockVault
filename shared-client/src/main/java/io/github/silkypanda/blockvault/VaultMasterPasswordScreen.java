@@ -14,7 +14,7 @@ import net.minecraft.util.FormattedCharSequence;
 final class VaultMasterPasswordScreen extends Screen {
     private final Screen parent;
     private EditBox current, next, confirm;
-    private boolean busy, failed, mismatch;
+    private boolean busy, failed, mismatch, tooShort, samePassword;
 
     VaultMasterPasswordScreen(Screen parent) {
         super(Component.translatable("blockvault.master.change.title"));
@@ -39,21 +39,25 @@ final class VaultMasterPasswordScreen extends Screen {
         EditBox box = new EditBox(font, x, y, 240, 20, Component.translatable(key));
         box.setHint(Component.translatable(key));
         box.setMaxLength(256);
+        box.setResponder(ignored -> VaultRuntime.activity());
         box.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         return box;
     }
 
     private void submit() {
         mismatch = next.getValue().isEmpty() || !next.getValue().equals(confirm.getValue());
-        if (mismatch || current.getValue().isEmpty()) { failed = true; return; }
+        tooShort = next.getValue().length() < 8;
+        samePassword = current.getValue().equals(next.getValue());
+        if (mismatch || tooShort || samePassword || current.getValue().isEmpty()) { failed = true; return; }
         char[] oldPassword = current.getValue().toCharArray();
         char[] newPassword = next.getValue().toCharArray();
         clearFields();
-        busy = true; failed = false;
-        VaultRuntime.changeMasterPassword(oldPassword, newPassword, success -> {
+        busy = true; failed = false; statusKey = null;
+        VaultRuntime.changeMasterPassword(oldPassword, newPassword, failure -> {
             Arrays.fill(oldPassword, '\0'); Arrays.fill(newPassword, '\0');
-            busy = false; failed = !success;
-            if (success) Minecraft.getInstance().setScreenAndShow(parent);
+            busy = false; failed = failure != null;
+            if (failure == null) Minecraft.getInstance().setScreenAndShow(parent);
+            else statusKey = failure;
         });
     }
 
@@ -62,8 +66,18 @@ final class VaultMasterPasswordScreen extends Screen {
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         if (failed || busy) graphics.centeredText(font, Component.translatable(busy ? "blockvault.master.working"
-                : mismatch ? "blockvault.master.mismatch" : "blockvault.master.failed"), width / 2,
+                : failureKey()), width / 2,
                 Math.min(height - 20, height / 2 + 67), 0xffff7777);
+    }
+
+    private String statusKey;
+
+    private String failureKey() {
+        if (statusKey != null) return statusKey;
+        if (mismatch) return "blockvault.master.mismatch";
+        if (tooShort) return "blockvault.master.new.too_short";
+        if (samePassword) return "blockvault.master.new.same";
+        return "blockvault.master.failed";
     }
 
     @Override public boolean isPauseScreen() { return false; }

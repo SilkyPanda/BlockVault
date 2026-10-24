@@ -29,12 +29,40 @@ final class PatternMatcherTest {
     }
 
     @Test
+    void negatedSuccessMessagesAreFailuresAndUnallowedCharactersAreRules() throws Exception {
+        var matcher = new ResultMatcher(pack());
+        assertEquals(ResultKind.FAILURE, matcher.classify("Unsuccessful login!"));
+        assertEquals(ResultKind.FAILURE, matcher.classify("You were not successfully registered."));
+        assertEquals(ResultKind.PASSWORD_RULE, matcher.classify("Password contains unallowed characters!"));
+    }
+
+    @Test
     void invalidUserPatternIsSkippedWithOneWarning() throws Exception {
         java.nio.file.Path user = java.nio.file.Files.createTempFile("blockvault-pattern", ".json");
         try {
             java.nio.file.Files.writeString(user, "{\"prompt\":{\"login\":[\"[broken\"]}}");
             java.util.List<String> warnings = new java.util.ArrayList<>();
             PatternPack loaded = PatternPack.load(getClass().getResourceAsStream("/assets/blockvault/patterns/default.json"), user, warnings::add);
+            assertEquals(1, warnings.size());
+            assertEquals(PromptKind.LOGIN, new PromptMatcher(loaded).matchPrompt("/login please").orElseThrow());
+        } finally {
+            java.nio.file.Files.deleteIfExists(user);
+        }
+    }
+
+    @Test
+    void malformedPatternShapesAndOversizedRegexesAreSkipped() throws Exception {
+        java.nio.file.Path user = java.nio.file.Files.createTempFile("blockvault-pattern-shape", ".json");
+        try {
+            java.nio.file.Files.writeString(user, "{\"prompt\":5,\"result\":{\"success\":[1,{}]},\"commandNames\":[]}");
+            java.util.List<String> warnings = new java.util.ArrayList<>();
+            PatternPack loaded = PatternPack.load(getClass().getResourceAsStream("/assets/blockvault/patterns/default.json"), user, warnings::add);
+            assertTrue(warnings.size() >= 2);
+            assertEquals(PromptKind.LOGIN, new PromptMatcher(loaded).matchPrompt("/login please").orElseThrow());
+
+            java.nio.file.Files.writeString(user, "{\"prompt\":{\"login\":[\"" + "a".repeat(257) + "\"]}}");
+            warnings.clear();
+            loaded = PatternPack.load(getClass().getResourceAsStream("/assets/blockvault/patterns/default.json"), user, warnings::add);
             assertEquals(1, warnings.size());
             assertEquals(PromptKind.LOGIN, new PromptMatcher(loaded).matchPrompt("/login please").orElseThrow());
         } finally {

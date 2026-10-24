@@ -43,6 +43,43 @@ final class VaultStoreTest {
     }
 
     @Test
+    void vaultReadIoFailureIsNotReportedAsCorruption() throws Exception {
+        Path vaultPath = directory.resolve("vault.bv");
+        Files.createDirectory(vaultPath);
+        assertThrows(java.io.IOException.class, () -> VaultStore.open(directory));
+    }
+
+    @Test
+    void explicitEditsPreserveRollbackAndDeletionButRejectStaleWriters() throws Exception {
+        VaultStore first = VaultStore.open(directory);
+        first.create("correct horse".toCharArray());
+        Account verified = new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
+                1, 10, 2, null);
+        Vault initial = new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"),
+                false, true, "auto", List.of(verified))));
+        first.save(initial);
+        first.reload();
+        VaultStore stale = VaultStore.open(directory);
+        stale.unlock("correct horse".toCharArray());
+
+        Account pending = new Account("Alex", "new-pass".toCharArray(), Account.Status.PENDING,
+                1, 20, 2, null);
+        first.saveExplicit(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"),
+                false, true, "auto", List.of(pending)))));
+        Account rollback = new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
+                1, 10, 2, null);
+        first.reload();
+        first.saveExplicit(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"),
+                false, true, "auto", List.of(rollback)))));
+        assertEquals("old-pass", new String(first.vault().servers().getFirst().accounts().getFirst().password()));
+
+        first.reload();
+        first.saveExplicit(new Vault(1, List.of()));
+        assertTrue(first.vault().servers().isEmpty());
+        assertThrows(java.io.IOException.class, () -> stale.saveExplicit(new Vault(1, List.of())));
+    }
+
+    @Test
     void backupRotationIsAtMostDailyAndRestoreReplacesVaultContents() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("correct horse".toCharArray());
@@ -51,6 +88,8 @@ final class VaultStoreTest {
                 1, 1, 1, null)));
         store.save(new Vault(1, List.of(before)));
         Path backup1 = directory.resolve("vault.bv.bak1");
+        assertTrue(Files.notExists(backup1));
+        store.save(store.vault());
         assertTrue(Files.isRegularFile(backup1));
         byte[] first = Files.readAllBytes(backup1);
         store.save(store.vault());
@@ -59,16 +98,21 @@ final class VaultStoreTest {
         Files.setLastModifiedTime(backup1, FileTime.fromMillis(System.currentTimeMillis() - 2L * 24 * 60 * 60 * 1000));
         store.save(store.vault());
         assertArrayEquals(first, Files.readAllBytes(directory.resolve("vault.bv.bak2")));
-        assertTrue(store.backupExists(2));
+        assertTrue(store.backups().stream().anyMatch(backup -> !backup.manual() && backup.slot() == 2));
         ServerEntry after = new ServerEntry("two", "two", List.of("two.example"), false, true,
                 "auto", List.of());
         store.save(new Vault(1, List.of(after)));
-        store.restoreBackup(1);
+        BackupSummary firstSnapshot = store.backups().stream()
+                .filter(backup -> !backup.manual() && backup.slot() == 1).findFirst().orElseThrow();
+        store.restoreBackup(firstSnapshot);
         assertEquals(1, store.vault().servers().size());
         assertEquals("one.example", store.vault().servers().get(0).hosts().get(0));
-        store.restoreBackup(1);
+        BackupSummary replacedState = store.backups().stream()
+                .filter(backup -> !backup.manual() && backup.slot() == 1).findFirst().orElseThrow();
+        store.restoreBackup(replacedState);
         assertTrue(store.vault().servers().stream().anyMatch(server -> server.hosts().contains("two.example")));
-        assertThrows(IllegalArgumentException.class, () -> store.backupExists(4));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.restoreBackup(new BackupSummary(false, 4, 0, 0)));
         store.lock();
         VaultStore reopened = VaultStore.open(directory);
         reopened.unlock("correct horse".toCharArray());
@@ -106,6 +150,46 @@ final class VaultStoreTest {
     }
 
     @Test
+    void damagedMainVaultCanBeRecoveredWithTheSelectedBackupsPassword() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        store.create("correct horse".toCharArray());
+        Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
+                10, 20, 30, null);
+        store.save(new Vault(1, List.of(new ServerEntry("id", "Example", List.of("example.org"), false,
+                true, "auto", List.of(account)))));
+        store.createManualBackup();
+        BackupSummary selected = store.backups().stream().filter(BackupSummary::manual).findFirst().orElseThrow();
+        Files.writeString(directory.resolve("vault.bv"), "damaged");
+        assertThrows(WrongMasterPasswordException.class,
+                () -> VaultStore.restoreFromBackup(directory, selected, "wrong horse".toCharArray()));
+        VaultStore.restoreFromBackup(directory, selected, "correct horse".toCharArray());
+        VaultStore recovered = VaultStore.open(directory);
+        recovered.unlock("correct horse".toCharArray());
+        assertEquals("backup-secret", new String(recovered.vault().servers().getFirst().accounts().getFirst().password()));
+    }
+
+    @Test
+    void passwordChangeReencryptsAutomaticAndManualBackups() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        store.create("old password".toCharArray());
+        Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
+                1, 1, 1, null);
+        store.save(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"), false,
+                true, "auto", List.of(account)))));
+        store.createManualBackup();
+        store.changeMasterPassword("old password".toCharArray(), "new password".toCharArray());
+
+        for (BackupSummary backup : store.backups()) {
+            Path isolated = Files.createDirectory(directory.resolve("check-" + backup.manual() + "-" + backup.slot()));
+            Files.copy(directory.resolve(backup.manual() ? "vault.bv.manual" + backup.slot()
+                    : "vault.bv.bak" + backup.slot()), isolated.resolve("vault.bv"));
+            VaultStore check = VaultStore.open(isolated);
+            assertThrows(WrongMasterPasswordException.class, () -> check.unlock("old password".toCharArray()));
+            check.unlock("new password".toCharArray());
+        }
+    }
+
+    @Test
     void masterPasswordCanBeChangedWithoutChangingVaultKey() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("old password".toCharArray());
@@ -115,6 +199,10 @@ final class VaultStoreTest {
                 true, "auto", List.of(account)))));
         assertThrows(WrongMasterPasswordException.class,
                 () -> store.changeMasterPassword("incorrect".toCharArray(), "new password".toCharArray()));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.changeMasterPassword("old password".toCharArray(), "short".toCharArray()));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.changeMasterPassword("old password".toCharArray(), "old password".toCharArray()));
         store.changeMasterPassword("old password".toCharArray(), "new password".toCharArray());
         store.lock();
         VaultStore reopened = VaultStore.open(directory);

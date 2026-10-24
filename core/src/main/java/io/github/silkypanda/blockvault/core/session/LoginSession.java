@@ -9,7 +9,6 @@ import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.vault.Account;
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,10 +37,8 @@ public final class LoginSession {
     private long lastPromptAt = Long.MIN_VALUE;
     private PromptKind lastPromptKind;
     private PromptKind dismissedPromptKind;
-    private long dismissedAtMillis = Long.MIN_VALUE;
     private boolean attempted;
     private boolean registerRetry;
-    private boolean canRegister;
     private int generation;
     private int promptRevision;
     private Scheduler.Handle timer;
@@ -63,28 +60,30 @@ public final class LoginSession {
         username = mcUsername;
     }
 
-    /** Arms from known root command names. */
-    public void onCommandTree(Set<String> rootCommandNames) {
-        if (host == null || rootCommandNames == null) return;
-        Set<String> names = rootCommandNames.stream().map(s -> s.toLowerCase(Locale.ROOT))
-                .collect(java.util.stream.Collectors.toSet());
-        boolean register = !java.util.Collections.disjoint(names, pack.commandNames("register"));
-        canRegister = register;
-        // A command tree only advertises commands; it does not tell us when the
-        // server is ready for authentication. Wait for an actual login/register prompt.
-    }
-
     /** Processes a plain system message only; callers must exclude signed player chat. */
     public void onSystemMessage(String plain) {
         if (host == null || state == SessionState.CONFIRMED) return;
-        prompts.matchPrompt(plain).ifPresent(kind -> {
-            if (kind == dismissedPromptKind && scheduler.nowMillis() - dismissedAtMillis < 5000) return;
-            dismissedPromptKind = null;
-            canRegister = kind == PromptKind.REGISTER;
-            arm(kind, plain);
-        });
+        java.util.Set<PromptKind> matches = prompts.matchingPrompts(plain);
+        if (matches.size() == 1) handlePrompt(matches.iterator().next(), plain);
+        else if (matches.contains(PromptKind.LOGIN) && matches.contains(PromptKind.REGISTER)) {
+            int token = generation;
+            String expectedHost = host;
+            String expectedUsername = username;
+            env.vault().find(expectedHost, expectedUsername, saved -> safely(() -> {
+                if (token != generation || host == null || !host.equals(expectedHost) || !username.equals(expectedUsername)) return;
+                Account existing = saved == null ? null : saved.account();
+                PromptKind selected = existing != null && existing.status() == Account.Status.VERIFIED
+                        ? PromptKind.LOGIN : PromptKind.REGISTER;
+                handlePrompt(selected, plain);
+            }));
+        }
         ResultKind result = results.classify(plain);
         if (result != ResultKind.NONE) onResult(result, plain);
+    }
+
+    private void handlePrompt(PromptKind kind, String plain) {
+        if (kind == dismissedPromptKind) return;
+        arm(kind, plain);
     }
 
     /** Captures a sensitive command in memory for possible post-success saving. */
@@ -126,7 +125,7 @@ public final class LoginSession {
 
     /** Confirms registration, including an optional email requested by the detected prompt. */
     public void confirmRegistration(char[] password, String email) {
-        if (host == null || state != SessionState.PROMPTED || !canRegister || action == Action.REGISTER) return;
+        if (host == null || state != SessionState.PROMPTED || lastPromptKind != PromptKind.REGISTER || action == Action.REGISTER) return;
         replacePending(password);
         action = Action.REGISTER;
         // Close the prompt race while the pending credential is persisted. Repeated
@@ -134,12 +133,12 @@ public final class LoginSession {
         state = SessionState.SENT;
         int token = generation;
         char[] staged = pending.clone();
-        env.vault().savePending(host, username, staged, saved -> {
+        env.vault().savePending(host, username, staged, saved -> safely(() -> {
             Arrays.fill(staged, '\0');
             if (token != generation || state != SessionState.SENT || action != Action.REGISTER) return;
             if (!saved) { wipePending(); state = SessionState.UNKNOWN; return; }
             send(true, email, token);
-        });
+        }));
     }
 
     /** Saves a manually captured password after the owner confirms its card. */
@@ -170,16 +169,14 @@ public final class LoginSession {
     public void dismissRejectedPrompt() {
         if (state == SessionState.REJECTED) {
             dismissedPromptKind = lastPromptKind;
-            dismissedAtMillis = scheduler.nowMillis();
             state = SessionState.UNKNOWN;
         }
     }
 
-    /** Dismisses a pending save or registration card until the server shows a different prompt. */
+    /** Dismisses the current prompt until this connection ends. */
     public void dismissPrompt() {
         if (state != SessionState.PROMPTED) return;
         dismissedPromptKind = lastPromptKind;
-        dismissedAtMillis = scheduler.nowMillis();
         state = SessionState.UNKNOWN;
         action = Action.NONE;
         promptRevision++;
@@ -194,7 +191,7 @@ public final class LoginSession {
 
     /** Applies client preferences on the session thread before future prompt handling. */
     public void configure(boolean autofill, long delayMillis, PasswordGenerator.Policy nextPolicy) {
-        if (delayMillis < 0 || delayMillis > 5000 || nextPolicy == null) {
+        if (delayMillis < 200 || delayMillis > 5000 || nextPolicy == null) {
             throw new IllegalArgumentException("Invalid session preferences");
         }
         globalAutofill = autofill;
@@ -213,19 +210,30 @@ public final class LoginSession {
         action = Action.NONE;
         attempted = false;
         registerRetry = false;
-        canRegister = false;
         lastPromptAt = Long.MIN_VALUE;
         lastPromptKind = null;
         dismissedPromptKind = null;
-        dismissedAtMillis = Long.MIN_VALUE;
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
     }
 
     private boolean contains(String group, String command) { return pack.commandNames(group).contains(command); }
 
+    private void safely(Runnable callback) {
+        try { callback.run(); }
+        catch (RuntimeException failure) {
+            cancelTimer();
+            action = Action.NONE;
+            state = SessionState.UNKNOWN;
+            attempted = false;
+            wipePending();
+            try { env.toast("blockvault.toast.send_failed"); }
+            catch (RuntimeException ignored) { /* A failed UI callback must not escape onto the game thread. */ }
+        }
+    }
+
     private void arm(PromptKind kind, String plain) {
-        if (kind == dismissedPromptKind && scheduler.nowMillis() - dismissedAtMillis < 5000) return;
+        if (kind == dismissedPromptKind) return;
         long now = scheduler.nowMillis();
         if ((lastPromptKind == kind && lastPromptAt != Long.MIN_VALUE && now - lastPromptAt < DEBOUNCE_MILLIS)
                 || state == SessionState.SENT || action == Action.REGISTER || attempted
@@ -241,7 +249,7 @@ public final class LoginSession {
             template = CommandTemplate.fromRegistrationPrompt(plain, pack.commandNames("register"));
         }
         int token = generation;
-        env.vault().find(host, username, saved -> {
+        env.vault().find(host, username, saved -> safely(() -> {
             if (token != generation || revision != promptRevision || state != SessionState.PROMPTED) return;
             if (saved != null && saved.templateExplicit() && saved.template() != null) {
                 template = saved.template();
@@ -275,7 +283,7 @@ public final class LoginSession {
                     send(false, null, token);
                 } finally { Arrays.fill(forSend, '\0'); }
             });
-        });
+        }));
     }
 
     private void send(boolean registration, String email, int token) {
@@ -322,7 +330,7 @@ public final class LoginSession {
                 else if (completed == Action.MANUAL) {
                     int token = generation;
                     char[] captured = pending.clone();
-                    env.vault().find(host, username, saved -> {
+                    env.vault().find(host, username, saved -> safely(() -> {
                         try {
                             if (token != generation || host == null) return;
                             Account existing = saved == null ? null : saved.account();
@@ -335,7 +343,7 @@ public final class LoginSession {
                                     ? CardVariant.SAVE : CardVariant.UPDATE, host, username, captured));
                             state = SessionState.CONFIRMED;
                         } finally { Arrays.fill(captured, '\0'); }
-                    });
+                    }));
                     wipePending();
                     action = Action.NONE;
                     return;
@@ -354,10 +362,11 @@ public final class LoginSession {
                 env.vault().delete(host, username);
                 attempted = false;
                 registerRetry = false;
+                dismissedPromptKind = PromptKind.REGISTER;
             }
             if (action == Action.AUTOFILL) {
                 state = SessionState.REJECTED;
-                env.showSavePrompt(new PromptModel(CardVariant.REJECTED, host, username, pending));
+                env.showSavePrompt(new PromptModel(CardVariant.REJECTED, host, username, null));
             } else state = SessionState.REJECTED;
             wipePending();
             action = Action.NONE;

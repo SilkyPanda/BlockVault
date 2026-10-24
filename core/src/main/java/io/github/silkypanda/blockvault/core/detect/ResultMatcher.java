@@ -10,6 +10,7 @@ public final class ResultMatcher {
     private static final Pattern MIN = Pattern.compile("(?iu)(?:at least|minimum(?: of)?|min(?:imum)? length(?: of)?)\\s*(\\d+)");
     private static final Pattern MAX = Pattern.compile("(?iu)(?:maximum(?: of)?|at most|max(?:imum)? length(?: of)?)\\s*(\\d+)");
     private static final Pattern ALNUM = Pattern.compile("(?iu)(?:alphanumeric|letters and numbers only|letters and digits only)");
+    private static final Pattern NEGATED_SUCCESS = Pattern.compile("(?iu)\\b(?:un\\s*successful(?:ly)?|unsuccessful(?:ly)?|not\\s+successful(?:ly)?)\\b");
     private final PatternPack pack;
 
     public ResultMatcher(PatternPack pack) { this.pack = pack; }
@@ -17,6 +18,7 @@ public final class ResultMatcher {
     /** Success takes precedence over incidental constraints in verbose success messages. */
     public ResultKind classify(String plain) {
         String text = PromptMatcher.clean(plain);
+        if (NEGATED_SUCCESS.matcher(text).find()) return ResultKind.FAILURE;
         if (PromptMatcher.matches(pack.result(ResultKind.SUCCESS), text)) return ResultKind.SUCCESS;
         if (PromptMatcher.matches(pack.result(ResultKind.FAILURE), text)) return ResultKind.FAILURE;
         if (PromptMatcher.matches(pack.result(ResultKind.PASSWORD_RULE), text)) return ResultKind.PASSWORD_RULE;
