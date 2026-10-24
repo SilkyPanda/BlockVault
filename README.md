@@ -24,7 +24,7 @@ Test on Paper with AuthMe (offline-mode or a cracked-friendly setup), then on a 
 10. Both jars: Fabric and NeoForge behave identically.
 11. Disconnect and watch `logs/latest.log`: no passwords, no secrets, no stack traces from BlockVault.
 
-`Trust this device` stores a 32-byte vault key file with owner-only permissions. It does not store the master password or use an operating-system keychain. Anyone with access to your OS account can access that trusted-device file; select `Ask for master password every launch` to remove it.
+`Trust this device` is enabled by default, as an explicit product choice. It stores the 32-byte vault key in `vault.bv.trust`; it never stores the master password and does not use an operating-system keychain. This convenience weakens at-rest protection: anyone or any malware with access to the current OS account and data directory can open the vault without the master password. Select `Ask for master password every launch` to remove the trust file. POSIX permissions are restricted to the owner; Windows relies on the data directory's OS profile ACL and BlockVault does not independently verify or set a Windows ACL.
 
 ## Local data and cleanup
 
@@ -36,10 +36,20 @@ BlockVault stores data outside the Minecraft game folder:
 
 The directory can also be overridden with the Java system property `blockvault.dataDir`.
 
-`vault.bv` and the rotating `vault.bv.bak1` through `vault.bv.bak3` files hold the encrypted vault, including saved server passwords and any TOTP secrets. With `Trust this device` enabled, `vault.bv.trust` holds the random vault key, not the master password. `config.json` stores preferences only. `patterns.json` is optional custom prompt-detection data.
+`vault.bv` and the rotating `vault.bv.bak1` through `vault.bv.bak3` files hold the encrypted vault, including saved server passwords and any TOTP secrets. With `Trust this device` enabled, `vault.bv.trust` holds the random vault key, not the master password. `config.json` stores preferences only. Optional `patterns.json` adds prompt and result patterns and command aliases to the built-in pattern pack.
 
-The vault screen can export a byte-for-byte encrypted vault copy to a new file. Importing accepts that encrypted file and its master password, then merges server/account entries by modification time. Exports remain sensitive files: protect them as you would a password-protected vault and keep the master password separate.
+The vault screen can export a byte-for-byte encrypted vault copy to a new file; export refuses to overwrite an existing file. Importing accepts that encrypted file and its master password, then merges server/account entries by host and modification time. Exports remain sensitive files: protect them as you would a password-protected vault and keep the master password separate.
 
-Deleting an account in the vault removes it from the current vault; older encrypted backups rotate out as later saves occur. BlockVault does not automatically erase its data directory when you uninstall the mod. To remove everything, exit Minecraft and delete the BlockVault data directory above. This also removes all saved accounts, backups, the trusted-device key, and settings.
+Deleting an account creates a tombstone in the current vault; tombstones are purged after 30 days. Encrypted backups rotate at most once per 24 hours, keeping up to three recovery points. Restore and master-password change are available from BlockVault settings. Restoring replaces current vault contents; it validates the backup first, snapshots the current vault so the restore can be undone, and keeps the current master password. BlockVault does not automatically erase its data directory when you uninstall the mod. To remove everything, exit Minecraft and delete the BlockVault data directory above. This also removes all saved accounts, backups, the trusted-device key, and settings.
 
 Copying a password places it on the operating-system clipboard. BlockVault does not clear it automatically. Clipboard history features or clipboard manager apps may retain additional copies; clear those separately if needed.
+
+## Security limits
+
+The encrypted vault protects data at rest when `Ask for master password every launch` is selected. Trusted-device mode keeps the vault key alongside the vault. Neither mode protects against malware running as your OS user, a compromised Minecraft process, screenshots or clipboard history, or a server that receives credentials. Java strings and UI text fields can retain temporary secret copies until garbage collection.
+
+Prompt detection uses server system messages, which a server or plugin can spoof. BlockVault only sends a credential to the server to which Minecraft is currently connected; review unexpected prompts before accepting them.
+
+Use a long, unique master password and keep a separate backup of it. A forgotten master password cannot be recovered. The memorable password preset is easier to type but has lower entropy than the longer random presets. TOTP secrets are stored in the same encrypted vault as passwords, so storing both does not provide independent two-factor protection. Verify that a selected TOTP command template matches the target server's syntax.
+
+Unlock reports an incorrect password separately from malformed or unauthenticated vault contents. If authentication fails on the password-wrapped vault key, the file format cannot distinguish a mistyped password from damage to that wrapped key; BlockVault reports an incorrect password in that case.

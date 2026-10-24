@@ -10,6 +10,8 @@ import java.util.Arrays;
 /** Strict binary encoding and parsing for the authenticated BVLT v1 container. */
 public final class VaultFile {
     public static final int MAX_BYTES = 8 * 1024 * 1024;
+    public static final int MIN_KDF_ITERATIONS = 210_000;
+    public static final int MAX_KDF_ITERATIONS = 2_000_000;
     private static final byte[] MAGIC = "BVLT".getBytes(StandardCharsets.US_ASCII);
     private static final int PREFIX_BYTES = 28;
 
@@ -20,7 +22,8 @@ public final class VaultFile {
     public record Header(KeyMode keyMode, int kdfId, int reserved, int iterations, byte[] salt) {
         public Header {
             if (keyMode != KeyMode.MASTER_PASSWORD || salt == null || salt.length != 16
-                    || kdfId != 1 || reserved != 0 || iterations <= 0) {
+                    || kdfId != 1 || reserved != 0 || iterations < MIN_KDF_ITERATIONS
+                    || iterations > MAX_KDF_ITERATIONS) {
                 throw new IllegalArgumentException("Invalid vault header");
             }
             salt = salt.clone();
@@ -95,7 +98,7 @@ public final class VaultFile {
         int iterations = input.getInt();
         byte[] salt = new byte[16];
         input.get(salt);
-        if (iterations <= 0 || kdfId != 1 || reserved != 0) {
+        if (iterations < MIN_KDF_ITERATIONS || iterations > MAX_KDF_ITERATIONS || kdfId != 1 || reserved != 0) {
             throw new IllegalArgumentException("Invalid KDF header");
         }
         Header header = new Header(mode, kdfId, reserved, iterations, salt);

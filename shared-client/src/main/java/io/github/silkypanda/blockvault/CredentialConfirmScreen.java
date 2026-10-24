@@ -96,7 +96,7 @@ final class CredentialConfirmScreen extends Screen {
         int fieldY = cardY + scaled(52);
         passwordBox = new EditBox(font, cardX + pad, fieldY, cardWidth - pad * 2, scaled(20),
                 Component.translatable("blockvault.card.password"));
-        passwordBox.setMaxLength(64);
+        passwordBox.setMaxLength(256);
         passwordBox.setHint(Component.translatable("blockvault.card.password"));
         passwordBox.setValue(model.variant() == CardVariant.REJECTED ? "" : new String(password));
         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
@@ -113,7 +113,7 @@ final class CredentialConfirmScreen extends Screen {
 
         if (model.variant() == CardVariant.REJECTED) initRejectedButtons();
         else initSaveButtons(registration);
-        scheduleTimer();
+        if (model.variant() != CardVariant.REGISTER && model.variant() != CardVariant.REJECTED) scheduleTimer();
     }
 
     private void initSaveButtons(boolean registration) {
@@ -201,6 +201,11 @@ final class CredentialConfirmScreen extends Screen {
     }
 
     private void accept(boolean registration) {
+        if (registration && emailBox != null
+                && !emailBox.getValue().matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) {
+            VaultRuntime.showToast("blockvault.toast.email_invalid");
+            return;
+        }
         wipePassword();
         password = passwordBox.getValue().toCharArray();
         if (registration) session.confirmRegistration(password, emailBox == null ? null : emailBox.getValue());
@@ -210,19 +215,17 @@ final class CredentialConfirmScreen extends Screen {
 
     private void scheduleTimer() {
         timer = BackgroundExecutor.scheduler().schedule(250, () -> {
-            BackgroundExecutor.onGameThread(() -> {
-                if (Minecraft.getInstance().gui.screen() != this) return;
-                long now = System.nanoTime();
-                long elapsed = now - lastTimerNanos;
-                lastTimerNanos = now;
-                boolean hovering = mouseX >= cardX && mouseX < cardX + cardWidth
-                        && mouseY >= cardY && mouseY < cardY + cardHeight;
-                boolean focused = passwordBox != null && passwordBox.isFocused()
-                        || emailBox != null && emailBox.isFocused();
-                if (!hovering && !focused) remainingNanos -= elapsed;
-                if (remainingNanos <= 0) onClose();
-                else scheduleTimer();
-            });
+            if (Minecraft.getInstance().gui.screen() != this) return;
+            long now = System.nanoTime();
+            long elapsed = now - lastTimerNanos;
+            lastTimerNanos = now;
+            boolean hovering = mouseX >= cardX && mouseX < cardX + cardWidth
+                    && mouseY >= cardY && mouseY < cardY + cardHeight;
+            boolean focused = passwordBox != null && passwordBox.isFocused()
+                    || emailBox != null && emailBox.isFocused();
+            if (!hovering && !focused) remainingNanos -= elapsed;
+            if (remainingNanos <= 0) onClose();
+            else scheduleTimer();
         });
     }
 
@@ -238,6 +241,7 @@ final class CredentialConfirmScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (event.x() < cardX || event.x() >= cardX + cardWidth
                 || event.y() < cardY || event.y() >= cardY + cardHeight) {
+            if (model.variant() == CardVariant.REGISTER || model.variant() == CardVariant.REJECTED) return true;
             onClose();
             return true;
         }

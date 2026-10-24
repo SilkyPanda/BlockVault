@@ -2,7 +2,7 @@
 
 ## 2026-10-24 — Replace OS key providers with an explicit trusted-device preference
 
-The owner rejected DPAPI, macOS Keychain/`security`, Linux Secret Service/`secret-tool`, and all other OS-backed device providers. Keep the BVLT vault key mode master-password-only. Add a user preference that asks for the master password every launch or trusts the current OS account, with trust enabled by default. Trust mode must not save the master password; it stores only the random vault key in a separate owner-only file and clearly documents that access to the OS account grants vault access. Turning trust off removes that key file. No OS commands, foreign APIs, networking, or telemetry are allowed.
+The owner rejected DPAPI, macOS Keychain/`security`, Linux Secret Service/`secret-tool`, and all other OS-backed device providers. Keep the BVLT vault key mode master-password-only. Add a user preference that asks for the master password every launch or trusts the current OS account, with trust enabled by default. Trust mode must not save the master password; it stores only the random vault key in a separate file and clearly documents that access to the OS account grants vault access. POSIX permissions are restricted; Windows relies on profile ACLs without dedicated validation. Turning trust off removes that key file. No OS commands, foreign APIs, networking, or telemetry are allowed.
 
 The owner reports M4 CI passed on `be0f292`. Fabric and NeoForge API artifacts have already served their M3/M4 verification purpose; remove their production from CI and retain the no-guessing rule by checking the real toolchain whenever future loader API work is introduced.
 
@@ -80,3 +80,42 @@ The M2 CI run showed that `Registration failed!` did not match the default failu
 - M6 import/export uses byte-for-byte encrypted `vault.bv` copies; import asks for the source vault's master password, merges into the current vault, and re-encrypts with the current local vault key. This avoids introducing any plaintext interchange format.
 - M6 TOTP autofill is opt-in through a separately labeled AuthMe template that appends `{totp}` to login. The format is explicit and does not change the built-in default templates; malformed or missing TOTP secrets stop automatic sending.
 - M6 review found no local loader jars to measure; the existing GitHub Actions workflow enforces the 256 KiB per-loader jar limit. Static rule checks cover network imports, unsafe console output, and other repository security constraints.
+
+## 2026-10-24 — Code-review hardening decisions
+
+The owner supplied `BlockVault code review.md` and authorized implementation changes. Treat its reproduced issues as actionable and its loader/runtime concerns as unverified until checked in game. Do not report current workspace changes as built or CI-green without an Actions run.
+
+Implemented in the current, unverified workspace:
+
+- Prevent lookup cleanup from zeroing the live vault account. A temporary account copy is returned to the session and wiped after the callback.
+- Preserve the prior verified account inside the encrypted vault while a replacement registration is pending; restore it on registration failure and drop the prior copy on success.
+- Give successful result text precedence over broad rule text, narrow default password-rule patterns, prioritize registration prompt matching, and expire prompt dismissal suppression after five seconds.
+- Enforce the KDF iteration range, merge imported server records by shared host as well as id, refuse export to existing files, make vault JSON defaults tolerant of missing/unknown fields, and make template replacement single-pass.
+- Handle memorable-password policy adjustments and grouped Base32 TOTP secrets, increase the captured-password UI limit, avoid common `/l` and `/log` aliases in built-in detection, and allow keybinds only with no screen open.
+- Bound/clear queued vault operations, catch individual queue failures, separate timer execution from vault I/O, discard canceled timers, fail closed for trusted unlock when settings cannot be read, validate settings values, and allow zero autofill delay.
+- Load optional `patterns.json` and ignore a malformed user file while retaining built-in patterns. Filter search before pagination and avoid searching hidden server addresses in streamer mode. Registration and rejected cards no longer auto-dismiss or close on outside clicks.
+- Add visible server-only policy rows, preserve vault-list page/search state after edits, refresh from disk before each unlocked operation, bound queued credential prompts, and clear queued prompts on disconnect.
+- Default new servers to prompt-derived templates; explicit selections override detection. Mark the selected template and validate required email fields.
+- Remove the misleading one-shot mixin-health warning, whose timing generated false warnings before relevant hooks had a chance to run.
+
+Product choices and remaining limits:
+
+- Keep `Trust this device` enabled by default because the owner explicitly requested that default earlier. Document that its local trust file contains the plaintext vault key and that it weakens at-rest protection. If the owner changes that preference, update the default and migration behavior separately.
+- On Windows, the code relies on the per-user data-directory ACL; it does not create or validate a dedicated owner-only ACL. README claims have been narrowed accordingly.
+- Keep the distinct `disableAutoLogin` setting because the owner explicitly requested a separate safety override. Preserve both its “master override” semantics and the global/per-server autofill controls.
+- Keep the duplicate English locale stubs because the implementation plan explicitly requires those locale files. Do not describe them as translations.
+- Keep clipboard copy behavior and document that BlockVault never clears the clipboard automatically, matching the owner's explicit request.
+- Keep the license as All Rights Reserved and keep the implementation plan/status/decision artifacts in the repository root, as the owner specified.
+
+Not implemented in this pass: dedicated Windows ACL enforcement or changing the explicitly requested trusted-device default; server-policy merge precedence; full screen lifecycle and Minecraft in-memory history guarantees; AuthMe TOTP syntax/URI provisioning and preview; IDN host support; Gradle wrapper generation and SHA-pinning dependencies/actions. Preserve the proprietary license and English locale stubs required by the plan. These items need separate validation or product design. Do not mark M6 complete while high-severity data-loss/security findings remain unresolved.
+
+Regression tests have been added for the storage and matcher/template fixes below. No CI or in-game verification is available for this follow-up yet. Require a green GitHub Actions run before calling these changes built.
+
+## 2026-10-24 — Recovery, password management, and trust notice
+
+- Backups rotate at most once per 24-hour interval during ordinary saves, keep three encrypted recovery points, and expose an in-game restore screen. Restore validates the selected backup with the active vault key, snapshots the current state so restore is reversible, writes the selected contents atomically, and retains the current password wrapper.
+- Unlock now distinguishes an incorrect master password, malformed/authentication-failing vault contents, and unsupported future format. Failed unlock does not rewrite the vault.
+- A failed authentication of the password-wrapped key is reported as an incorrect password because this format has no independent verifier that can distinguish a typo from tampering of that wrapped-key blob. Once the wrapped key authenticates, malformed or unauthenticated vault payload data is reported as damaged.
+- Add an in-game master-password change screen; the core operation verifies the current password, rewraps the same random vault key, and refreshes the trusted-device key when applicable.
+- Keep `Trust this device` enabled by default as previously requested. After successful new-vault creation, send a chat notice explaining the local key storage and that the behavior can be changed in settings.
+- Add core regression tests for the error distinction, backup interval/restore, password change, success-vs-rule classification, and one-pass placeholder replacement. Tests and loader UI remain unverified until CI and in-game checks.

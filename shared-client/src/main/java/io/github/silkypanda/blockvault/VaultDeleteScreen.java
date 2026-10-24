@@ -8,10 +8,12 @@ import net.minecraft.network.chat.Component;
 /** Explicit second step before a credential is tombstoned. */
 final class VaultDeleteScreen extends Screen {
     private final VaultRow row;
+    private final Screen parent;
 
-    VaultDeleteScreen(VaultRow row) {
-        super(Component.translatable("blockvault.vault.delete.title"));
+    VaultDeleteScreen(VaultRow row, Screen parent) {
+        super(Component.translatable(row.serverOnly() ? "blockvault.vault.server.remove.title" : "blockvault.vault.delete.title"));
         this.row = row;
+        this.parent = parent;
     }
 
     @Override
@@ -19,9 +21,10 @@ final class VaultDeleteScreen extends Screen {
         int x = width / 2 - 110;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete.confirm"), button -> {
             VaultRuntime.deleteAccount(row);
-            VaultRuntime.openVaultScreen();
+            net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
         }).bounds(x, height / 2 + 18, 104, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.card.cancel"), button -> VaultRuntime.openVaultScreen())
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.card.cancel"), button ->
+                        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent))
                 .bounds(x + 116, height / 2 + 18, 104, 20).build());
     }
 
@@ -30,8 +33,10 @@ final class VaultDeleteScreen extends Screen {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         String serverName = BlockVaultConfig.current().streamerMode()
                 ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
-        graphics.centeredText(font, Component.translatable("blockvault.vault.delete.prompt",
-                Component.literal(row.username()), Component.literal(serverName)), width / 2,
+        Component prompt = row.serverOnly()
+                ? Component.translatable("blockvault.vault.server.remove.prompt", Component.literal(serverName))
+                : Component.translatable("blockvault.vault.delete.prompt", Component.literal(row.username()), Component.literal(serverName));
+        graphics.centeredText(font, prompt, width / 2,
                 height / 2 - 8, 0xffffffff);
     }
 

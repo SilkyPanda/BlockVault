@@ -4,26 +4,50 @@ Updated: 2026-10-24
 
 ## Milestones
 
-- M0 — DONE: the skeleton and build workflow meet the planned layout. The owner reports the complete CI build passed on the current base commit `f189cec`.
-- M1 — DONE: AES-GCM, PBKDF2, bounded BVLT parsing, JSON models, data directory resolution, master-password wrapping, atomic writes, backups, and snapshot merging passed the reported CI build. Additional fault-injection and failure-path hardening remains for M6.
-- M2 — DONE: password generation (including a 1,024-entry memorable list), TOTP, host normalization, pattern matching, prompt-derived templates, per-server policy, and the pure-Java session state machine passed CI on `f2d881a`. Tests cover registration, retries, pending recovery, autofill timing/rejection/timeout, manual capture, policy suppression and disconnect cancellation.
-- M3 — DONE (build): Fabric/NeoForge system chat and connection callbacks, command-tree and outgoing-command mixins, command-history scrubbing, event-based keybinds, lazy background work, vault access, and the minimal credential confirmation screen build on both loaders. API names/signatures were checked against refreshed dumps and local 26.3 bytecode, including `command_history.txt` persistence. The owner reports CI passed on `fdc9be2`. `NeoForgePlatform.isDevEnvironment()` returns false with a verification TODO because the exact NeoForge environment API was absent from the supplied dumps; current behavior does not use it. In-game behavior remains unverified.
-- M4 — DONE (build): includes the save/update/register/rejected credential card, encrypted-vault account list and editor, per-server autofill/save policy, command templates, password generation, and settings on both loaders. The owner reports the latest CI run passed on `ec729a2`. Current follow-up changes restore dialog password controls, suppress repeated dismissed registration prompts, and add settings help tooltips; those changes still need CI and in-game verification.
-- M5 — DONE (build): master-password-only vault with optional trusted-device auto-unlock using a local vault-key file. No OS keystores or OS commands. The owner reports CI passed on `ec729a2`; trusted unlock behavior needs in-game verification.
-- M6 — PARTIAL (workspace; CI pending): auto-lock, streamer-mode address masking, encrypted vault import/export/merge, and opt-in TOTP-backed login-template wiring are implemented. Static security/performance review and locale/rule checks pass; no local jars were available for size inspection, while CI enforces the 256 KiB limit. Need a green Actions run and in-game verification. No release/publishing changes.
+- M0 — DONE (owner-reported CI): skeleton and build workflow. Last historical green report is documented below; no current Actions status is available from this workspace.
+- M1 — DONE (owner-reported CI): encrypted vault format, AES-GCM, PBKDF2, JSON model, atomic writes, backups and merge. Follow-up now adds KDF bounds, tolerant JSON parsing, daily backup rotation and backup restore; this follow-up is unverified by CI.
+- M2 — DONE (owner-reported CI): password generation, TOTP, host normalization, prompt/result matching, templates and login state machine. Follow-up fixes for rule precedence, prompt order, memorable-policy adjustment and single-pass substitution are unverified by CI.
+- M3 — DONE (build, owner-reported): Fabric/NeoForge hooks, mixins, history scrubbing, keybinds, background work and vault access. Runtime behavior has not been verified in-game.
+- M4 — DONE (build, owner-reported): credential cards, vault list/editor, settings, policy and templates. Current code-review follow-ups have not been verified by CI or in-game.
+- M5 — DONE (build, owner-reported): master-password vault with optional trusted-device key file and master-password change screen. Trust remains enabled by default; new vault creation displays a chat notice explaining the local key and settings option. Windows ACL behavior and trusted unlock still need verification; current changes are unverified by CI.
+- M6 — PARTIAL (workspace): encrypted import/export, merge, streamer mode, auto-lock, opt-in TOTP, daily backup rotation, and restore exist. Code-review hardening and regression tests are added but not yet run. Current workspace changes have not been built by CI; M6 is not complete.
+
+## Code-review follow-up
+
+Implemented in the current workspace, not yet CI-verified:
+
+- Keep the live vault password intact during credential lookup by returning a temporary defensive account copy.
+- Preserve and restore a previously verified password if replacement registration fails; discard the saved prior copy when registration succeeds.
+- Prioritize success responses over incidental password-rule text, narrow the default rule matcher, prefer registration prompts when both prompt types match, and make dismissed-prompt suppression temporary.
+- Bound accepted KDF work to the planned range; merge imported servers that share a host; refuse export onto existing files; tolerate missing/unknown JSON fields conservatively.
+- Catch failures at Minecraft chat/command hook boundaries, reset failed session handling, and make command-template substitution single-pass.
+- Handle memorable-password policies when server constraints are applied; accept grouped Base32 TOTP secrets; allow longer captured passwords.
+- Remove common `/l` and `/log` aliases from built-in password detection, avoid firing keybinds while a screen is open, and stop resetting the auto-lock timer on ordinary gameplay keypresses.
+- Bound and clear queued vault actions, isolate timer scheduling from vault I/O, remove canceled timers promptly, fail closed on unreadable settings for trusted unlock, validate setting strings, and allow a zero-millisecond autofill delay.
+- Load the documented optional `patterns.json`; ignore malformed user pattern files without disabling built-in patterns.
+- Filter vault search before pagination, preserve list state after edits, and omit server name/address from search matching in streamer mode. Show server-only policy rows so “Never save here” can be reversed. Keep registration/rejection prompts from timing out or closing on outside clicks.
+- Reload encrypted state before each unlocked operation so another game process's atomic save becomes visible; bound queued prompts and clear them on disconnect.
+- Document the at-rest threat model, trusted-device tradeoff, clipboard behavior, encrypted transfer, tombstones, and backup limitations.
+- Distinguish incorrect master passwords from damaged vault contents; add regression coverage for restore, rotation, and master-password changes.
+
+## Findings still open or requiring game verification
+
+- Registration failure path, import/export overwrite protection, duplicate-host merge, KDF limits, and account preservation need unit/CI verification after these changes.
+- Trusted-device mode stores a plaintext vault key beside the encrypted vault. This remains the owner's requested default; Windows relies on the profile ACL, which this code does not set or independently verify.
+- Full screen lifecycle handling, cross-process write contention, server-policy merge precedence, Windows ACL enforcement, and recovery from impossible server password rules require further work.
+- Mixin optionality and Minecraft's in-memory up-arrow history behavior remain unverified. Async callback failures still need a complete audit.
+- Current API targets and all Minecraft-facing behavior remain unverified in-game. Modded-server prompt detection and AuthMe TOTP command syntax also need manual validation.
+- Duplicate locale stubs remain because the plan explicitly lists them; they are English placeholders, not translations.
 
 ## Compiles but not verified in-game
 
-- M0-M5 sources compiled in the owner-reported green Actions run on `ec729a2`.
-- M3 API targets checked against dumps/bytecode but not verified in-game: system chat filtering, join/disconnect lifecycle, command tree signal, manual command capture, vanilla history scrubbing, keybind behavior, encrypted-vault prompts, and registration/autofill command flow. Multiplayer screen button is omitted.
-- The NeoForge development-environment flag is also unverified and intentionally returns false pending a dump of the relevant loader API.
-- M4 dialogs, settings screens, clipboard copy (without automatic clearing), and template selection compiled in the owner-reported green Actions run but still need in-game verification on both loaders.
-- M5 trusted-device auto-unlock, removing the trust file when disabled, password fallback, and the settings default need in-game verification.
-- Current working changes restore Reveal password, Copy password, Another password, and Never save here actions; dismissing registration suppresses duplicate queued prompts; settings options show hover descriptions; vault pagination is clamped and layout adapts to window dimensions; password presets have descriptive labels; clipboard contents are no longer cleared automatically; TOTP secrets can be stored and used with the explicit AuthMe password-plus-TOTP template; import/export uses encrypted vault files. These changes have not yet compiled in CI or been tested in-game.
-- Nothing has been verified in-game.
+- The owner previously reported M0-M5 and the loader integrations building successfully. Those reports do not verify the current uncommitted workspace changes.
+- Unverified behavior includes login/register detection, autofill timing, command-history scrubbing, keybinds, dialogs, config screens, trusted unlock, import/export, TOTP, auto-lock and streamer mode on both loaders.
+- Nothing is currently marked verified in-game.
 
-## CI
+## CI and repository state
 
-- Last owner-reported green commit: `ec729a2` (`fix: compact credential prompts and restore config controls`).
-- Current follow-up workspace changes need a new GitHub Actions run.
-- API-dump artifacts remain out of the workflow; the owner supplied the exact Mod Menu artifact needed for the Fabric integration.
+- Last commit visible in this checkout: `5630162` (`feat: complete vault transfer and TOTP polish`).
+- Current source and documentation edits have not been pushed and have no associated green Actions run. This environment has not verified CI status.
+- Static rules, whitespace, locale parity, and JSON syntax checks passed locally. Regression tests have been added but have not yet run; the local Gradle invocation failed before project configuration because Gradle could not load `libnative-platform.so`. No green Actions run is available for these changes.
+- API-dump generation is not part of ongoing CI. Loader API names must still be verified against real toolchain sources when new loader-facing work is needed.

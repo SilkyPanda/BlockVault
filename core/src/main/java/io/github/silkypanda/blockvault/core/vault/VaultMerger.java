@@ -19,10 +19,16 @@ public final class VaultMerger {
         Map<String, ServerEntry> merged = new LinkedHashMap<>();
         for (ServerEntry server : onDisk.servers()) merged.put(server.id(), server);
         for (ServerEntry server : current.servers()) {
-            ServerEntry disk = merged.get(server.id());
+            String matchingId = merged.containsKey(server.id()) ? server.id() : merged.values().stream()
+                    .filter(disk -> sharesHost(server, disk)).map(ServerEntry::id).findFirst().orElse(null);
+            ServerEntry disk = matchingId == null ? null : merged.remove(matchingId);
             merged.put(server.id(), disk == null ? server : mergeServer(server, disk, nowMillis));
         }
         return new Vault(Math.max(current.v(), onDisk.v()), new ArrayList<>(merged.values()), mergeUnknown(current.unknownFields(), onDisk.unknownFields()));
+    }
+
+    private static boolean sharesHost(ServerEntry left, ServerEntry right) {
+        return left.hosts().stream().anyMatch(right.hosts()::contains);
     }
 
     private static ServerEntry mergeServer(ServerEntry current, ServerEntry disk, long nowMillis) {

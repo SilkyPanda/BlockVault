@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import java.util.Map;
+import java.util.List;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -8,12 +9,13 @@ import net.minecraft.network.chat.Component;
 
 /** Selects a validated built-in login command template for one server. */
 final class VaultTemplateScreen extends Screen {
-    private static final Map<String, String> LABELS = Map.of(
-            "authme", "blockvault.template.authme",
-            "authme-noconfirm", "blockvault.template.authme_noconfirm",
-            "authme-totp", "blockvault.template.authme_totp",
-            "nlogin", "blockvault.template.nlogin",
-            "loginsecurity", "blockvault.template.loginsecurity");
+    private static final List<Map.Entry<String, String>> LABELS = List.of(
+            Map.entry("auto", "blockvault.template.auto"),
+            Map.entry("authme", "blockvault.template.authme"),
+            Map.entry("authme-noconfirm", "blockvault.template.authme_noconfirm"),
+            Map.entry("authme-totp", "blockvault.template.authme_totp"),
+            Map.entry("nlogin", "blockvault.template.nlogin"),
+            Map.entry("loginsecurity", "blockvault.template.loginsecurity"));
     private final VaultRow row;
     private final Screen parent;
 
@@ -27,10 +29,16 @@ final class VaultTemplateScreen extends Screen {
     protected void init() {
         int x = width / 2 - 140;
         int y = height / 2 - 48;
-        for (Map.Entry<String, String> template : LABELS.entrySet()) {
-            addRenderableWidget(Button.builder(Component.translatable(template.getValue()), button -> {
+        for (Map.Entry<String, String> template : LABELS) {
+            boolean selected = template.getKey().equals(row.templateId())
+                    || ("authme".equals(template.getKey()) && "authme-explicit".equals(row.templateId()));
+            Component label = selected
+                    ? Component.translatable("blockvault.template.current", Component.translatable(template.getValue()))
+                    : Component.translatable(template.getValue());
+            addRenderableWidget(Button.builder(label, button -> {
                 VaultRuntime.activity();
                 VaultRuntime.updateServerTemplate(row, template.getKey());
+                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
             }).bounds(x, y, 280, 20).build());
             y += 25;
         }

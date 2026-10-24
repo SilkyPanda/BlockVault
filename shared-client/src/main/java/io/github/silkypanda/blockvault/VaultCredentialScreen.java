@@ -20,7 +20,6 @@ final class VaultCredentialScreen extends Screen {
     private boolean masterRequired;
     private boolean revealed;
     private boolean revealFailed;
-    private boolean confirmDelete;
     private boolean showPassword;
     private boolean invalidTotp;
     private boolean totpLoaded;
@@ -88,16 +87,9 @@ final class VaultCredentialScreen extends Screen {
             addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.activity(); VaultRuntime.copyPassword(row); })
                     .bounds(x, top + 78, 94, 20).build());
         }
-        addRenderableWidget(Button.builder(Component.translatable(confirmDelete
-                        ? "blockvault.vault.delete.confirm" : "blockvault.vault.delete"), button -> {
-                    if (confirmDelete) {
-                        VaultRuntime.deleteAccount(row);
-                        VaultRuntime.openVaultScreen();
-                    } else {
-                        confirmDelete = true;
-                        button.setMessage(Component.translatable("blockvault.vault.delete.confirm"));
-                    }
-                }).bounds(x + 103, top + 78, 94, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete"), button ->
+                        Minecraft.getInstance().setScreenAndShow(new VaultDeleteScreen(row, this)))
+                .bounds(x + 103, top + 78, 94, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { VaultRuntime.activity(); VaultRuntime.openVaultScreen(); })
                 .bounds(x + 206, top + 78, 94, 20).build());
         setInitialFocus(passwordBox);

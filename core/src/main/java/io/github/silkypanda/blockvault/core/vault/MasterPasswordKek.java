@@ -3,6 +3,7 @@ package io.github.silkypanda.blockvault.core.vault;
 import io.github.silkypanda.blockvault.core.crypto.AesGcm;
 import io.github.silkypanda.blockvault.core.crypto.Kdf;
 import io.github.silkypanda.blockvault.core.crypto.SecureBytes;
+import io.github.silkypanda.blockvault.core.crypto.VaultAuthException;
 
 /** PBKDF2-HMAC-SHA512 and AES-GCM provider for master-password vaults. */
 public final class MasterPasswordKek {
@@ -37,9 +38,9 @@ public final class MasterPasswordKek {
         }
     }
 
-    public byte[] unwrap(byte[] blob) throws Exception {
-        if (blob.length != 60) {
-            throw new IllegalArgumentException("Invalid wrapped key length");
+    public byte[] unwrap(byte[] blob) throws VaultAuthException {
+        if (blob == null || blob.length != 60) {
+            throw new VaultAuthException("Vault authentication failed", new IllegalArgumentException("Invalid wrapped key length"));
         }
         byte[] nonce = new byte[12];
         byte[] ciphertext = new byte[blob.length - nonce.length];
@@ -66,6 +67,7 @@ public final class MasterPasswordKek {
         SecureBytes.wipe(aad);
     }
 
+    @Override
     public String toString() {
         return "MasterPasswordKek[masked]";
     }

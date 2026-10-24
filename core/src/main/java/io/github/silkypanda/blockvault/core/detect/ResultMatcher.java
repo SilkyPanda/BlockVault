@@ -14,12 +14,12 @@ public final class ResultMatcher {
 
     public ResultMatcher(PatternPack pack) { this.pack = pack; }
 
-    /** Classifies text in precedence order: password rule, failure, success, then none. */
+    /** Success takes precedence over incidental constraints in verbose success messages. */
     public ResultKind classify(String plain) {
         String text = PromptMatcher.clean(plain);
-        if (PromptMatcher.matches(pack.result(ResultKind.PASSWORD_RULE), text)) return ResultKind.PASSWORD_RULE;
-        if (PromptMatcher.matches(pack.result(ResultKind.FAILURE), text)) return ResultKind.FAILURE;
         if (PromptMatcher.matches(pack.result(ResultKind.SUCCESS), text)) return ResultKind.SUCCESS;
+        if (PromptMatcher.matches(pack.result(ResultKind.FAILURE), text)) return ResultKind.FAILURE;
+        if (PromptMatcher.matches(pack.result(ResultKind.PASSWORD_RULE), text)) return ResultKind.PASSWORD_RULE;
         return ResultKind.NONE;
     }
 

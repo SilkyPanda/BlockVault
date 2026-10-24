@@ -6,7 +6,7 @@ import java.util.Set;
 /** Identifies authentication commands that must never enter vanilla command history. */
 public final class SensitiveCommands {
     private static final Set<String> NAMES = Set.of(
-            "login", "l", "log", "register", "reg", "changepassword", "changepass", "unregister", "totp", "2fa");
+            "login", "register", "reg", "changepassword", "changepass", "unregister", "totp", "2fa");
 
     private SensitiveCommands() { }
 
@@ -17,6 +17,9 @@ public final class SensitiveCommands {
         int end = 0;
         while (end < normalized.length() && !Character.isWhitespace(normalized.charAt(end))) end++;
         if (end == 0) return false;
-        return NAMES.contains(normalized.substring(0, end).toLowerCase(Locale.ROOT));
+        String name = normalized.substring(0, end).toLowerCase(Locale.ROOT);
+        int namespace = name.lastIndexOf(':');
+        if (namespace >= 0) name = name.substring(namespace + 1);
+        return NAMES.contains(name) || Hooks.isSensitiveAlias(name);
     }
 }

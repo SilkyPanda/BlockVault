@@ -1,18 +1,18 @@
 {
   "version": 1,
   "commandNames": {
-    "login": ["login", "log", "l"],
+    "login": ["login"],
     "register": ["register", "reg"],
     "changePassword": ["changepassword", "changepass"],
     "unregister": ["unregister"]
   },
   "prompt": {
-    "login": ["(?iu)/(?:login|log|l)\\b"],
+    "login": ["(?iu)/login\\b"],
     "register": ["(?iu)/(?:register|reg)\\b"]
   },
   "result": {
     "success": ["(?iu)(successful(?:ly)?\\s+(?:log(?:ged)?\\s*in|login|registered)|logged\\s+in\\s+successfully|you(?:'| a)re\\s+now\\s+logged\\s+in|login\\s+successful|registration\\s+successful|successfully\\s+registered)", "(?iu)(sesi[oó]n\\s+iniciada|inicio\\s+de\\s+sesi[oó]n\\s+exitoso|registrado\\s+con\\s+[eé]xito|login\\s+realizado|registrado\\s+com\\s+sucesso)", "(?iu)(успешная\\s+(?:авторизация|регистрация)|вы\\s+успешно\\s+вошли)", "(?iu)(anmeldung\\s+erfolgreich|erfolgreich\\s+(?:angemeldet|registriert)|connexion\\s+réussie|inscription\\s+réussie|başarıyla\\s+(?:giriş|kaydol)|zalogowano\\s+pomyślnie|rejestracja\\s+(?:zakończona|pomyślna)|登录成功|注册成功)"],
     "failure": ["(?iu)(wrong|incorrect|invalid)\\s+password|password\\s+(?:is\\s+)?(?:wrong|incorrect)", "(?iu)(?:registration|register(?:ing)?|account creation)\\s+(?:has\\s+)?(?:failed|unsuccessful|error)", "(?iu)(contraseña\\s+incorrecta|senha\\s+incorreta|mot\\s+de\\s+passe\\s+incorrect|falsches\\s+passwort|неверный\\s+пароль|falsches\\s+passwort|mot\\s+de\\s+passe\\s+incorrect|yanlış\\s+şifre|nieprawidłowe\\s+hasło|密码错误)"],
-    "passwordRules": ["(?iu)(too\\s+short|too\\s+long|illegal\\s+characters|invalid\\s+characters|unsafe\\s+password|not\\s+allowed|at\\s+least\\s+\\d+|maximum\\s+of\\s+\\d+)"]
+    "passwordRules": ["(?iu)(?:password|passphrase)\\s+(?:is\\s+)?(?:too\\s+(?:short|long)|must\\s+be\\s+(?:at\\s+least|no\\s+more\\s+than)|contains?\\s+(?:illegal|invalid|forbidden)\\s+characters)|(?:too\\s+(?:short|long)|illegal|invalid|forbidden)\\s+(?:password|passphrase)"]
   }
 }

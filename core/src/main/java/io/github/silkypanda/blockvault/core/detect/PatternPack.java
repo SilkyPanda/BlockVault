@@ -42,8 +42,11 @@ public final class PatternPack {
         try (InputStream stream = defaults) {
             base = JsonParser.parseReader(new java.io.InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
         }
-        JsonObject user = userFileOrNull != null && Files.isRegularFile(userFileOrNull)
-                ? JsonParser.parseString(Files.readString(userFileOrNull)).getAsJsonObject() : new JsonObject();
+        JsonObject user = new JsonObject();
+        if (userFileOrNull != null && Files.isRegularFile(userFileOrNull)) {
+            try { user = JsonParser.parseString(Files.readString(userFileOrNull)).getAsJsonObject(); }
+            catch (RuntimeException | IOException malformedUserFile) { warning.accept("Invalid BlockVault pattern file ignored"); }
+        }
         Map<PromptKind, List<Pattern>> prompts = new EnumMap<>(PromptKind.class);
         addPatterns(prompts, PromptKind.LOGIN, getArray(base, "prompt", "login"), ignored -> { });
         addPatterns(prompts, PromptKind.REGISTER, getArray(base, "prompt", "register"), ignored -> { });

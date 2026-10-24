@@ -26,7 +26,10 @@ final class BlockVaultConfig {
                 Path path = DataDirs.resolve().resolve("config.json");
                 if (Files.isRegularFile(path)) {
                     try { current = read(JsonParser.parseString(Files.readString(path)).getAsJsonObject()); }
-                    catch (Exception failure) { LOGGER.warn("BlockVault could not read its settings; defaults are active"); }
+                    catch (Exception failure) {
+                        current = Settings.defaults().withTrustDevice(false);
+                        LOGGER.warn("BlockVault could not read its settings; trusted-device unlock is disabled");
+                    }
                 }
                 loaded = true;
             }
@@ -53,17 +56,25 @@ final class BlockVaultConfig {
 
     private static void loadOnBackgroundThread() throws Exception {
         Path path = DataDirs.resolve().resolve("config.json");
-        if (Files.isRegularFile(path)) current = read(JsonParser.parseString(Files.readString(path)).getAsJsonObject());
-        loaded = true;
+        try {
+            if (Files.isRegularFile(path)) current = read(JsonParser.parseString(Files.readString(path)).getAsJsonObject());
+        } catch (Exception failure) {
+            current = Settings.defaults().withTrustDevice(false);
+            LOGGER.warn("BlockVault could not read its settings; trusted-device unlock is disabled");
+        } finally { loaded = true; }
     }
 
     private static Settings read(JsonObject json) {
         Settings defaults = Settings.defaults();
-        return new Settings(bool(json, "autofill", defaults.autofill()), integer(json, "autofillDelayMillis", 400, 5000,
+        String position = string(json, "cardPosition", defaults.cardPosition());
+        if (!java.util.Set.of("top_left", "top_right", "bottom_left", "bottom_right").contains(position)) position = defaults.cardPosition();
+        String generator = string(json, "generator", defaults.generator());
+        if (!java.util.Set.of("defaults", "pickyServer", "max", "memorable").contains(generator)) generator = defaults.generator();
+        return new Settings(bool(json, "autofill", defaults.autofill()), integer(json, "autofillDelayMillis", 0, 5000,
                 defaults.autofillDelayMillis()), integer(json, "autoLockMinutes", 0, 1440, defaults.autoLockMinutes()),
                 integer(json, "cardDurationSeconds", 1, 60, defaults.cardDurationSeconds()),
-                string(json, "cardPosition", defaults.cardPosition()), bool(json, "streamerMode", defaults.streamerMode()),
-                string(json, "generator", defaults.generator()), bool(json, "scrubHistory", defaults.scrubHistory()),
+                position, bool(json, "streamerMode", defaults.streamerMode()),
+                generator, bool(json, "scrubHistory", defaults.scrubHistory()),
                 bool(json, "trustDevice", defaults.trustDevice()), bool(json, "disableAutoLogin", defaults.disableAutoLogin()));
     }
 
@@ -80,7 +91,16 @@ final class BlockVaultConfig {
         json.addProperty("scrubHistory", settings.scrubHistory());
         json.addProperty("trustDevice", settings.trustDevice());
         json.addProperty("disableAutoLogin", settings.disableAutoLogin());
-        Files.writeString(path, json.toString());
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
+        try {
+            Files.writeString(temporary, json.toString(), java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING, java.nio.file.StandardOpenOption.WRITE);
+            try { Files.move(temporary, path, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+            catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally { Files.deleteIfExists(temporary); }
     }
 
     private static boolean bool(JsonObject json, String key, boolean fallback) {

@@ -14,6 +14,7 @@ final class VaultAccessScreen extends Screen {
     private EditBox password;
     private EditBox confirmation;
     private boolean failed;
+    private String failureKey;
 
     VaultAccessScreen(boolean create) {
         super(Component.translatable(create ? "blockvault.vault.create.title" : "blockvault.vault.unlock.title"));
@@ -44,6 +45,8 @@ final class VaultAccessScreen extends Screen {
     }
 
     private void submit() {
+        failed = false;
+        failureKey = null;
         String entered = password.getValue();
         String repeated = create ? confirmation.getValue() : entered;
         if (entered.isEmpty() || !entered.equals(repeated)) {
@@ -62,7 +65,7 @@ final class VaultAccessScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         if (failed) {
-            graphics.centeredText(font, Component.translatable(create
+            graphics.centeredText(font, Component.translatable(failureKey != null ? failureKey : create
                     ? "blockvault.vault.password.mismatch" : "blockvault.vault.unlock.failed"), width / 2,
                     height / 2 + (create ? 59 : 32), 0xffff5555);
         }
@@ -78,8 +81,9 @@ final class VaultAccessScreen extends Screen {
         super.onClose();
     }
 
-    void showFailure() {
+    void showFailure(String translationKey) {
         failed = true;
+        failureKey = translationKey;
         if (password != null) password.setValue("");
         if (confirmation != null) confirmation.setValue("");
     }

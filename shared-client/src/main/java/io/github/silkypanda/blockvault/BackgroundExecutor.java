@@ -4,16 +4,18 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import io.github.silkypanda.blockvault.core.session.Scheduler;
 
-/** Single lazy daemon for vault work and timers; scheduled callbacks are returned to the game thread. */
+/** Separate lazy daemons for vault I/O and timers; scheduled callbacks return to the game thread. */
 public final class BackgroundExecutor implements Scheduler {
     private static final BackgroundExecutor SCHEDULER = new BackgroundExecutor();
-    private static ScheduledExecutorService executor;
+    private static java.util.concurrent.ExecutorService executor;
+    private static ScheduledExecutorService scheduler;
 
     private BackgroundExecutor() { }
 
@@ -37,22 +39,32 @@ public final class BackgroundExecutor implements Scheduler {
 
     @Override
     public Handle schedule(long delayMillis, Runnable callback) {
-        ScheduledFuture<?> future = executor().schedule(() -> onGameThread(callback), delayMillis, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> future = timerExecutor().schedule(() -> onGameThread(callback), delayMillis, TimeUnit.MILLISECONDS);
         return () -> future.cancel(false);
     }
 
     @Override
     public long nowMillis() { return TimeUnit.NANOSECONDS.toMillis(System.nanoTime()); }
 
-    private static synchronized ScheduledExecutorService executor() {
-        if (executor == null) {
-            ThreadFactory factory = task -> {
-                Thread thread = new Thread(task, "blockvault-io");
-                thread.setDaemon(true);
-                return thread;
-            };
-            executor = Executors.newSingleThreadScheduledExecutor(factory);
-        }
+    private static synchronized java.util.concurrent.ExecutorService executor() {
+        if (executor == null) executor = Executors.newSingleThreadExecutor(threadFactory("blockvault-io"));
         return executor;
+    }
+
+    private static synchronized ScheduledExecutorService timerExecutor() {
+        if (scheduler == null) {
+            ScheduledThreadPoolExecutor timers = new ScheduledThreadPoolExecutor(1, threadFactory("blockvault-timer"));
+            timers.setRemoveOnCancelPolicy(true);
+            scheduler = timers;
+        }
+        return scheduler;
+    }
+
+    private static ThreadFactory threadFactory(String name) {
+        return task -> {
+            Thread thread = new Thread(task, name);
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 }

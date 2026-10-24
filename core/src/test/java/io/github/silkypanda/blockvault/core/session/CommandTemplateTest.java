@@ -28,4 +28,11 @@ final class CommandTemplateTest {
         assertTrue(rendered.startsWith("register safe"));
         assertTrue(!rendered.contains("\n"));
     }
+
+    @Test
+    void insertedPasswordIsNotRescannedAsAnotherPlaceholder() {
+        String rendered = new CommandTemplate("test", "login {password}", "register {password}")
+                .render(false, "{email}".toCharArray(), "secret@example.test", "Alex", null);
+        assertEquals("login {email}", rendered);
+    }
 }

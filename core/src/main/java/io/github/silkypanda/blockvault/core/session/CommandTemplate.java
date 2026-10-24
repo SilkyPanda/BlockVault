@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 public record CommandTemplate(String id, String login, String register) {
     private static final Pattern REGISTER_COMMAND = Pattern.compile("(?iu)/([\\p{L}]+)\\b([^\\r\\n]*)");
     private static final Pattern PLACEHOLDER = Pattern.compile("<([^<>]+)>");
+    private static final Pattern TOKEN = Pattern.compile("\\{(password|email|username|totp)}");
     public CommandTemplate {
         if (id == null || login == null || register == null) throw new IllegalArgumentException("Template fields are required");
         validate(login);
@@ -57,8 +58,21 @@ public record CommandTemplate(String id, String login, String register) {
     /** Renders one command while preserving the no-leading-slash contract. */
     public String render(boolean registration, char[] password, String email, String username, String totp) {
         String source = registration ? register : login;
-        String result = source.replace("{password}", safe(new String(password)))
-                .replace("{email}", safe(email)).replace("{username}", safe(username)).replace("{totp}", safe(totp));
+        String[] values = {safe(new String(password)), safe(email), safe(username), safe(totp)};
+        Matcher tokens = TOKEN.matcher(source);
+        StringBuffer resultBuffer = new StringBuffer();
+        while (tokens.find()) {
+            String value = switch (tokens.group(1)) {
+                case "password" -> values[0];
+                case "email" -> values[1];
+                case "username" -> values[2];
+                case "totp" -> values[3];
+                default -> "";
+            };
+            tokens.appendReplacement(resultBuffer, Matcher.quoteReplacement(value));
+        }
+        tokens.appendTail(resultBuffer);
+        String result = resultBuffer.toString();
         if (result.startsWith("/") || result.isBlank()) throw new IllegalStateException("Template produced an invalid command");
         return result;
     }

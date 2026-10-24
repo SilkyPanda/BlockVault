@@ -61,6 +61,10 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                 current -> current.withScrubHistory(!current.scrubHistory()));
         addSettingButton("blockvault.settings.unlock_policy", unlockPolicyLabel(settings.trustDevice()),
                 current -> current.withTrustDevice(!current.trustDevice()));
+        list.addBig(Button.builder(Component.translatable("blockvault.backup.title"),
+                button -> VaultRuntime.openBackupScreen(this)).width(300).build());
+        list.addBig(Button.builder(Component.translatable("blockvault.master.change.title"),
+                button -> VaultRuntime.openMasterPasswordScreen(this)).width(300).build());
         list.addBig(Button.builder(Component.translatable("blockvault.settings.vault"),
                 button -> VaultRuntime.openVaultScreen()).width(300).build());
     }
@@ -121,7 +125,11 @@ final class VaultSettingsScreen extends OptionsSubScreen {
         return Component.translatable("blockvault.settings.generator.preset." + preset);
     }
 
-    private static Component label(String key, Object value) { return Component.translatable(key, value); }
+    private static Component label(String key, Object value) {
+        Object display = value instanceof Boolean enabled
+                ? Component.translatable(enabled ? "blockvault.common.enabled" : "blockvault.common.disabled") : value;
+        return Component.translatable(key, display);
+    }
 
     private static <T> T next(T current, List<T> choices) {
         int at = choices.indexOf(current);

@@ -1,7 +1,6 @@
 package io.github.silkypanda.blockvault.mixin;
 
 import io.github.silkypanda.blockvault.Hooks;
-import io.github.silkypanda.blockvault.MixinHealth;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundCommandsPacket;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,13 +13,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ClientPacketListenerMixin {
     @Inject(method = "handleCommands", at = @At("RETURN"), require = 0)
     private void blockvault$commandsApplied(ClientboundCommandsPacket packet, CallbackInfo callback) {
-        MixinHealth.packetRan();
         Hooks.onCommandTree((ClientPacketListener) (Object) this);
     }
 
     @Inject(method = "sendCommand", at = @At("HEAD"), require = 0)
     private void blockvault$commandSent(String command, CallbackInfo callback) {
-        MixinHealth.commandRan();
         Hooks.onOutgoingCommand(command);
     }
 }

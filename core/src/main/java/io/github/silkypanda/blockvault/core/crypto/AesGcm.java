@@ -1,7 +1,6 @@
 package io.github.silkypanda.blockvault.core.crypto;
 
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;

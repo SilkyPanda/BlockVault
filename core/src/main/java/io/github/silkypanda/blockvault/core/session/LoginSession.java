@@ -40,6 +40,7 @@ public final class LoginSession {
     private long lastPromptAt = Long.MIN_VALUE;
     private PromptKind lastPromptKind;
     private PromptKind dismissedPromptKind;
+    private long dismissedAtMillis = Long.MIN_VALUE;
     private boolean attempted;
     private boolean registerRetry;
     private boolean canRegister;
@@ -72,7 +73,7 @@ public final class LoginSession {
         boolean login = !java.util.Collections.disjoint(names, pack.commandNames("login"));
         boolean register = !java.util.Collections.disjoint(names, pack.commandNames("register"));
         if (login || register) {
-            canRegister = !login && register;
+            canRegister = register;
             arm(canRegister ? PromptKind.REGISTER : PromptKind.LOGIN, null);
         }
     }
@@ -81,7 +82,7 @@ public final class LoginSession {
     public void onSystemMessage(String plain) {
         if (host == null || state == SessionState.CONFIRMED) return;
         prompts.matchPrompt(plain).ifPresent(kind -> {
-            if (kind == dismissedPromptKind) return;
+            if (kind == dismissedPromptKind && scheduler.nowMillis() - dismissedAtMillis < 5000) return;
             dismissedPromptKind = null;
             canRegister = kind == PromptKind.REGISTER;
             arm(kind, plain);
@@ -173,6 +174,7 @@ public final class LoginSession {
     public void dismissRejectedPrompt() {
         if (state == SessionState.REJECTED) {
             dismissedPromptKind = lastPromptKind;
+            dismissedAtMillis = scheduler.nowMillis();
             state = SessionState.UNKNOWN;
         }
     }
@@ -181,6 +183,7 @@ public final class LoginSession {
     public void dismissPrompt() {
         if (state != SessionState.PROMPTED) return;
         dismissedPromptKind = lastPromptKind;
+        dismissedAtMillis = scheduler.nowMillis();
         state = SessionState.UNKNOWN;
         action = Action.NONE;
         promptRevision++;
@@ -218,6 +221,7 @@ public final class LoginSession {
         lastPromptAt = Long.MIN_VALUE;
         lastPromptKind = null;
         dismissedPromptKind = null;
+        dismissedAtMillis = Long.MIN_VALUE;
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
         wipeTotpSecret();
@@ -226,7 +230,7 @@ public final class LoginSession {
     private boolean contains(String group, String command) { return pack.commandNames(group).contains(command); }
 
     private void arm(PromptKind kind, String plain) {
-        if (kind == dismissedPromptKind) return;
+        if (kind == dismissedPromptKind && scheduler.nowMillis() - dismissedAtMillis < 5000) return;
         long now = scheduler.nowMillis();
         if ((lastPromptKind == kind && lastPromptAt != Long.MIN_VALUE && now - lastPromptAt < DEBOUNCE_MILLIS)
                 || state == SessionState.SENT || action == Action.REGISTER || attempted
@@ -244,7 +248,9 @@ public final class LoginSession {
         int token = generation;
         env.vault().find(host, username, saved -> {
             if (token != generation || revision != promptRevision || state != SessionState.PROMPTED) return;
-            if (saved != null && saved.template() != null) template = saved.template();
+            if (saved != null && saved.templateExplicit() && saved.template() != null) {
+                template = saved.template();
+            }
             Account account = saved == null ? null : saved.account();
             wipeTotpSecret();
             totpSecret = account == null || account.totpSecret() == null ? null : account.totpSecret().toCharArray();
@@ -300,15 +306,31 @@ public final class LoginSession {
                 return;
             }
         }
-        cancelTimer();
-        attempted = true;
-        state = SessionState.SENT;
         char[] copy = pending.clone();
+        String outgoing;
         try {
-            env.sendCommand(template.render(registration, copy, email, username, totp));
+            outgoing = template.render(registration, copy, email, username, totp);
+        } catch (RuntimeException invalidTemplate) {
+            state = SessionState.UNKNOWN;
+            action = Action.NONE;
+            wipePending();
+            env.toast("blockvault.toast.send_failed");
+            return;
         } finally {
             Arrays.fill(copy, '\0');
             wipeTotpSecret();
+        }
+        cancelTimer();
+        attempted = true;
+        state = SessionState.SENT;
+        try { env.sendCommand(outgoing); }
+        catch (RuntimeException sendFailure) {
+            attempted = false;
+            state = SessionState.UNKNOWN;
+            action = Action.NONE;
+            wipePending();
+            env.toast("blockvault.toast.send_failed");
+            return;
         }
         timer = scheduler.schedule(RESULT_TIMEOUT_MILLIS, () -> {
             if (token == generation && state == SessionState.SENT) {
@@ -352,7 +374,11 @@ public final class LoginSession {
             }
         } else if (result == ResultKind.FAILURE && state == SessionState.SENT) {
             cancelTimer();
-            if (action == Action.REGISTER) env.vault().delete(host, username);
+            if (action == Action.REGISTER) {
+                env.vault().delete(host, username);
+                attempted = false;
+                registerRetry = false;
+            }
             if (action == Action.AUTOFILL) {
                 state = SessionState.REJECTED;
                 env.showSavePrompt(new PromptModel(CardVariant.REJECTED, host, username, pending));
@@ -366,7 +392,16 @@ public final class LoginSession {
                 var hint = results.parseRuleHint(plain);
                 if (hint.isPresent()) {
                     registerRetry = true;
-                    policy = policy.adjustFor(hint.orElseThrow());
+                    try { policy = policy.adjustFor(hint.orElseThrow()); }
+                    catch (IllegalArgumentException unsupportedRule) {
+                        attempted = false;
+                        registerRetry = false;
+                        wipePending();
+                        state = SessionState.UNKNOWN;
+                        action = Action.NONE;
+                        env.toast("blockvault.toast.rule_unsupported");
+                        return;
+                    }
                     wipePending();
                     action = Action.NONE;
                     state = SessionState.PROMPTED;
@@ -378,7 +413,9 @@ public final class LoginSession {
                 }
             }
             wipePending();
-            state = SessionState.REJECTED;
+            attempted = false;
+            registerRetry = false;
+            state = SessionState.UNKNOWN;
             action = Action.NONE;
         }
     }

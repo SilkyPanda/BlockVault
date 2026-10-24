@@ -12,6 +12,7 @@ import net.minecraft.network.chat.Component;
 
 /** Minecraft-thread implementation of actions requested by the pure-Java login session. */
 final class McSessionEnv implements SessionEnv {
+    private static final int MAX_QUEUED_PROMPTS = 16;
     private final Queue<PromptModel> queuedPrompts = new ArrayDeque<>();
     private LoginSession session;
     private boolean showing;
@@ -26,6 +27,7 @@ final class McSessionEnv implements SessionEnv {
     @Override
     public void showSavePrompt(PromptModel model) {
         if (showing) {
+            if (queuedPrompts.size() >= MAX_QUEUED_PROMPTS) queuedPrompts.remove().clearPassword();
             queuedPrompts.add(model);
             return;
         }
@@ -58,5 +60,14 @@ final class McSessionEnv implements SessionEnv {
         }
         PromptModel next = queuedPrompts.poll();
         if (next != null) show(next);
+    }
+
+    void disconnect() {
+        PromptModel queued;
+        while ((queued = queuedPrompts.poll()) != null) queued.clearPassword();
+        showing = false;
+        if (Minecraft.getInstance().gui.screen() instanceof CredentialConfirmScreen) {
+            Minecraft.getInstance().setScreenAndShow(null);
+        }
     }
 }

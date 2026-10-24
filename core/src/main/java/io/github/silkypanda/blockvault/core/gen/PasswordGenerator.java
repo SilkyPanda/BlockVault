@@ -36,7 +36,15 @@ public final class PasswordGenerator {
             if (hint.minLength() != null && hint.maxLength() != null && hint.minLength() > hint.maxLength()) {
                 throw new IllegalArgumentException("Server password length rules conflict");
             }
+            if ((hint.minLength() != null && hint.minLength() > 64)
+                    || (hint.maxLength() != null && hint.maxLength() < 8)) {
+                throw new IllegalArgumentException("Server password length is outside the supported range");
+            }
             adjusted = Math.max(8, Math.min(64, adjusted));
+            if (symbols && "\u0000".equals(symbolSet)) {
+                if (hint.alphanumericOnly()) return new Policy(adjusted, false, true, true, false, "", excludeAmbiguous);
+                return new Policy(adjusted, false, false, false, true, "\u0000", excludeAmbiguous);
+            }
             boolean nextUpper = upper;
             boolean nextLower = lower;
             boolean nextDigits = digits;
@@ -106,6 +114,19 @@ public final class PasswordGenerator {
     }
 
     private static char[] generateMemorable() {
+        List<String> words = WordList.VALUE;
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            if (i > 0) result.append('-');
+            result.append(words.get(uniformIndex(RANDOM, words.size())));
+        }
+        result.append('-').append(uniformIndex(RANDOM, 10)).append(uniformIndex(RANDOM, 10));
+        char[] password = new char[result.length()];
+        result.getChars(0, result.length(), password, 0);
+        return password;
+    }
+
+    private static List<String> loadWordList() {
         List<String> words = new ArrayList<>(1024);
         try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(
                 PasswordGenerator.class.getResourceAsStream("/assets/blockvault/password-words.txt"),
@@ -116,14 +137,10 @@ public final class PasswordGenerator {
             throw new IllegalStateException("Memorable word list is unavailable");
         }
         if (words.size() != 1024) throw new IllegalStateException("Memorable word list is invalid");
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < 4; i++) {
-            if (i > 0) result.append('-');
-            result.append(words.get(uniformIndex(RANDOM, words.size())));
-        }
-        result.append('-').append(uniformIndex(RANDOM, 10)).append(uniformIndex(RANDOM, 10));
-        char[] password = new char[result.length()];
-        result.getChars(0, result.length(), password, 0);
-        return password;
+        return List.copyOf(words);
+    }
+
+    private static final class WordList {
+        private static final List<String> VALUE = loadWordList();
     }
 }

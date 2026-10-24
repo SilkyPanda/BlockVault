@@ -18,8 +18,8 @@ public final class PromptMatcher {
         boolean candidate = text.indexOf('/') >= 0;
         for (String keyword : KEYWORDS) candidate |= lower.contains(keyword);
         if (!candidate) return Optional.empty();
-        if (matches(pack.prompt(PromptKind.LOGIN), text)) return Optional.of(PromptKind.LOGIN);
         if (matches(pack.prompt(PromptKind.REGISTER), text)) return Optional.of(PromptKind.REGISTER);
+        if (matches(pack.prompt(PromptKind.LOGIN), text)) return Optional.of(PromptKind.LOGIN);
         return Optional.empty();
     }
 

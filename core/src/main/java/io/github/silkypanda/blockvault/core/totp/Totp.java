@@ -44,6 +44,7 @@ public final class Totp {
     /** Decodes an unpadded or padded Base32 secret. */
     public static byte[] decodeBase32(String encoded) {
         if (encoded == null || encoded.isBlank()) throw new IllegalArgumentException("Base32 secret is empty");
+        encoded = encoded.replace(" ", "").replace("-", "");
         java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
         int buffer = 0;
         int bits = 0;
