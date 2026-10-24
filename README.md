@@ -8,6 +8,18 @@ GitHub Actions builds and tests each push and pull request. The build workflow u
 
 There are independent Gradle builds in `core/`, `fabric/`, and `neoforge/`. CI uses Java 25 and Gradle 9.7.1 when a Gradle wrapper is unavailable. Local builds are best-effort; only a green Actions run verifies a commit.
 
+## Code map
+
+- `core/src/main/java/.../core/crypto` contains encryption, key derivation, and secret-buffer helpers.
+- `core/.../detect`, `gen`, `host`, and `session` contain pure-Java prompt matching, password generation, server identity, and login flow logic. Their tests live in matching packages under `core/src/test`.
+- `core/.../vault` contains the vault model, encrypted file format, backup handling, and storage.
+- `shared-client/src/main/java/.../blockvault` contains the Minecraft-facing runtime, session bridge, configuration, and screens. Those classes currently share one package because the screens call package-private runtime/config helpers directly.
+- `shared-client/.../blockvault/mixin` contains the small set of Minecraft interception points. Keep loader-specific APIs out of this source tree.
+- `fabric/.../fabric` and `neoforge/.../neoforge` contain loader entrypoints and event bridges. Shared behavior belongs in `shared-client`; game-independent behavior belongs in `core`.
+- `shared-client/src/main/resources` contains translations, prompt patterns, and mixin metadata; loader metadata stays under each loader's `src/main/resources`.
+
+For a code change, follow the relevant section in `BLOCKVAULT_PLAN.md`, keep pure-Java behavior in `core` where possible, and use the GitHub Actions run for the commit as the build result.
+
 ## Manual in-game checks
 
 Test on Paper with AuthMe (offline-mode or a cracked-friendly setup), then on a server using nLogin or LoginSecurity if available.

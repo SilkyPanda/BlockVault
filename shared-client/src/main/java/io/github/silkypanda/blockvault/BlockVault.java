@@ -10,7 +10,7 @@ public final class BlockVault {
     }
 
     /** Reports which loader initialized the shared client code. */
-    public static void init(Platform value) {
-        LOGGER.info("BlockVault initialized ({})", value.loaderName());
+    public static void init(Platform platform) {
+        LOGGER.info("BlockVault initialized ({})", platform.loaderName());
     }
 }

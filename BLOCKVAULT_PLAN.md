@@ -100,8 +100,8 @@ BlockVault/
 |     src/main/resources/assets/blockvault/patterns/default.json
 |- shared-client/                     NO Gradle build; just sources compiled into BOTH loader jars
 |  `- src/main/
-|     |- java/io/github/silkypanda/blockvault/{BlockVault.java,Platform.java,...}
-|     |- java/io/github/silkypanda/blockvault/{hooks,session,ui,mixin}/...
+|     |- java/io/github/silkypanda/blockvault/ (runtime, config, session bridge, screens)
+|     |- java/io/github/silkypanda/blockvault/mixin/ (Minecraft interception points)
 |     `- resources/{blockvault.mixins.json, assets/blockvault/{lang,textures,...}}
 |- fabric/                            standalone Gradle build (Loom)
 |  |- settings.gradle
@@ -118,6 +118,7 @@ BlockVault/
 Rules:
 - `core/` must not import any `net.minecraft`, Fabric or NeoForge class.
 - `shared-client/` may import `net.minecraft.*` and `core`, but NOT Fabric API or NeoForge classes. (Unobfuscated 26.x means the same Mojang names compile on both loaders.)
+- Keep the current shared-client screens and their package-private runtime/config collaborators in `io.github.silkypanda.blockvault` together unless a refactor also defines and verifies a clean public UI boundary.
 - Loader folders contain only entrypoint glue: event bridges, keybind registration, loader manifests, loader-specific `Platform` implementation.
 - Each loader build adds `../core/src/main/{java,resources}` and `../shared-client/src/main/{java,resources}` to its main source set.
 - Wrapper: commit `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.{jar,properties}` inside each of `core/`, `fabric/`, `neoforge/` IF you can generate them (`gradle wrapper --gradle-version 9.7.1`). If you cannot, do not block: CI has a no-wrapper fallback (5.1). Note it in `DECISIONS.md`.

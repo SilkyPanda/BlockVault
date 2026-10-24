@@ -24,6 +24,5 @@ public final class BlockVaultNeoForge {
         public String loaderName() {
             return "neoforge";
         }
-
     }
 }

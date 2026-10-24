@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-10-24 — Document current shared-client boundaries
+
+Keep shared-client screens and their package-private runtime/config collaborators in the existing `io.github.silkypanda.blockvault` package for now. Splitting screens into a separate package would require defining and validating a broader public API across many screens. Document the actual package layout and module responsibilities in `README.md`; revisit a package split only with a deliberate UI boundary.
+
 ## 2026-10-24 — Resolve round-two review choices
 
 Follow the owner's selected behavior for review findings: use explicit local edits guarded by an encrypted-file SHA-256 conflict check for rollbacks and removals; recover a missing or damaged main vault by validating and restoring the selected backup with the password that encrypted that backup; re-encrypt all automatic and manual backups after a master-password change; remove password reauthentication from reveal/copy/edit flows after vault unlock; allow trusted-device unlock to run again after inactivity auto-lock during the same session; keep registration Cancel suppression through disconnect and make Never save here a persistent per-server policy; remove duplicate English locale stubs; cap user regexes at 256 characters; require at least 8 characters for a new master password and reject the current password as the replacement. The owner also chose variable memorable-preset word count to fit parsed server length bounds, automatic prompt detection for legacy `authme` template IDs, skipping automatic backups when the current vault has no accounts, and a 200 ms minimum autofill delay.
