@@ -54,7 +54,7 @@ final class PasswordGeneratorTest {
     void memorablePresetChangesWordCountToFitServerLengthRules() {
         char[] shortPassword = PasswordGenerator.generate(PasswordGenerator.Policy.memorable()
                 .adjustFor(new ServerRuleHint(null, 12, false)));
-        assertEquals(11, shortPassword.length);
+        assertEquals(12, shortPassword.length);
         assertEquals(2, new String(shortPassword).chars().filter(c -> c == '-').count());
         java.util.Arrays.fill(shortPassword, '\0');
 
