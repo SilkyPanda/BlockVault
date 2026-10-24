@@ -72,10 +72,11 @@ public final class LoginSession {
                 .collect(java.util.stream.Collectors.toSet());
         boolean login = !java.util.Collections.disjoint(names, pack.commandNames("login"));
         boolean register = !java.util.Collections.disjoint(names, pack.commandNames("register"));
-        if (login || register) {
-            canRegister = register;
-            arm(canRegister ? PromptKind.REGISTER : PromptKind.LOGIN, null);
-        }
+        canRegister = register;
+        // A command tree only advertises commands; it does not tell us which prompt
+        // the server is asking for. Login can be pre-armed for known credentials,
+        // while registration cards wait for the actual registration system message.
+        if (login) arm(PromptKind.LOGIN, null);
     }
 
     /** Processes a plain system message only; callers must exclude signed player chat. */
@@ -415,8 +416,9 @@ public final class LoginSession {
             wipePending();
             attempted = false;
             registerRetry = false;
-            state = SessionState.UNKNOWN;
+            state = SessionState.REJECTED;
             action = Action.NONE;
+            env.toast("blockvault.toast.rule_retry_failed");
         }
     }
 

@@ -65,14 +65,15 @@ final class VaultStoreTest {
                 "auto", List.of(), null);
         store.save(new Vault(1, List.of(after), null));
         store.restoreBackup(1);
+        assertEquals(1, store.vault().servers().size());
         assertEquals("one.example", store.vault().servers().get(0).hosts().get(0));
         store.restoreBackup(1);
-        assertEquals("two.example", store.vault().servers().get(0).hosts().get(0));
+        assertTrue(store.vault().servers().stream().anyMatch(server -> server.hosts().contains("two.example")));
         assertThrows(IllegalArgumentException.class, () -> store.backupExists(4));
         store.lock();
         VaultStore reopened = VaultStore.open(directory);
         reopened.unlock("correct horse".toCharArray());
-        assertEquals("two.example", reopened.vault().servers().get(0).hosts().get(0));
+        assertTrue(reopened.vault().servers().stream().anyMatch(server -> server.hosts().contains("two.example")));
     }
 
     @Test

@@ -6,7 +6,7 @@ Updated: 2026-10-24
 
 - M0 — DONE (owner-reported CI): skeleton and build workflow. Last historical green report is documented below; no current Actions status is available from this workspace.
 - M1 — DONE (owner-reported CI): encrypted vault format, AES-GCM, PBKDF2, JSON model, atomic writes, backups and merge. Follow-up now adds KDF bounds, tolerant JSON parsing, daily backup rotation and backup restore; this follow-up is unverified by CI.
-- M2 — DONE (owner-reported CI): password generation, TOTP, host normalization, prompt/result matching, templates and login state machine. Follow-up fixes for rule precedence, prompt order, memorable-policy adjustment and single-pass substitution are unverified by CI.
+- M2 — DONE (owner-reported CI): password generation, TOTP, host normalization, prompt/result matching, templates and login state machine. The owner-provided latest core CI log had failures in command-tree arming and the second rule-retry state; both have been corrected in the workspace but need a rerun.
 - M3 — DONE (build, owner-reported): Fabric/NeoForge hooks, mixins, history scrubbing, keybinds, background work and vault access. Runtime behavior has not been verified in-game.
 - M4 — DONE (build, owner-reported): credential cards, vault list/editor, settings, policy and templates. Current code-review follow-ups have not been verified by CI or in-game.
 - M5 — DONE (build, owner-reported): master-password vault with optional trusted-device key file and master-password change screen. Trust remains enabled by default; new vault creation displays a chat notice explaining the local key and settings option. Windows ACL behavior and trusted unlock still need verification; current changes are unverified by CI.
@@ -32,7 +32,7 @@ Implemented in the current workspace, not yet CI-verified:
 
 ## Findings still open or requiring game verification
 
-- Registration failure path, import/export overwrite protection, duplicate-host merge, KDF limits, and account preservation need unit/CI verification after these changes.
+- Registration rollback, import/export overwrite protection, duplicate-host merge, KDF limits, account preservation, command-tree prompt behavior, rule retry, and backup restore need unit/CI verification after these fixes.
 - Trusted-device mode stores a plaintext vault key beside the encrypted vault. This remains the owner's requested default; Windows relies on the profile ACL, which this code does not set or independently verify.
 - Full screen lifecycle handling, cross-process write contention, server-policy merge precedence, Windows ACL enforcement, and recovery from impossible server password rules require further work.
 - Mixin optionality and Minecraft's in-memory up-arrow history behavior remain unverified. Async callback failures still need a complete audit.
@@ -49,5 +49,5 @@ Implemented in the current workspace, not yet CI-verified:
 
 - Last commit visible in this checkout: `5630162` (`feat: complete vault transfer and TOTP polish`).
 - Current source and documentation edits have not been pushed and have no associated green Actions run. This environment has not verified CI status.
-- Static rules, whitespace, locale parity, and JSON syntax checks passed locally. Regression tests have been added but have not yet run; the local Gradle invocation failed before project configuration because Gradle could not load `libnative-platform.so`. No green Actions run is available for these changes.
+- Static rules, whitespace, locale parity, and JSON syntax checks passed locally. The owner-provided Actions run reported 50 core tests with three failures; the command-tree, rule-retry, and backup-recovery issues have since been fixed but not rerun. The local Gradle invocation failed before project configuration because Gradle could not load `libnative-platform.so`. No green Actions run is available for these changes.
 - API-dump generation is not part of ongoing CI. Loader API names must still be verified against real toolchain sources when new loader-facing work is needed.

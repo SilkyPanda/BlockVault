@@ -143,5 +143,6 @@
   "blockvault.master.working": "Changing password…",
   "blockvault.master.mismatch": "New passwords do not match.",
   "blockvault.master.failed": "Could not change password. Check the current password.",
-  "blockvault.vault.create.failed": "Could not create the encrypted vault."
+  "blockvault.vault.create.failed": "Could not create the encrypted vault.",
+  "blockvault.toast.rule_retry_failed": "The server rejected the adjusted password. Wait for its registration prompt and choose a different password."
 }
