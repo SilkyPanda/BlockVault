@@ -49,7 +49,7 @@ final class VaultStoreTest {
         store.create("correct horse".toCharArray());
         ServerEntry before = new ServerEntry("one", "one", List.of("one.example"), false, true,
                 "auto", List.of(new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
-                1, 1, 1, null, null)), new JsonObject());
+                1, 1, 1, null)), new JsonObject());
         store.save(new Vault(1, List.of(before), null));
         Path backup1 = directory.resolve("vault.bv.bak1");
         assertTrue(Files.isRegularFile(backup1));
@@ -81,7 +81,7 @@ final class VaultStoreTest {
         VaultStore store = VaultStore.open(directory);
         store.create("old password".toCharArray());
         Account account = new Account("Alex", "retained-secret".toCharArray(), Account.Status.VERIFIED,
-                1, 1, 1, null, null);
+                1, 1, 1, null);
         store.save(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"), false,
                 true, "auto", List.of(account), null)), null));
         assertThrows(WrongMasterPasswordException.class,

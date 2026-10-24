@@ -6,7 +6,6 @@ import io.github.silkypanda.blockvault.core.detect.PromptMatcher;
 import io.github.silkypanda.blockvault.core.detect.ResultKind;
 import io.github.silkypanda.blockvault.core.detect.ResultMatcher;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
-import io.github.silkypanda.blockvault.core.totp.Totp;
 import io.github.silkypanda.blockvault.core.vault.Account;
 import java.util.Arrays;
 import java.util.Locale;
@@ -34,7 +33,6 @@ public final class LoginSession {
     private String host;
     private String username;
     private CommandTemplate template = CommandTemplate.builtins().get("authme");
-    private char[] totpSecret;
     private char[] pending;
     private Action action = Action.NONE;
     private long lastPromptAt = Long.MIN_VALUE;
@@ -70,13 +68,10 @@ public final class LoginSession {
         if (host == null || rootCommandNames == null) return;
         Set<String> names = rootCommandNames.stream().map(s -> s.toLowerCase(Locale.ROOT))
                 .collect(java.util.stream.Collectors.toSet());
-        boolean login = !java.util.Collections.disjoint(names, pack.commandNames("login"));
         boolean register = !java.util.Collections.disjoint(names, pack.commandNames("register"));
         canRegister = register;
-        // A command tree only advertises commands; it does not tell us which prompt
-        // the server is asking for. Login can be pre-armed for known credentials,
-        // while registration cards wait for the actual registration system message.
-        if (login) arm(PromptKind.LOGIN, null);
+        // A command tree only advertises commands; it does not tell us when the
+        // server is ready for authentication. Wait for an actual login/register prompt.
     }
 
     /** Processes a plain system message only; callers must exclude signed player chat. */
@@ -225,7 +220,6 @@ public final class LoginSession {
         dismissedAtMillis = Long.MIN_VALUE;
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
-        wipeTotpSecret();
     }
 
     private boolean contains(String group, String command) { return pack.commandNames(group).contains(command); }
@@ -253,8 +247,6 @@ public final class LoginSession {
                 template = saved.template();
             }
             Account account = saved == null ? null : saved.account();
-            wipeTotpSecret();
-            totpSecret = account == null || account.totpSecret() == null ? null : account.totpSecret().toCharArray();
             if (kind == PromptKind.REGISTER) {
                 if (saved != null && saved.neverSave()) return;
                 if (account != null && account.status() == Account.Status.PENDING) {
@@ -288,29 +280,10 @@ public final class LoginSession {
 
     private void send(boolean registration, String email, int token) {
         if (token != generation || pending == null) return;
-        String commandTemplate = registration ? template.register() : template.login();
-        String totp = null;
-        if (commandTemplate.contains("{totp}")) {
-            if (totpSecret == null) {
-                state = SessionState.UNKNOWN;
-                action = Action.NONE;
-                wipePending();
-                env.toast("blockvault.toast.totp_missing");
-                return;
-            }
-            try { totp = Totp.code(new String(totpSecret), System.currentTimeMillis() / 1000L); }
-            catch (IllegalArgumentException invalidSecret) {
-                state = SessionState.UNKNOWN;
-                action = Action.NONE;
-                wipePending();
-                env.toast("blockvault.toast.totp_invalid");
-                return;
-            }
-        }
         char[] copy = pending.clone();
         String outgoing;
         try {
-            outgoing = template.render(registration, copy, email, username, totp);
+            outgoing = template.render(registration, copy, email, username);
         } catch (RuntimeException invalidTemplate) {
             state = SessionState.UNKNOWN;
             action = Action.NONE;
@@ -319,7 +292,6 @@ public final class LoginSession {
             return;
         } finally {
             Arrays.fill(copy, '\0');
-            wipeTotpSecret();
         }
         cancelTimer();
         attempted = true;
@@ -356,8 +328,10 @@ public final class LoginSession {
                             Account existing = saved == null ? null : saved.account();
                             char[] oldPassword = existing == null ? null : existing.password();
                             boolean same = oldPassword != null && Arrays.equals(oldPassword, captured);
+                            boolean pendingAccount = existing != null && existing.status() == Account.Status.PENDING;
                             if (oldPassword != null) Arrays.fill(oldPassword, '\0');
-                            if (!same && (saved == null || !saved.neverSave())) env.showSavePrompt(new PromptModel(existing == null
+                            if (same && pendingAccount) env.vault().markVerified(host, username);
+                            else if (!same && (saved == null || !saved.neverSave())) env.showSavePrompt(new PromptModel(existing == null
                                     ? CardVariant.SAVE : CardVariant.UPDATE, host, username, captured));
                             state = SessionState.CONFIRMED;
                         } finally { Arrays.fill(captured, '\0'); }
@@ -368,6 +342,7 @@ public final class LoginSession {
                 } else {
                     env.vault().markVerified(host, username);
                     if (completed == Action.REGISTER) env.toast("blockvault.toast.saved");
+                    else if (completed == Action.AUTOFILL) env.chatMessage("blockvault.chat.autologin_success");
                 }
                 state = SessionState.CONFIRMED;
                 wipePending();
@@ -441,8 +416,4 @@ public final class LoginSession {
         pending = null;
     }
 
-    private void wipeTotpSecret() {
-        if (totpSecret != null) Arrays.fill(totpSecret, '\0');
-        totpSecret = null;
-    }
 }

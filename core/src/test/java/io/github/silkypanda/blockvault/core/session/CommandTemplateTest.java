@@ -9,7 +9,7 @@ final class CommandTemplateTest {
     @Test
     void rendersBuiltInTemplatesWithoutSlash() {
         assertEquals("register pass123 pass123", CommandTemplate.builtins().get("authme")
-                .render(true, "pass123".toCharArray(), null, "Alex", null));
+                .render(true, "pass123".toCharArray(), null, "Alex"));
     }
 
     @Test
@@ -24,7 +24,7 @@ final class CommandTemplateTest {
     @Test
     void rejectsSlashInjectionInRenderedCommand() {
         String rendered = CommandTemplate.builtins().get("authme-noconfirm")
-                .render(true, "safe\n/logout".toCharArray(), null, "Alex", null);
+                .render(true, "safe\n/logout".toCharArray(), null, "Alex");
         assertTrue(rendered.startsWith("register safe"));
         assertTrue(!rendered.contains("\n"));
     }
@@ -32,7 +32,7 @@ final class CommandTemplateTest {
     @Test
     void insertedPasswordIsNotRescannedAsAnotherPlaceholder() {
         String rendered = new CommandTemplate("test", "login {password}", "register {password}")
-                .render(false, "{email}".toCharArray(), "secret@example.test", "Alex", null);
+                .render(false, "{email}".toCharArray(), "secret@example.test", "Alex");
         assertEquals("login {email}", rendered);
     }
 }

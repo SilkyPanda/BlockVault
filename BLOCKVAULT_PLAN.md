@@ -48,7 +48,7 @@ What the mod is: a client-only password manager for servers that use login plugi
 
 ### 2.1 Security
 - Vault is always encrypted: AES-256-GCM (JDK `javax.crypto`), random 96-bit nonce per write, header authenticated as AAD.
-- Never log, print, or put into exception messages any password, TOTP secret, key, or decrypted vault content. Credential-like classes override `toString()` to return a masked value.
+- Never log, print, or put into exception messages any password, key, or decrypted vault content. Credential-like classes override `toString()` to return a masked value.
 - Never use `System.out`, `System.err`, `printStackTrace()`. Use a logger.
 - Use `char[]`/`byte[]` for secrets inside `core` and zero them with `Arrays.fill` when done (best effort; the JVM cannot guarantee wiping).
 - Never overwrite a vault file that fails authentication. Keep it, surface an error.
@@ -693,8 +693,8 @@ Acceptance:
 ### M1 - Core: crypto and vault storage (section 7.1-7.4)
 Acceptance: all unit tests green in CI; vault round-trips, rejects tampering, handles corruption without data loss.
 
-### M2 - Core: logic (section 7.5-7.9)
-Generator, TOTP, host normalization, pattern pack matcher, command templates, `LoginSession` state machine with a fake scheduler. Acceptance: all unit tests green; coverage of every state transition.
+### M2 - Core: logic (section 7.5-7.8)
+Generator, host normalization, pattern pack matcher, command templates, `LoginSession` state machine with a fake scheduler. Acceptance: all unit tests green; coverage of every state transition.
 
 ### M3 - Client wiring (section 8.1-8.4)
 Verify every Minecraft, Fabric, and NeoForge API against the refreshed 26.3 dumps before implementing hooks, mixins, background executor, session listener, autofill sending `/login` and `/register`, history scrubbing, and keybinds. No fancy UI yet: use vanilla toasts and a minimal confirm screen. Acceptance: builds on both loaders; `STATUS.md` lists exactly which hooks were verified against dumps and which are unverified in-game.
@@ -706,7 +706,7 @@ Save/Update/Register/Unlock/Rejected card, vault screen, settings screen, transl
 The vault has exactly one key mode: a master password. Do not add DPAPI, Java Foreign Function & Memory calls, macOS Keychain/`security`, Linux Secret Service/`secret-tool`, OS commands, or device key providers. Add a settings choice between `Ask for master password every launch` and `Trust this device`; `Trust this device` is the default. After successful new-vault creation, explain in chat that the trusted-device key is stored locally and this behavior can be changed in settings. In trusted mode, after the user has entered the master password successfully, store only the random 32-byte vault key in a separate local file under the BlockVault data directory. Do not store the master password. The vault retains its master-password wrapping format, while trusted mode deliberately adds a local unwrapping path. Trusting this device means granting anyone who can read the current OS account files access to the vault; it is not a second key mode or hardware-backed protection. Untrusted mode removes the local key file and requires the master password on every process launch. A bad/missing trust file falls back to the master-password screen without changing the vault. Trust file writes are atomic and limited to 0600 on POSIX. Windows relies on the OS profile-directory ACL; BlockVault does not create or verify a dedicated ACL there. Temporary key buffers are wiped when no longer needed. The settings screen provides master-password change, which rewraps the same vault key after verifying the current password. Acceptance: core tests cover trusted unlock, missing/corrupt trust-file fallback, disabling trust, and password change; settings default, chat notice, password change, and both launch choices are checked in-game. `check-rules.sh` remains green.
 
 ### M6 - Polish and hardening
-Import/export, streamer mode, auto-lock, TOTP wiring, docs, final performance review (section 2.2), jar-size review, `STATUS.md` final pass. Before M6 is DONE, resolve the confirmed critical/high findings in `BlockVault code review.md` or record an explicit accepted limitation in `DECISIONS.md`; preserve reproduced-vs-unverified labels, and do not mark loader behavior verified without in-game checks. Add regression tests for confirmed core findings and require green CI after each logical commit. Version stays `0.1.0`; the owner releases manually.
+Import/export, streamer mode, auto-lock, docs, final performance review (section 2.2), jar-size review, `STATUS.md` final pass. Before M6 is DONE, resolve the confirmed critical/high findings in `BlockVault code review.md` or record an explicit accepted limitation in `DECISIONS.md`; preserve reproduced-vs-unverified labels, and do not mark loader behavior verified without in-game checks. Add regression tests for confirmed core findings and require green CI after each logical commit. Version stays `0.1.0`; the owner releases manually.
 
 ---------------------------------------------------------------------------
 ## 7. `core` specification (package `io.github.silkypanda.blockvault.core`)
@@ -724,9 +724,9 @@ Vault { int v; List<ServerEntry> servers; }
 ServerEntry { String id (UUID); String name; List<String> hosts (normalized host:port);
               boolean neverSave; boolean autofill; String templateId; List<Account> accounts; }
 Account { String username; char[] password; Status status (VERIFIED|PENDING);
-          long createdAt; long modifiedAt; long lastUsedAt; String totpSecret (nullable, base32) }
+          long createdAt; long modifiedAt; long lastUsedAt; }
 ```
-`Account.toString()` never reveals the password. JSON field names are short and stable: `v`, `servers`, `id`, `name`, `hosts`, `neverSave`, `autofill`, `template`, `accounts`, `user`, `pass`, `status`, `created`, `modified`, `used`, `totp`. Unknown fields must be preserved on load/save (round-trip safe) so newer vaults are not damaged by older builds.
+`Account.toString()` never reveals the password. JSON field names are short and stable: `v`, `servers`, `id`, `name`, `hosts`, `neverSave`, `autofill`, `template`, `accounts`, `user`, `pass`, `status`, `created`, `modified`, `used`. Unknown fields must be preserved on load/save (round-trip safe) so newer vaults are not damaged by older builds.
 
 ### 7.3 Key management
 - Key hierarchy: a random 256-bit vault key (VK) encrypts the vault JSON. `MasterPasswordKek` wraps VK with PBKDF2-HMAC-SHA512(masterPassword, salt, iterations, 32) and AES-GCM using the header prefix as AAD. Changing the master password only re-wraps VK; it never re-encrypts vault data.
@@ -782,13 +782,10 @@ Wrap AAD (for AES-GCM wrapping) = header bytes [0, 28).
 - `Policy adjustFor(ServerRuleHint hint)`: given a parsed hint (`minLength`, `maxLength`, `alphanumericOnly`), return a stricter policy.
 - Tests: length, class guarantees, forbidden characters never appear over 100k generations, chi-square uniformity sanity check over the character set, rejection sampling unit test with a fake random source.
 
-### 7.6 `totp` - `Totp`
-RFC 6238, HMAC-SHA1 (and SHA256/SHA512 supported), 6 digits, 30 s step; base32 decode without dependencies. `static String code(String base32Secret, long epochSeconds)`. Tests use the RFC 6238 appendix vectors. When an account has a valid Base32 secret and its selected template includes `{totp}`, compute a fresh code at send time. The explicit AuthMe password-plus-TOTP template sends `login {password} {totp}`; servers with other syntax require a suitable template. If the selected template requires TOTP but the account has no valid secret, do not autofill.
-
-### 7.7 `net`-free host handling - `HostKey`
+### 7.6 `net`-free host handling - `HostKey`
 `static String normalize(String address)`: lowercase, trim, strip a trailing dot, strip IPv6 brackets handling correctly, default port 25565 -> keep canonical form `host:25565` always. Examples: `Play.Example.NET` -> `play.example.net:25565`; `play.example.net:25570` -> same with 25570; `[::1]:25565` -> `[::1]:25565`. Tests for all of these plus malformed input (returns empty Optional, never throws).
 
-### 7.8 `detect`
+### 7.7 `detect`
 **Pattern pack** (`assets/blockvault/patterns/default.json`, in `core` resources; optional user file `<dataDir>/patterns.json` is merged on top):
 ```json
 {
@@ -820,7 +817,7 @@ These are starting points. Real server messages vary; keep patterns tolerant, te
 - Plain text only: the caller passes `Component.getString()`; strip any remaining `\u00a7x` color codes defensively.
 - Test corpus: put at least 40 realistic messages in `core/src/test/resources/prompt-corpus.txt`, format `KIND<TAB>message`, covering AuthMe-style English defaults (e.g. "Please, login with the command: /login <password>", "Please, register to the server with the command: /register <password> <ConfirmPassword>", "Successful login!", "Wrong password!", "Successfully registered!"), usage lines, and unrelated chat ("Steve: type /login if you forgot", which must classify as NONE only because it is player chat - but note the matcher itself never sees player chat; keep one test showing the matcher is pure text and the caller is responsible for the system-message filter).
 
-### 7.9 `session` - `LoginSession` and templates
+### 7.8 `session` - `LoginSession` and templates
 Pure Java, no Minecraft imports. Inputs are plain method calls; outputs go through two interfaces so everything is unit-testable with fakes:
 ```java
 public interface SessionEnv {            // implemented by shared-client
@@ -836,13 +833,13 @@ State per connection: `IDLE -> PROMPTED -> SENT -> CONFIRMED | REJECTED | UNKNOW
 Inputs: `onJoin(String hostKey, String mcUsername)`, `onCommandTree(Set<String> rootCommandNames)`, `onSystemMessage(String plain)`, `onOutgoingCommand(String commandWithoutSlash)` (for manual capture), `onDisconnect()`.
 
 Behavior (this is the heart of the mod - implement and test every line):
-1. **Arm**: a prompt is detected if the command tree contains a `login`/`register` command name, OR a system message matches a prompt pattern. Debounce repeated prompts: ignore further prompts within 1500 ms of the last one.
-2. **Returning player** (vault has a VERIFIED account for hostKey + username, autofill on, not neverSave): wait `autofillDelayMillis` (default 400), call `env.sendCommand("login " + password)` through the template for that server, set `attempted = true`, state SENT, start a 5000 ms result timer. Success pattern -> CONFIRMED (update `lastUsedAt`). Failure pattern -> REJECTED: show the Rejected card (Enter manually / Update / Forget). Timer expiry -> UNKNOWN (no action, no retry).
+1. **Arm**: the command tree only advertises supported roots and never triggers a credential action by itself. A system message must match a login/register prompt before the session acts. Debounce repeated prompts: ignore further prompts within 1500 ms of the last one.
+2. **Returning player** (vault has a VERIFIED account for hostKey + username, autofill on, not neverSave): wait `autofillDelayMillis` (default 400), call `env.sendCommand("login " + password)` through the template for that server, set `attempted = true`, state SENT, start a 5000 ms result timer. Success pattern -> CONFIRMED (update `lastUsedAt`) and show a localized “Logged in automatically” chat message. Failure pattern -> REJECTED: show the Rejected card (Enter manually / Update / Forget). Timer expiry -> UNKNOWN (no action, no retry).
 3. **New player** (register prompt, no entry): show the Register card with a generated password. On confirm: FIRST write the account to the vault with status PENDING, THEN send the register command, then wait for the result. SUCCESS -> mark VERIFIED, toast "Saved". FAILURE or password-rule complaint -> if rule complaint and not retried yet, regenerate once with `adjustFor(hint)` and offer the card again; otherwise delete the PENDING account. This ordering guarantees the player is never locked out by a crash right after a successful register.
-4. **Manual capture**: `onOutgoingCommand` recognizes `login <pw>`, `register|reg <pw> [<pw>]`, `changepassword|changepass <old> <new>`, `unregister <pw>` (case-insensitive command names; aliases configurable via `commandNames`). Stash the password as pending IN MEMORY ONLY, wait for the result message, and on SUCCESS show Save (no entry), Update (entry exists with different password), or nothing (identical). Do not write to disk before success for manual captures.
+4. **Manual capture**: `onOutgoingCommand` recognizes `login <pw>`, `register|reg <pw> [<pw>]`, `changepassword|changepass <old> <new>`, `unregister <pw>` (case-insensitive command names; aliases configurable via `commandNames`). Stash the password as pending IN MEMORY ONLY, wait for the result message, and on SUCCESS show Save (no entry), Update (entry exists with different password), or nothing (identical). If the matching entry is PENDING, promote it to VERIFIED instead of showing another save prompt. Do not write manual captures to disk before success.
 5. `onDisconnect` resets state, wipes in-memory pending secrets, cancels timers.
-6. Never autofill when `attempted` is already true. Never autofill if the prompt arrived from anything other than `onSystemMessage` or `onCommandTree`.
-7. Templates: `CommandTemplate` with placeholders `{password}`, `{email}`, `{username}`, `{totp}`. Built-ins: `authme` (`login {password}`, `register {password} {password}`), `authme-noconfirm` (`register {password}`), `nlogin`, `loginsecurity` (same shapes as `authme`). A prompt containing exactly one `<...>` placeholder after `/register` selects `authme-noconfirm`; two selects `authme`; a third or an `email` word selects a template with `{email}` and asks the user for it in the Register card.
+6. Never autofill when `attempted` is already true. Never autofill without an actual matching system-message prompt, even if the command tree advertises `login`.
+7. Templates: `CommandTemplate` with placeholders `{password}`, `{email}`, `{username}`. Built-ins: `authme` (`login {password}`, `register {password} {password}`), `authme-noconfirm` (`register {password}`), `nlogin`, `loginsecurity` (same shapes as `authme`). A prompt containing exactly one `<...>` placeholder after `/register` selects `authme-noconfirm`; two selects `authme`; a third or an `email` word selects a template with `{email}` and asks the user for it in the Register card.
 8. Fake `Scheduler` in tests; cover: happy path autofill, wrong password, timeout, repeated prompt debounce, one-attempt rule, register success, register failure, rule complaint retry, crash between pending write and result (simulate by constructing a new session with a PENDING account present: it must show Update/Unlock options instead of generating a new password blindly), manual login capture then success, manual capture then failure (nothing saved), disconnect mid-wait.
 
 ---------------------------------------------------------------------------
@@ -866,7 +863,7 @@ public interface Platform {
 - Minecraft username: `Minecraft.getInstance().getUser().getName()`.
 - Command tree: mixin at RETURN of the client packet listener's commands-packet handler, collecting root child names from the dispatcher, then `Hooks.onCommandTree(Set<String>)`. If the signature cannot be verified, skip this signal (pattern matching still works).
 - Outgoing commands: ONE mixin class on the client packet listener's command-sending methods (both the signed and unsigned variants; names vary by version - verify), calling `Hooks.onOutgoingCommand(String)`. Commands sent by the mod itself are flagged with a ThreadLocal/static "self-sent" marker and ignored by the hook.
-- Command history: mixin (or event if one exists) that stops commands whose first word is in the sensitive list (`login`, `register`, `reg`, `changepassword`, `changepass`, `unregister`, `totp`, `2fa`, plus configured aliases) from being added to vanilla's command history and from the persisted history file. VERIFY the mechanism (class `CommandHistory` and the file it writes).
+- Command history: mixin (or event if one exists) that stops commands whose first word is in the sensitive list (`login`, `register`, `reg`, `changepassword`, `changepass`, `unregister`, plus configured aliases) from being added to vanilla's command history and from the persisted history file. VERIFY the mechanism (class `CommandHistory` and the file it writes).
 - Keybinds: shared `Keybinds` class builds the `KeyMapping`s (open vault screen, lock vault); each loader registers them with its own API (Fabric `KeyBindingHelper`; NeoForge `RegisterKeyMappingsEvent` on the mod bus). KeyMapping construction changed in recent versions (category type) - verify.
 - Multiplayer-screen "Vault" button: loader glue adds a small button on `JoinMultiplayerScreen` via Fabric `ScreenEvents.AFTER_INIT` / NeoForge `ScreenEvent.Init.Post`. Optional; skip if it risks the build, note in STATUS.
 
@@ -889,7 +886,7 @@ Keep `JAVA_21` (it is a minimum level; do not raise it). Register the config in 
 - Vault access via `BackgroundExecutor`; results delivered back on the game thread.
 - A master-password vault that is locked triggers the Unlock card first, then continues the pending action.
 - `showSavePrompt` opens the card screen (section 8.5). Never open a card while another BlockVault card is open: queue it.
-Config (`<dataDir>/config.json`, Gson tree API): `autofill` (true), `disableAutoLogin` (false; overrides autofill when true), `autofillDelayMillis` (400), `resultTimeoutMillis` (5000), `autoLockMinutes` (15, 0 = never), `cardDurationSeconds` (10), `cardPosition` ("top_right"), `streamerMode` (false), `generator` (policy fields), `scrubHistory` (true), `trustDevice` (true). Load lazily, write only when the user changes a setting.
+Config (`<dataDir>/config.json`, Gson tree API): `autofill` (true), `autofillDelayMillis` (400), `resultTimeoutMillis` (5000), `autoLockMinutes` (15, 0 = never), `cardDurationSeconds` (10), `cardPosition` ("top_right"), `streamerMode` (false), `generator` (policy fields), `scrubHistory` (true), `trustDevice` (true). Load lazily, write only when the user changes a setting.
 
 ### 8.4 Threading summary
 Game thread: hooks, UI. Background thread: KDF, vault IO, key provider calls. Never block the game thread on either. Timers for the session use the game thread via `Minecraft.execute` + a scheduled executor shared with `BackgroundExecutor`.

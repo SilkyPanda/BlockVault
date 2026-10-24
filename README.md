@@ -17,12 +17,13 @@ Test on Paper with AuthMe (offline-mode or a cracked-friendly setup), then on a 
 3. Change the saved password in the vault manually -> rejoin -> wrong password message -> Rejected card appears, no retry loop.
 4. Type `/login <right password>` manually -> Update card appears.
 5. Check the game folder: typed login/register commands are NOT present in the command history file.
-6. Kill the game right after `/register` -> relaunch -> vault shows the PENDING account (no lockout).
+6. Kill the game right after `/register` -> relaunch -> vault shows “Pending — server not confirmed” (the credential is retained so you can retry or update it). If the server did accept it, manually log in once; a matching pending entry becomes verified so auto-login can work on the next join.
 7. With the default `Trust this device` setting, unlock once with the master password, restart Minecraft, and confirm the vault opens without asking again. Then select `Ask for master password every launch`, restart, and confirm it asks again.
 8. Join a vanilla server (no login plugin) -> nothing happens, no log spam.
 9. Join singleplayer -> nothing happens.
-10. Both jars: Fabric and NeoForge behave identically.
-11. Disconnect and watch `logs/latest.log`: no passwords, no secrets, no stack traces from BlockVault.
+10. Confirm a successful auto-login prints “Logged in automatically.” in green BlockVault chat text.
+11. Both jars: Fabric and NeoForge behave identically.
+12. Disconnect and watch `logs/latest.log`: no passwords, no secrets, no stack traces from BlockVault.
 
 `Trust this device` is enabled by default, as an explicit product choice. It stores the 32-byte vault key in `vault.bv.trust`; it never stores the master password and does not use an operating-system keychain. This convenience weakens at-rest protection: anyone or any malware with access to the current OS account and data directory can open the vault without the master password. Select `Ask for master password every launch` to remove the trust file. POSIX permissions are restricted to the owner; Windows relies on the data directory's OS profile ACL and BlockVault does not independently verify or set a Windows ACL.
 
@@ -36,7 +37,7 @@ BlockVault stores data outside the Minecraft game folder:
 
 The directory can also be overridden with the Java system property `blockvault.dataDir`.
 
-`vault.bv` and the rotating `vault.bv.bak1` through `vault.bv.bak3` files hold the encrypted vault, including saved server passwords and any TOTP secrets. With `Trust this device` enabled, `vault.bv.trust` holds the random vault key, not the master password. `config.json` stores preferences only. Optional `patterns.json` adds prompt and result patterns and command aliases to the built-in pattern pack.
+`vault.bv` and the rotating `vault.bv.bak1` through `vault.bv.bak3` files hold the encrypted vault, including saved server passwords. With `Trust this device` enabled, `vault.bv.trust` holds the random vault key, not the master password. `config.json` stores preferences only. Optional `patterns.json` adds prompt and result patterns and command aliases to the built-in pattern pack.
 
 The vault screen can export a byte-for-byte encrypted vault copy to a new file; export refuses to overwrite an existing file. Importing accepts that encrypted file and its master password, then merges server/account entries by host and modification time. Exports remain sensitive files: protect them as you would a password-protected vault and keep the master password separate.
 
@@ -44,12 +45,17 @@ Deleting an account creates a tombstone in the current vault; tombstones are pur
 
 Copying a password places it on the operating-system clipboard. BlockVault does not clear it automatically. Clipboard history features or clipboard manager apps may retain additional copies; clear those separately if needed.
 
+## Login statuses
+
+A saved account marked “Pending — server not confirmed” was written before BlockVault sent a registration command, but the server success response was not observed. This protects against losing the credential if Minecraft closes during registration. If registration succeeded, a successful manual login with that same password promotes it to verified; verified accounts are eligible for auto-login.
+
+
 ## Security limits
 
 The encrypted vault protects data at rest when `Ask for master password every launch` is selected. Trusted-device mode keeps the vault key alongside the vault. Neither mode protects against malware running as your OS user, a compromised Minecraft process, screenshots or clipboard history, or a server that receives credentials. Java strings and UI text fields can retain temporary secret copies until garbage collection.
 
 Prompt detection uses server system messages, which a server or plugin can spoof. BlockVault only sends a credential to the server to which Minecraft is currently connected; review unexpected prompts before accepting them.
 
-Use a long, unique master password and keep a separate backup of it. A forgotten master password cannot be recovered. The memorable password preset is easier to type but has lower entropy than the longer random presets. TOTP secrets are stored in the same encrypted vault as passwords, so storing both does not provide independent two-factor protection. Verify that a selected TOTP command template matches the target server's syntax.
+Use a long, unique master password and keep a separate backup of it. A forgotten master password cannot be recovered. The memorable password preset is easier to type but has lower entropy than the longer random presets.
 
 Unlock reports an incorrect password separately from malformed or unauthenticated vault contents. If authentication fails on the password-wrapped vault key, the file format cannot distinguish a mistyped password from damage to that wrapped key; BlockVault reports an incorrect password in that case.

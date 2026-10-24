@@ -8,6 +8,8 @@ public interface SessionEnv {
     void showSavePrompt(PromptModel model);
     /** Shows a localized toast key. */
     void toast(String translationKey);
+    /** Adds a localized client-only status message to chat. */
+    default void chatMessage(String translationKey) { }
     /** Returns the asynchronous vault facade. */
     VaultAccess vault();
 }

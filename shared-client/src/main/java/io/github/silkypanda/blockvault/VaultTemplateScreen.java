@@ -13,7 +13,6 @@ final class VaultTemplateScreen extends Screen {
             Map.entry("auto", "blockvault.template.auto"),
             Map.entry("authme", "blockvault.template.authme"),
             Map.entry("authme-noconfirm", "blockvault.template.authme_noconfirm"),
-            Map.entry("authme-totp", "blockvault.template.authme_totp"),
             Map.entry("nlogin", "blockvault.template.nlogin"),
             Map.entry("loginsecurity", "blockvault.template.loginsecurity"));
     private final VaultRow row;

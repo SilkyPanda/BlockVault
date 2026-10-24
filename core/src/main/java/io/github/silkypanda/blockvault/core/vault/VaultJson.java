@@ -35,6 +35,7 @@ public final class VaultJson {
             JsonArray accounts = new JsonArray();
             for (Account account : server.accounts()) {
                 JsonObject value = account.unknownFields();
+                discardRetiredAccountField(value);
                 value.addProperty("user", account.username());
                 char[] password = account.password();
                 try { value.addProperty("pass", new String(password)); }
@@ -43,8 +44,6 @@ public final class VaultJson {
                 value.addProperty("created", account.createdAt());
                 value.addProperty("modified", account.modifiedAt());
                 value.addProperty("used", account.lastUsedAt());
-                if (account.totpSecret() == null) value.remove("totp");
-                else value.addProperty("totp", account.totpSecret());
                 accounts.add(value);
             }
             item.add("accounts", accounts);
@@ -77,7 +76,7 @@ public final class VaultJson {
                     catch (IllegalArgumentException unknownStatus) { status = Account.Status.PENDING; }
                     accounts.add(new Account(string(value, "user", ""), password, status,
                             number(value, "created", 0), number(value, "modified", 0), number(value, "used", 0),
-                            value.has("totp") ? value.get("totp").getAsString() : null, unknown(value, ACCOUNT_KEYS)));
+                            unknown(value, ACCOUNT_KEYS)));
                 } finally {
                     java.util.Arrays.fill(password, '\0');
                 }
@@ -85,6 +84,7 @@ public final class VaultJson {
             String template = string(item, "template", "auto");
             // The pre-review schema wrote authme even when the owner had not chosen a template.
             if ("authme".equals(template)) template = "auto";
+            if ("authme-totp".equals(template)) template = "authme-explicit";
             servers.add(new ServerEntry(string(item, "id", java.util.UUID.randomUUID().toString()),
                     string(item, "name", "Unknown server"), hosts, bool(item, "neverSave", false),
                     bool(item, "autofill", true), template, accounts,
@@ -112,5 +112,12 @@ public final class VaultJson {
         JsonObject result = object.deepCopy();
         known.forEach(result::remove);
         return result;
+    }
+
+    private static void discardRetiredAccountField(JsonObject account) {
+        account.remove("totp");
+        if (account.has("blockvaultPrevious") && account.get("blockvaultPrevious").isJsonObject()) {
+            account.getAsJsonObject("blockvaultPrevious").remove("totp");
+        }
     }
 }

@@ -6,7 +6,7 @@ import java.util.Set;
 /** Identifies authentication commands that must never enter vanilla command history. */
 public final class SensitiveCommands {
     private static final Set<String> NAMES = Set.of(
-            "login", "register", "reg", "changepassword", "changepass", "unregister", "totp", "2fa");
+            "login", "register", "reg", "changepassword", "changepass", "unregister");
 
     private SensitiveCommands() { }
 

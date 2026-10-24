@@ -43,8 +43,6 @@ final class VaultSettingsScreen extends OptionsSubScreen {
     protected void addOptions() {
         if (!settingsLoaded) return;
         addSettingButton("blockvault.settings.autofill", settings.autofill(), current -> current.withAutofill(!current.autofill()));
-        addSettingButton("blockvault.settings.disable_auto_login", settings.disableAutoLogin(),
-                current -> current.withDisableAutoLogin(!current.disableAutoLogin()));
         addSettingButton("blockvault.settings.delay", settings.autofillDelayMillis(),
                 current -> current.withDelay(next(current.autofillDelayMillis(), List.of(0, 400, 800, 1500, 3000))));
         addSettingButton("blockvault.settings.auto_lock", settings.autoLockMinutes(),
@@ -103,7 +101,6 @@ final class VaultSettingsScreen extends OptionsSubScreen {
     private Object settingValue(String key) {
         return switch (key) {
             case "blockvault.settings.autofill" -> settings.autofill();
-            case "blockvault.settings.disable_auto_login" -> settings.disableAutoLogin();
             case "blockvault.settings.delay" -> settings.autofillDelayMillis();
             case "blockvault.settings.auto_lock" -> settings.autoLockMinutes();
             case "blockvault.settings.duration" -> settings.cardDurationSeconds();

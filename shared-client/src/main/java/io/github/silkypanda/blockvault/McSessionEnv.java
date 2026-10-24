@@ -9,6 +9,7 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 
 /** Minecraft-thread implementation of actions requested by the pure-Java login session. */
 final class McSessionEnv implements SessionEnv {
@@ -40,6 +41,13 @@ final class McSessionEnv implements SessionEnv {
         net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),
                 net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
                 Component.translatable("blockvault.toast.title"), Component.translatable(translationKey));
+    }
+
+    @Override
+    public void chatMessage(String translationKey) {
+        BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(
+                Component.literal("[BlockVault] ").withStyle(Style.EMPTY.withColor(0x55ff55))
+                        .append(Component.translatable(translationKey).withStyle(Style.EMPTY.withColor(0x55ff55)))));
     }
 
     @Override

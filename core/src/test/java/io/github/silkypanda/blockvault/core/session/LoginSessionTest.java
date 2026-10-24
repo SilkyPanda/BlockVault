@@ -117,6 +117,31 @@ final class LoginSessionTest {
     }
 
     @Test
+    void successfulManualLoginVerifiesMatchingPendingCredentialForLaterAutofill() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.pendingCredential("saved-pass");
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onOutgoingCommand("/login saved-pass");
+        session.onSystemMessage("Successful login!");
+        assertEquals(1, env.verified);
+        assertEquals(null, env.card);
+    }
+
+    @Test
+    void successfulAutofillSendsLocalizedChatConfirmation() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("secret");
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please login with /login <password>");
+        clock.advance(400);
+        session.onSystemMessage("Successfully logged in!");
+        assertEquals(List.of("blockvault.chat.autologin_success"), env.chatMessages);
+    }
+
+    @Test
     void rejectedCredentialCanBeUpdatedOrForgottenByExplicitAction() throws Exception {
         FakeEnv env = new FakeEnv();
         env.credential("old-secret");
@@ -233,6 +258,7 @@ final class LoginSessionTest {
     private static final class FakeEnv implements SessionEnv, VaultAccess {
         private final List<String> order = new ArrayList<>();
         private final List<String> commands = new ArrayList<>();
+        private final List<String> chatMessages = new ArrayList<>();
         private PromptModel card;
         private SavedCredential credential;
         private int verified;
@@ -242,6 +268,7 @@ final class LoginSessionTest {
         @Override public void sendCommand(String commandWithoutSlash) { order.add("send"); commands.add(commandWithoutSlash); }
         @Override public void showSavePrompt(PromptModel model) { card = model; }
         @Override public void toast(String translationKey) { }
+        @Override public void chatMessage(String translationKey) { chatMessages.add(translationKey); }
         @Override public VaultAccess vault() { return this; }
         @Override public void find(String host, String username, Consumer<SavedCredential> result) { result.accept(credential); }
         @Override public void savePending(String host, String username, char[] password, Consumer<Boolean> saved) {
@@ -256,7 +283,7 @@ final class LoginSessionTest {
         void credential(String secret) { credential = new SavedCredential(account(secret, Account.Status.VERIFIED), true, false, null); }
         void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, false, null); }
         private static Account account(String secret, Account.Status status) {
-            return new Account("Alex", secret.toCharArray(), status, 0, 0, 0, null, null);
+            return new Account("Alex", secret.toCharArray(), status, 0, 0, 0, null);
         }
     }
 

@@ -27,7 +27,7 @@ final class VaultMergerTest {
     private static Account account(String user, String password, long modified, boolean deleted) {
         JsonObject extra = new JsonObject();
         if (deleted) extra.addProperty("deleted", true);
-        return new Account(user, password.toCharArray(), Account.Status.PENDING, 1, modified, 0, null, extra);
+        return new Account(user, password.toCharArray(), Account.Status.PENDING, 1, modified, 0, extra);
     }
 
     private static Vault vault(Account... accounts) {

@@ -70,8 +70,7 @@ public final class VaultRuntime implements VaultAccess {
             try {
                 changeAccount(host, username, old -> new Account(username, copy, Account.Status.PENDING,
                         old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
-                        old == null ? 0 : old.lastUsedAt(), old == null ? null : old.totpSecret(),
-                        pendingFields(old)));
+                        old == null ? 0 : old.lastUsedAt(), pendingFields(old)));
                 BackgroundExecutor.onGameThread(() -> saved.accept(true));
             } catch (Exception failure) {
                 BackgroundExecutor.onGameThread(() -> saved.accept(false));
@@ -86,7 +85,7 @@ public final class VaultRuntime implements VaultAccess {
             char[] secret = old.password();
             try {
                 return new Account(username, secret, Account.Status.VERIFIED, old.createdAt(),
-                        System.currentTimeMillis(), System.currentTimeMillis(), old.totpSecret(), withoutDeletedFlag(old));
+                        System.currentTimeMillis(), System.currentTimeMillis(), withoutDeletedFlag(old));
             } finally { Arrays.fill(secret, '\0'); }
         }));
     }
@@ -104,13 +103,12 @@ public final class VaultRuntime implements VaultAccess {
                             ? previous.getAsJsonObject("unknown") : new com.google.gson.JsonObject();
                     return new Account(username, previousPassword, Account.Status.valueOf(previous.get("status").getAsString()),
                             previous.get("created").getAsLong(), previous.get("modified").getAsLong(),
-                            previous.get("used").getAsLong(), previous.has("totp") ? previous.get("totp").getAsString() : null,
-                            previousFields);
+                            previous.get("used").getAsLong(), previousFields);
                 } finally { Arrays.fill(previousPassword, '\0'); }
             }
             fields.addProperty("deleted", true);
             return new Account(username, new char[0], old.status(), old.createdAt(), System.currentTimeMillis(),
-                    old.lastUsedAt(), null, fields);
+                    old.lastUsedAt(), fields);
         }));
     }
 
@@ -121,8 +119,7 @@ public final class VaultRuntime implements VaultAccess {
             try {
                 changeAccount(host, username, old -> new Account(username, copy, Account.Status.VERIFIED,
                         old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
-                        System.currentTimeMillis(), old == null ? null : old.totpSecret(),
-                        old == null ? null : withoutDeletedFlag(old)));
+                        System.currentTimeMillis(), old == null ? null : withoutDeletedFlag(old)));
             } finally { Arrays.fill(copy, '\0'); }
         });
     }
@@ -157,7 +154,9 @@ public final class VaultRuntime implements VaultAccess {
                     toast("blockvault.toast.unlocked");
                     if (create && trustReady[0]) {
                         Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(
-                                Component.translatable("blockvault.chat.trusted_device_notice"));
+                                Component.literal("[BlockVault] ").withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(0xc58cff))
+                                        .append(Component.translatable("blockvault.chat.trusted_device_notice")
+                                                .withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(0xffffff))));
                     }
                     activity();
                     BackgroundExecutor.submit(() -> {
@@ -349,15 +348,6 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Returns the saved Base32 TOTP secret on the game thread; no secret is logged. */
-    static void revealTotpSecret(VaultRow row, Consumer<String> result) {
-        withVault(() -> {
-            Account account = findAccount(row.host(), row.username());
-            String secret = account == null ? null : account.totpSecret();
-            BackgroundExecutor.onGameThread(() -> result.accept(secret));
-        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(null)));
-    }
-
     static void requiresMasterPassword(Consumer<Boolean> result) {
         BackgroundExecutor.submit(() -> {
             try {
@@ -439,14 +429,13 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     /** Saves an edited credential as verified. */
-    static void updatePassword(VaultRow row, char[] password, String totpSecret) {
+    static void updatePassword(VaultRow row, char[] password) {
         char[] copy = password.clone();
         withVault(() -> {
             try {
                 changeAccount(row.host(), row.username(), old -> new Account(row.username(), copy,
                         Account.Status.VERIFIED, old == null ? System.currentTimeMillis() : old.createdAt(),
                         System.currentTimeMillis(), old == null ? 0 : old.lastUsedAt(),
-                        totpSecret == null || totpSecret.isBlank() ? null : totpSecret.trim(),
                         old == null ? null : withoutDeletedFlag(old)));
                 BackgroundExecutor.onGameThread(() -> toast("blockvault.toast.saved"));
             } finally { Arrays.fill(copy, '\0'); }
@@ -530,7 +519,7 @@ public final class VaultRuntime implements VaultAccess {
                 com.google.gson.JsonObject fields = old.unknownFields();
                 fields.addProperty("deleted", true);
                 return new Account(row.username(), new char[0], old.status(), old.createdAt(), System.currentTimeMillis(),
-                        old.lastUsedAt(), null, fields);
+                        old.lastUsedAt(), fields);
             });
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
         });
@@ -723,7 +712,7 @@ public final class VaultRuntime implements VaultAccess {
         char[] password = source.password();
         try {
             return new Account(source.username(), password, source.status(), source.createdAt(), source.modifiedAt(),
-                    source.lastUsedAt(), source.totpSecret(), source.unknownFields());
+                    source.lastUsedAt(), source.unknownFields());
         } finally { Arrays.fill(password, '\0'); }
     }
 
@@ -745,7 +734,6 @@ public final class VaultRuntime implements VaultAccess {
             previous.addProperty("created", previousAccount.createdAt());
             previous.addProperty("modified", previousAccount.modifiedAt());
             previous.addProperty("used", previousAccount.lastUsedAt());
-            if (previousAccount.totpSecret() != null) previous.addProperty("totp", previousAccount.totpSecret());
             previous.add("unknown", previousAccount.unknownFields());
             com.google.gson.JsonObject fields = withoutDeletedFlag(previousAccount);
             fields.add("blockvaultPrevious", previous);

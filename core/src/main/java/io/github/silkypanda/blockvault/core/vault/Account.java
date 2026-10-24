@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 
 /** Immutable account metadata with a defensively copied password. */
 public record Account(String username, char[] password, Status status, long createdAt, long modifiedAt,
-                      long lastUsedAt, String totpSecret, JsonObject unknownFields) {
+                      long lastUsedAt, JsonObject unknownFields) {
     /** Account verification state persisted across crashes. */
     public enum Status { VERIFIED, PENDING }
 

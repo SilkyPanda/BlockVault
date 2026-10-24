@@ -140,14 +140,8 @@ Fix idea: no auto-dismiss for REGISTER and REJECTED cards, and make dismissal te
 
 **2.17 Card password box truncates at 64 characters.** `setMaxLength(64)` silently truncates a longer captured password before Save writes it.
 
-**2.18 TOTP.**
 
-- Secrets with spaces or hyphens are rejected (reproduced: `JBSW Y3DP EHPK 3PXP` throws, the no-space form works), though most services display them in groups.
-- There is no `otpauth://` parsing and no preview code to confirm the secret works.
-- The `authme-totp` template appends the code to `/login`. I believe AuthMe’s 2FA is a separate command after login; check against AuthMe’s docs before shipping.
-- Storing TOTP secrets in the same vault as the password collapses the two factors; worth stating plainly in the README.
-
-**2.19 History scrubbing gaps.**
+**2.18 History scrubbing gaps.**
 
 - `SensitiveCommands.NAMES` is hardcoded instead of derived from the pattern pack, so custom aliases leak.
 - It doesn’t cover namespaced forms such as `/authme:login`.

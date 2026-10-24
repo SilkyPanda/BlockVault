@@ -11,11 +11,20 @@ final class VaultJsonTest {
     @Test
     void roundTripPreservesUnknownFieldsAndMasksAccountString() {
         JsonObject extra = new JsonObject(); extra.addProperty("future", "kept");
-        Account account = new Account("Alex", "secret".toCharArray(), Account.Status.VERIFIED, 1, 2, 3, null, extra);
+        Account account = new Account("Alex", "secret".toCharArray(), Account.Status.VERIFIED, 1, 2, 3, extra);
         ServerEntry server = new ServerEntry("id", "server", List.of("example.org:25565"), false, true, "authme", List.of(account), new JsonObject());
         Vault result = VaultJson.read(VaultJson.write(new Vault(1, List.of(server), new JsonObject())));
         assertTrue(VaultJson.write(result).length > 0);
         assertEquals("kept", result.servers().getFirst().accounts().getFirst().unknownFields().get("future").getAsString());
         org.junit.jupiter.api.Assertions.assertFalse(account.toString().contains("secret"));
+    }
+
+    @Test
+    void retiredAccountFieldIsDiscardedWhenVaultIsRewritten() {
+        String legacy = "{\"v\":1,\"servers\":[{\"id\":\"id\",\"name\":\"server\",\"hosts\":[\"example.org\"],\"accounts\":[{\"user\":\"Alex\",\"pass\":\"secret\",\"status\":\"VERIFIED\",\"totp\":\"OLD-SECRET\",\"blockvaultPrevious\":{\"totp\":\"OLD-PREVIOUS\"}}]}]}";
+        String rewritten = new String(VaultJson.write(VaultJson.read(legacy.getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+                java.nio.charset.StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertFalse(rewritten.contains("OLD-SECRET"));
+        org.junit.jupiter.api.Assertions.assertFalse(rewritten.contains("OLD-PREVIOUS"));
     }
 }

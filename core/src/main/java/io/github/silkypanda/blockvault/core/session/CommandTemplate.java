@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 public record CommandTemplate(String id, String login, String register) {
     private static final Pattern REGISTER_COMMAND = Pattern.compile("(?iu)/([\\p{L}]+)\\b([^\\r\\n]*)");
     private static final Pattern PLACEHOLDER = Pattern.compile("<([^<>]+)>");
-    private static final Pattern TOKEN = Pattern.compile("\\{(password|email|username|totp)}");
+    private static final Pattern TOKEN = Pattern.compile("\\{(password|email|username)}");
     public CommandTemplate {
         if (id == null || login == null || register == null) throw new IllegalArgumentException("Template fields are required");
         validate(login);
@@ -21,7 +21,6 @@ public record CommandTemplate(String id, String login, String register) {
         return Map.of(
                 "authme", new CommandTemplate("authme", "login {password}", "register {password} {password}"),
                 "authme-noconfirm", new CommandTemplate("authme-noconfirm", "login {password}", "register {password}"),
-                "authme-totp", new CommandTemplate("authme-totp", "login {password} {totp}", "register {password} {password}"),
                 "nlogin", new CommandTemplate("nlogin", "login {password}", "register {password} {password}"),
                 "loginsecurity", new CommandTemplate("loginsecurity", "login {password}", "register {password} {password}"));
     }
@@ -56,9 +55,9 @@ public record CommandTemplate(String id, String login, String register) {
     }
 
     /** Renders one command while preserving the no-leading-slash contract. */
-    public String render(boolean registration, char[] password, String email, String username, String totp) {
+    public String render(boolean registration, char[] password, String email, String username) {
         String source = registration ? register : login;
-        String[] values = {safe(new String(password)), safe(email), safe(username), safe(totp)};
+        String[] values = {safe(new String(password)), safe(email), safe(username)};
         Matcher tokens = TOKEN.matcher(source);
         StringBuffer resultBuffer = new StringBuffer();
         while (tokens.find()) {
@@ -66,7 +65,6 @@ public record CommandTemplate(String id, String login, String register) {
                 case "password" -> values[0];
                 case "email" -> values[1];
                 case "username" -> values[2];
-                case "totp" -> values[3];
                 default -> "";
             };
             tokens.appendReplacement(resultBuffer, Matcher.quoteReplacement(value));
@@ -92,7 +90,7 @@ public record CommandTemplate(String id, String login, String register) {
     private static void validate(String template) {
         if (template.startsWith("/") || template.indexOf('\n') >= 0 || template.indexOf('\r') >= 0
                 || template.replace("{password}", "").replace("{email}", "").replace("{username}", "")
-                .replace("{totp}", "").matches(".*\\{[^}]*}.*")) {
+                .matches(".*\\{[^}]*}.*")) {
             throw new IllegalArgumentException("Invalid command template");
         }
     }

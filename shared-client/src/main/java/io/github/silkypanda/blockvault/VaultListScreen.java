@@ -168,8 +168,9 @@ final class VaultListScreen extends Screen {
             String serverName = BlockVaultConfig.current().streamerMode()
                     ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
             graphics.text(font, Component.literal(clip(serverName, rowLabelWidth)), contentLeft, y, 0xffffffff);
+            String status = Component.translatable("blockvault.vault.status." + row.status().name().toLowerCase(java.util.Locale.ROOT)).getString();
             String accountLine = row.serverOnly() ? Component.translatable("blockvault.vault.server.settings").getString()
-                    : row.username() + " · " + row.status().name();
+                    : row.username() + " · " + status;
             graphics.text(font, Component.literal(clip(accountLine, rowLabelWidth)),
                     contentLeft, y + 12, 0xffb9b4c5);
         }

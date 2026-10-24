@@ -53,7 +53,7 @@ public final class Hooks {
             environment.attach(active);
             active.onJoin(host, minecraft.getUser().getName());
             BlockVaultConfig.load(settings -> {
-                if (session == active) active.configure(settings.autofill() && !settings.disableAutoLogin(), settings.autofillDelayMillis(),
+                if (session == active) active.configure(settings.autofill(), settings.autofillDelayMillis(),
                         generatorPolicy(settings.generator()));
             });
         } catch (Exception failure) {
@@ -75,7 +75,7 @@ public final class Hooks {
 
     static void applySettings(BlockVaultConfig.Settings settings) {
         LoginSession active = session;
-        if (active != null) active.configure(settings.autofill() && !settings.disableAutoLogin(), settings.autofillDelayMillis(),
+        if (active != null) active.configure(settings.autofill(), settings.autofillDelayMillis(),
                 generatorPolicy(settings.generator()));
     }
 
