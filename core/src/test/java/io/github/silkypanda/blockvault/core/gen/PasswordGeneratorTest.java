@@ -44,6 +44,7 @@ final class PasswordGeneratorTest {
     void memorablePresetUsesFourWordsAndTwoDigits() {
         char[] generated = PasswordGenerator.generate(PasswordGenerator.Policy.memorable());
         String value = new String(generated);
+        assertEquals(22, generated.length);
         assertEquals(4, value.chars().filter(c -> c == '-').count());
         assertTrue(value.matches("[a-z]{4}(?:-[a-z]{4}){3}-[0-9]{2}"));
         java.util.Arrays.fill(generated, '\0');
@@ -59,7 +60,7 @@ final class PasswordGeneratorTest {
 
         char[] longPassword = PasswordGenerator.generate(PasswordGenerator.Policy.memorable()
                 .adjustFor(new ServerRuleHint(24, null, false)));
-        assertEquals(26, longPassword.length);
+        assertEquals(27, longPassword.length);
         assertEquals(5, new String(longPassword).chars().filter(c -> c == '-').count());
         java.util.Arrays.fill(longPassword, '\0');
     }

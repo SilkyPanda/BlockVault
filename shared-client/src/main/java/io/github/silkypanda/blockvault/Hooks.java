@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.util.Set;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

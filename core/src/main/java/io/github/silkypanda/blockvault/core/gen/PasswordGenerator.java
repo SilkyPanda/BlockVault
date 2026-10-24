@@ -33,7 +33,7 @@ public final class PasswordGenerator {
         public static Policy max() { return new Policy(32, true, true, true, true, "!@#$%^&*-_", false); }
         public static Policy memorable() { return memorable(4); }
         private static Policy memorable(int words) {
-            return new Policy(5 * words + 1, false, false, false, true, "", false, words);
+            return new Policy(5 * words + 2, false, false, false, true, "", false, words);
         }
 
         /** Tightens length and character constraints using a parsed server rule. */
@@ -45,7 +45,7 @@ public final class PasswordGenerator {
                 if (min > max) throw new IllegalArgumentException("Server password length rules conflict");
                 int selected = -1;
                 for (int words = 2; words <= 12; words++) {
-                    int candidateLength = 5 * words + 1;
+                    int candidateLength = 5 * words + 2;
                     if (candidateLength >= min && candidateLength <= max
                             && (selected < 0 || Math.abs(words - memorableWordCount) < Math.abs(selected - memorableWordCount))) {
                         selected = words;
