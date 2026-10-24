@@ -16,6 +16,7 @@ import io.github.silkypanda.blockvault.core.vault.VaultStore;
 import io.github.silkypanda.blockvault.core.vault.WrongMasterPasswordException;
 import io.github.silkypanda.blockvault.core.vault.VaultCorruptException;
 import java.io.IOException;
+import java.awt.Desktop;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -274,6 +275,59 @@ public final class VaultRuntime implements VaultAccess {
         BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultMasterPasswordScreen(parent)));
     }
 
+    static void openDataDirectory() {
+        BackgroundExecutor.submit(() -> {
+            boolean opened = false;
+            try {
+                java.nio.file.Path directory = DataDirs.createDirectory();
+                if (!Desktop.isDesktopSupported()) throw new IOException("Desktop file browser is unavailable");
+                Desktop.getDesktop().open(directory.toFile());
+                opened = true;
+            } catch (Exception failure) {
+                LOGGER.warn("BlockVault could not open its data directory ({})", failure.getClass().getSimpleName());
+            }
+            boolean result = opened;
+            BackgroundExecutor.onGameThread(() -> toast(result ? "blockvault.data.opened" : "blockvault.data.open.failed"));
+            return null;
+        });
+    }
+
+    static void eraseAllData(char[] masterPassword, Consumer<String> result) {
+        char[] password = masterPassword.clone();
+        Arrays.fill(masterPassword, '\0');
+        BackgroundExecutor.submit(() -> {
+            String failureKey = null;
+            try {
+                java.nio.file.Path directory = DataDirs.resolve();
+                VaultStore verifier = VaultStore.open(directory);
+                if (!verifier.exists()) throw new IOException("No encrypted vault is available to verify the password");
+                try { verifier.unlock(password); }
+                finally { verifier.lock(); }
+                if (store != null) {
+                    store.lock();
+                    store = null;
+                }
+                DataDirs.delete(directory);
+                trustedUnlockAttempted = false;
+                accessScreenOpen = false;
+                WAITING.clear();
+            } catch (Exception failure) {
+                failureKey = failure instanceof WrongMasterPasswordException
+                        ? "blockvault.data.erase.wrong_password" : "blockvault.data.erase.failed";
+                LOGGER.warn("BlockVault data erasure failed ({})", failure.getClass().getSimpleName());
+            } finally { Arrays.fill(password, '\0'); }
+            String completed = failureKey;
+            BackgroundExecutor.onGameThread(() -> {
+                if (completed == null) {
+                    BlockVaultConfig.resetAfterDataErasure();
+                    Hooks.onDisconnect();
+                }
+                result.accept(completed);
+            });
+            return null;
+        });
+    }
+
     static void listBackups(Consumer<List<BackupSummary>> result) {
         withVault(() -> {
             List<BackupSummary> backups;
@@ -377,7 +431,8 @@ public final class VaultRuntime implements VaultAccess {
                 || screen instanceof VaultTemplateScreen || screen instanceof VaultDeleteScreen
                 || screen instanceof VaultTransferScreen || screen instanceof VaultSettingsScreen
                 || screen instanceof VaultRecoveryScreen || screen instanceof VaultBackupDetailScreen
-                || screen instanceof VaultBackupRecoveryScreen || screen instanceof VaultMasterPasswordScreen)) return;
+                || screen instanceof VaultBackupRecoveryScreen || screen instanceof VaultMasterPasswordScreen
+                || screen instanceof VaultEraseScreen)) return;
         cancelAutoLock();
         int minutes = BlockVaultConfig.current().autoLockMinutes();
         if (minutes > 0) {
@@ -396,7 +451,8 @@ public final class VaultRuntime implements VaultAccess {
                                 || Minecraft.getInstance().gui.screen() instanceof VaultRecoveryScreen
                                 || Minecraft.getInstance().gui.screen() instanceof VaultBackupDetailScreen
                                 || Minecraft.getInstance().gui.screen() instanceof VaultBackupRecoveryScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultMasterPasswordScreen) {
+                                || Minecraft.getInstance().gui.screen() instanceof VaultMasterPasswordScreen
+                                || Minecraft.getInstance().gui.screen() instanceof VaultEraseScreen) {
                             closeBlockVaultScreen();
                         }
                         toast("blockvault.toast.locked");
@@ -710,6 +766,7 @@ public final class VaultRuntime implements VaultAccess {
                 || screen instanceof VaultTransferScreen || screen instanceof VaultSettingsScreen
                 || screen instanceof VaultRecoveryScreen || screen instanceof VaultBackupDetailScreen
                 || screen instanceof VaultBackupRecoveryScreen || screen instanceof VaultMasterPasswordScreen
+                || screen instanceof VaultEraseScreen
                 || screen instanceof VaultAccessScreen) {
             minecraft.setScreenAndShow(null);
         }

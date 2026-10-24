@@ -20,6 +20,11 @@ final class BlockVaultConfig {
 
     static Settings current() { return current; }
 
+    static void resetAfterDataErasure() {
+        current = Settings.defaults();
+        loaded = false;
+    }
+
     static void load(Consumer<Settings> result) {
         BackgroundExecutor.submit(() -> {
             if (!loaded) {

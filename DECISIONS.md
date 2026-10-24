@@ -6,6 +6,10 @@ Follow the owner's selected behavior for review findings: use explicit local edi
 
 An older mod build can discard newer vault fields that it does not understand. The owner has been asked whether to preserve unknown fields, reject edits, or retain the current drop behavior; do not change this until answered.
 
+## 2026-10-24 — Data-folder erasure controls
+
+Add a settings action to open the resolved BlockVault data directory and a separate destructive action that warns, verifies the master password, then deletes only that data directory without following symlinks. Tell the player to close other Minecraft instances first. The game does not delete its launcher-managed mod jar; the player removes that through the launcher. Reported in the confirmation screen and README.
+
 These are product decisions supplied by the owner in response to the review questions. CI and in-game validation are still required before treating the implementation as complete.
 
 ## 2026-10-24 — Preserve trusted key after unreadable settings

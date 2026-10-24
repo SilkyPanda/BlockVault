@@ -65,6 +65,13 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                 button -> VaultRuntime.openMasterPasswordScreen(this)).width(300).build());
         list.addBig(Button.builder(Component.translatable("blockvault.settings.vault"),
                 button -> VaultRuntime.openVaultScreen()).width(300).build());
+        list.addBig(Button.builder(Component.translatable("blockvault.data.open"),
+                button -> VaultRuntime.openDataDirectory()).tooltip(Tooltip.create(
+                        Component.translatable("blockvault.settings.description.data.open"))).width(300).build());
+        list.addBig(Button.builder(Component.translatable("blockvault.data.erase"),
+                button -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(this)))
+                .tooltip(Tooltip.create(Component.translatable("blockvault.settings.description.data.erase")))
+                .width(300).build());
     }
 
     @Override

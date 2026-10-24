@@ -30,6 +30,7 @@ Implemented but not yet verified by CI:
 - Queue the first-use trust notice when a vault is created outside a world; wipe prompt secrets on screen removal without replacing a disconnect screen; lock vault snapshot reads and avoid decrypting unchanged files during reload.
 - Remove non-English English-placeholder locale files, command-tree handling, obsolete reauthentication methods, and several confirmed dead helpers/types.
 - Adjust memorable-password word count to fit server length rules; legacy `authme` entries now use automatic prompt detection; skip automatic backups for vaults with no accounts; enforce a 200 ms autofill-delay minimum.
+- Add settings actions to open the BlockVault data directory and erase its contents after a warning and master-password verification; this does not uninstall the launcher-managed mod jar.
 
 ## TODO / unresolved review work
 
