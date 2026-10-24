@@ -36,6 +36,7 @@ public final class VaultRuntime implements VaultAccess {
     private static final int MAX_WAITING = 32;
     private static VaultStore store;
     private static volatile boolean accessScreenOpen;
+    private static volatile boolean openVaultAfterAccess;
     private static volatile boolean trustedUnlockAttempted;
     private static volatile boolean pendingTrustNotice;
     private static Scheduler.Handle autoLockTimer;
@@ -149,11 +150,17 @@ public final class VaultRuntime implements VaultAccess {
                 accessScreenOpen = false;
                 List<Runnable> resumed = new ArrayList<>(WAITING);
                 WAITING.clear();
+                boolean showVaultAfterUnlock = openVaultAfterAccess && resumed.isEmpty();
+                openVaultAfterAccess = false;
                 BackgroundExecutor.onGameThread(() -> {
                     closeAccessScreen();
                     toast("blockvault.toast.unlocked");
                     if (create && trustReady[0]) showTrustedDeviceNotice();
                     activity();
+                    if (showVaultAfterUnlock) BackgroundExecutor.submit(() -> {
+                        showVaultRows();
+                        return null;
+                    });
                     BackgroundExecutor.submit(() -> {
                         while (!resumed.isEmpty()) {
                             try { resumed.remove(0).run(); }
@@ -199,7 +206,11 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     /** Allows a dismissed access screen to be requested again on the next vault operation. */
-    public static void accessScreenClosed() { accessScreenOpen = false; WAITING.clear(); }
+    public static void accessScreenClosed() {
+        accessScreenOpen = false;
+        openVaultAfterAccess = false;
+        WAITING.clear();
+    }
     public static void clearWaiting() { WAITING.clear(); }
 
     /** Opens the vault view if unlocked, otherwise asks for its master password. */
@@ -208,11 +219,14 @@ public final class VaultRuntime implements VaultAccess {
             try {
                 ensureStore();
                 if (!store.exists()) {
+                    openVaultAfterAccess = true;
                     requestAccessScreen(true);
                 } else {
                     if (!isUnlocked() && !tryTrustedUnlock(settings)) {
+                        openVaultAfterAccess = true;
                         requestAccessScreen(false);
                     } else {
+                        openVaultAfterAccess = false;
                         showVaultRows();
                     }
                 }

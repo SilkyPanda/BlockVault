@@ -31,6 +31,7 @@ Implemented but not yet verified by CI:
 - Remove non-English English-placeholder locale files, command-tree handling, obsolete reauthentication methods, and several confirmed dead helpers/types.
 - Adjust memorable-password word count to fit server length rules; legacy `authme` entries now use automatic prompt detection; skip automatic backups for vaults with no accounts; enforce a 200 ms autofill-delay minimum.
 - Add settings actions to open the BlockVault data directory and erase its contents after a warning and master-password verification; this does not uninstall the launcher-managed mod jar.
+- The Vault action in settings now continues to the vault list after first-time creation or master-password unlock. This navigation fix is not yet verified by CI or in-game testing.
 
 ## TODO / unresolved review work
 
@@ -46,7 +47,7 @@ Implemented but not yet verified by CI:
 ## Compiles but not verified in-game
 
 - The owner reported earlier builds succeeding on both loaders. This does not verify the current workspace, which has not been built by CI.
-- Recovery from a missing/damaged main vault, backup password re-encryption, trusted re-unlock after inactivity, registration suppression, backup-list refresh, prompt matching, and all current screen changes remain unverified in-game.
+- Recovery from a missing/damaged main vault, backup password re-encryption, trusted re-unlock after inactivity, registration suppression, backup-list refresh, prompt matching, the settings Vault navigation fix, and all current screen changes remain unverified in-game. No Windows-specific build or runtime check has verified the reported missing registration card.
 
 ## CI and repository state
 
