@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 
 /** Immutable account metadata with a defensively copied password. */
 public record Account(String username, char[] password, Status status, long createdAt, long modifiedAt,
-                      long lastUsedAt, JsonObject unknownFields) {
+                      long lastUsedAt, JsonObject metadata) {
     /** Account verification state persisted across crashes. */
     public enum Status { VERIFIED, PENDING }
 
@@ -13,14 +13,14 @@ public record Account(String username, char[] password, Status status, long crea
             throw new IllegalArgumentException("Account fields must not be null");
         }
         password = password.clone();
-        unknownFields = unknownFields == null ? new JsonObject() : unknownFields.deepCopy();
+        metadata = metadata == null ? new JsonObject() : metadata.deepCopy();
     }
 
     @Override
     public char[] password() { return password.clone(); }
 
     @Override
-    public JsonObject unknownFields() { return unknownFields.deepCopy(); }
+    public JsonObject metadata() { return metadata.deepCopy(); }
 
     /** Best-effort zeroing of the account's retained password characters. */
     public void clearPassword() { java.util.Arrays.fill(password, '\0'); }

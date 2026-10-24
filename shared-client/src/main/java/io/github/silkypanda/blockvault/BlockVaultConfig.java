@@ -25,11 +25,7 @@ final class BlockVaultConfig {
             if (!loaded) {
                 Path path = DataDirs.resolve().resolve("config.json");
                 if (Files.isRegularFile(path)) {
-                    try {
-                        JsonObject saved = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
-                        current = read(saved);
-                        removeLegacyAutoLoginOverride(path, saved);
-                    }
+                    try { current = read(JsonParser.parseString(Files.readString(path)).getAsJsonObject()); }
                     catch (Exception failure) {
                         current = Settings.defaults().withTrustDevice(false);
                         LOGGER.warn("BlockVault could not read its settings; trusted-device unlock is disabled");
@@ -61,11 +57,7 @@ final class BlockVaultConfig {
     private static void loadOnBackgroundThread() throws Exception {
         Path path = DataDirs.resolve().resolve("config.json");
         try {
-            if (Files.isRegularFile(path)) {
-                JsonObject saved = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
-                current = read(saved);
-                removeLegacyAutoLoginOverride(path, saved);
-            }
+            if (Files.isRegularFile(path)) current = read(JsonParser.parseString(Files.readString(path)).getAsJsonObject());
         } catch (Exception failure) {
             current = Settings.defaults().withTrustDevice(false);
             LOGGER.warn("BlockVault could not read its settings; trusted-device unlock is disabled");
@@ -84,12 +76,6 @@ final class BlockVaultConfig {
                 position, bool(json, "streamerMode", defaults.streamerMode()),
                 generator, bool(json, "scrubHistory", defaults.scrubHistory()),
                 bool(json, "trustDevice", defaults.trustDevice()));
-    }
-
-    private static void removeLegacyAutoLoginOverride(Path path, JsonObject saved) {
-        if (!saved.has("disableAutoLogin")) return;
-        try { write(path, current); }
-        catch (Exception failure) { LOGGER.warn("BlockVault could not migrate its settings"); }
     }
 
     private static void write(Path path, Settings settings) throws Exception {

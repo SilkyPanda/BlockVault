@@ -32,7 +32,7 @@ final class VaultMergerTest {
 
     private static Vault vault(Account... accounts) {
         ServerEntry server = new ServerEntry("id", "name", List.of("host:25565"), false, true, "authme",
-                List.of(accounts), new JsonObject());
-        return new Vault(1, List.of(server), new JsonObject());
+                List.of(accounts));
+        return new Vault(1, List.of(server));
     }
 }

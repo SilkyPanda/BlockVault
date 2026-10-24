@@ -1,6 +1,5 @@
 package io.github.silkypanda.blockvault.core.vault;
 
-import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -24,7 +23,7 @@ public final class VaultMerger {
             ServerEntry disk = matchingId == null ? null : merged.remove(matchingId);
             merged.put(server.id(), disk == null ? server : mergeServer(server, disk, nowMillis));
         }
-        return new Vault(Math.max(current.v(), onDisk.v()), new ArrayList<>(merged.values()), mergeUnknown(current.unknownFields(), onDisk.unknownFields()));
+        return new Vault(Math.max(current.v(), onDisk.v()), new ArrayList<>(merged.values()));
     }
 
     private static boolean sharesHost(ServerEntry left, ServerEntry right) {
@@ -42,18 +41,12 @@ public final class VaultMerger {
         Set<String> hosts = new LinkedHashSet<>(disk.hosts());
         hosts.addAll(current.hosts());
         return new ServerEntry(current.id(), current.name(), List.copyOf(hosts), current.neverSave(), current.autofill(),
-                current.templateId(), new ArrayList<>(accounts.values()), mergeUnknown(current.unknownFields(), disk.unknownFields()));
+                current.templateId(), new ArrayList<>(accounts.values()));
     }
 
     private static boolean expiredTombstone(Account account, long nowMillis) {
-        JsonObject unknown = account.unknownFields();
-        return unknown.has("deleted") && unknown.get("deleted").getAsBoolean()
+        com.google.gson.JsonObject metadata = account.metadata();
+        return metadata.has("deleted") && metadata.get("deleted").getAsBoolean()
                 && nowMillis - account.modifiedAt() > TOMBSTONE_LIFETIME_MILLIS;
-    }
-
-    private static JsonObject mergeUnknown(JsonObject preferred, JsonObject older) {
-        JsonObject result = older.deepCopy();
-        preferred.entrySet().forEach(entry -> result.add(entry.getKey(), entry.getValue().deepCopy()));
-        return result;
     }
 }

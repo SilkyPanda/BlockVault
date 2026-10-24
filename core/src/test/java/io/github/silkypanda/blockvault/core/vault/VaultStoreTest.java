@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
-import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -49,8 +48,8 @@ final class VaultStoreTest {
         store.create("correct horse".toCharArray());
         ServerEntry before = new ServerEntry("one", "one", List.of("one.example"), false, true,
                 "auto", List.of(new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
-                1, 1, 1, null)), new JsonObject());
-        store.save(new Vault(1, List.of(before), null));
+                1, 1, 1, null)));
+        store.save(new Vault(1, List.of(before)));
         Path backup1 = directory.resolve("vault.bv.bak1");
         assertTrue(Files.isRegularFile(backup1));
         byte[] first = Files.readAllBytes(backup1);
@@ -62,8 +61,8 @@ final class VaultStoreTest {
         assertArrayEquals(first, Files.readAllBytes(directory.resolve("vault.bv.bak2")));
         assertTrue(store.backupExists(2));
         ServerEntry after = new ServerEntry("two", "two", List.of("two.example"), false, true,
-                "auto", List.of(), null);
-        store.save(new Vault(1, List.of(after), null));
+                "auto", List.of());
+        store.save(new Vault(1, List.of(after)));
         store.restoreBackup(1);
         assertEquals(1, store.vault().servers().size());
         assertEquals("one.example", store.vault().servers().get(0).hosts().get(0));
@@ -77,13 +76,43 @@ final class VaultStoreTest {
     }
 
     @Test
+    void manualBackupsKeepTenSlotsAndCanBeInspected() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        store.create("correct horse".toCharArray());
+        Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
+                10, 20, 30, null);
+        ServerEntry server = new ServerEntry("id", "Example", List.of("example.org:25565"), false, true,
+                "auto", List.of(account));
+        store.save(new Vault(1, List.of(server)));
+
+        store.createManualBackup();
+        List<BackupSummary> backups = store.backups();
+        List<BackupSummary> manual = backups.stream().filter(BackupSummary::manual).toList();
+        assertEquals(1, manual.size());
+        assertEquals("backup-secret", new String(store.inspectBackup(manual.getFirst()).servers().getFirst()
+                .accounts().getFirst().password()));
+        for (int i = 0; i < VaultStore.MANUAL_BACKUP_SLOTS; i++) store.createManualBackup();
+        assertEquals(VaultStore.MANUAL_BACKUP_SLOTS,
+                store.backups().stream().filter(BackupSummary::manual).count());
+        assertTrue(Files.isRegularFile(directory.resolve("vault.bv.manual10")));
+        BackupSummary selected = store.backups().stream().filter(BackupSummary::manual).findFirst().orElseThrow();
+        com.google.gson.JsonObject deleted = new com.google.gson.JsonObject();
+        deleted.addProperty("deleted", true);
+        Account tombstone = new Account("Alex", new char[0], Account.Status.VERIFIED, 10, 40, 30, deleted);
+        store.save(new Vault(1, List.of(new ServerEntry("id", "Example", List.of("example.org:25565"),
+                false, true, "auto", List.of(tombstone)))));
+        store.restoreBackup(selected);
+        assertEquals("backup-secret", new String(store.vault().servers().getFirst().accounts().getFirst().password()));
+    }
+
+    @Test
     void masterPasswordCanBeChangedWithoutChangingVaultKey() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("old password".toCharArray());
         Account account = new Account("Alex", "retained-secret".toCharArray(), Account.Status.VERIFIED,
                 1, 1, 1, null);
         store.save(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"), false,
-                true, "auto", List.of(account), null)), null));
+                true, "auto", List.of(account)))));
         assertThrows(WrongMasterPasswordException.class,
                 () -> store.changeMasterPassword("incorrect".toCharArray(), "new password".toCharArray()));
         store.changeMasterPassword("old password".toCharArray(), "new password".toCharArray());

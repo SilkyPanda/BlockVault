@@ -5,6 +5,7 @@ import io.github.silkypanda.blockvault.core.session.SavedCredential;
 import io.github.silkypanda.blockvault.core.session.Scheduler;
 import io.github.silkypanda.blockvault.core.session.VaultAccess;
 import io.github.silkypanda.blockvault.core.vault.Account;
+import io.github.silkypanda.blockvault.core.vault.BackupSummary;
 import io.github.silkypanda.blockvault.core.vault.DataDirs;
 import io.github.silkypanda.blockvault.core.vault.KeyMode;
 import io.github.silkypanda.blockvault.core.vault.ServerEntry;
@@ -13,7 +14,6 @@ import io.github.silkypanda.blockvault.core.vault.Vault;
 import io.github.silkypanda.blockvault.core.vault.VaultStore;
 import io.github.silkypanda.blockvault.core.vault.WrongMasterPasswordException;
 import io.github.silkypanda.blockvault.core.vault.VaultCorruptException;
-import io.github.silkypanda.blockvault.core.vault.UnsupportedVaultVersionException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -94,16 +94,14 @@ public final class VaultRuntime implements VaultAccess {
     public void delete(String host, String username) {
         withVault(() -> changeAccount(host, username, old -> {
             if (old == null) return null;
-            com.google.gson.JsonObject fields = old.unknownFields();
+            com.google.gson.JsonObject fields = old.metadata();
             if (old.status() == Account.Status.PENDING && fields.has("blockvaultPrevious")) {
                 com.google.gson.JsonObject previous = fields.getAsJsonObject("blockvaultPrevious");
                 char[] previousPassword = previous.get("pass").getAsString().toCharArray();
                 try {
-                    com.google.gson.JsonObject previousFields = previous.has("unknown")
-                            ? previous.getAsJsonObject("unknown") : new com.google.gson.JsonObject();
                     return new Account(username, previousPassword, Account.Status.valueOf(previous.get("status").getAsString()),
                             previous.get("created").getAsLong(), previous.get("modified").getAsLong(),
-                            previous.get("used").getAsLong(), previousFields);
+                            previous.get("used").getAsLong(), null);
                 } finally { Arrays.fill(previousPassword, '\0'); }
             }
             fields.addProperty("deleted", true);
@@ -218,25 +216,62 @@ public final class VaultRuntime implements VaultAccess {
         BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultMasterPasswordScreen(parent)));
     }
 
-    static void backupAvailability(Consumer<boolean[]> result) {
+    static void listBackups(Consumer<List<BackupSummary>> result) {
         BackgroundExecutor.submit(() -> {
-            boolean[] available = new boolean[3];
+            List<BackupSummary> backups = List.of();
             try {
-                ensureStore();
-                for (int slot = 1; slot <= 3; slot++) available[slot - 1] = store.backupExists(slot);
-            } catch (Exception ignored) { }
+                if (store != null && isUnlocked()) {
+                    store.reload();
+                    backups = store.backups();
+                }
+            } catch (Exception failure) {
+                LOGGER.warn("BlockVault backup listing failed ({})", failure.getClass().getSimpleName());
+            }
+            List<BackupSummary> available = backups;
             BackgroundExecutor.onGameThread(() -> result.accept(available));
             return null;
         });
     }
 
-    static void restoreBackup(int slot, Consumer<Boolean> result) {
+    static void createManualBackup(Consumer<Boolean> result) {
         BackgroundExecutor.submit(() -> {
             boolean success = false;
             try {
                 if (store != null && isUnlocked()) {
                     store.reload();
-                    store.restoreBackup(slot);
+                    store.createManualBackup();
+                    success = true;
+                }
+            } catch (Exception failure) {
+                LOGGER.warn("BlockVault manual backup failed ({})", failure.getClass().getSimpleName());
+            }
+            boolean completed = success;
+            BackgroundExecutor.onGameThread(() -> result.accept(completed));
+            return null;
+        });
+    }
+
+    static void inspectBackup(BackupSummary backup, Consumer<io.github.silkypanda.blockvault.core.vault.Vault> result) {
+        BackgroundExecutor.submit(() -> {
+            io.github.silkypanda.blockvault.core.vault.Vault contents = null;
+            try {
+                if (store != null && isUnlocked()) contents = store.inspectBackup(backup);
+            } catch (Exception failure) {
+                LOGGER.warn("BlockVault backup inspection failed ({})", failure.getClass().getSimpleName());
+            }
+            io.github.silkypanda.blockvault.core.vault.Vault inspected = contents;
+            BackgroundExecutor.onGameThread(() -> result.accept(inspected));
+            return null;
+        });
+    }
+
+    static void restoreBackup(BackupSummary backup, Consumer<Boolean> result) {
+        BackgroundExecutor.submit(() -> {
+            boolean success = false;
+            try {
+                if (store != null && isUnlocked()) {
+                    store.reload();
+                    store.restoreBackup(backup);
                     success = true;
                 }
             } catch (Exception failure) {
@@ -451,11 +486,11 @@ public final class VaultRuntime implements VaultAccess {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
                     servers.set(index, new ServerEntry(server.id(), server.name(), server.hosts(), neverSave,
-                            autofill, server.templateId(), server.accounts(), server.unknownFields()));
+                            autofill, server.templateId(), server.accounts()));
                     break;
                 }
             }
-            try { store.save(new Vault(current.v(), servers, current.unknownFields())); }
+            try { store.save(new Vault(current.v(), servers)); }
             catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
         });
@@ -471,11 +506,11 @@ public final class VaultRuntime implements VaultAccess {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
                     servers.set(index, new ServerEntry(server.id(), server.name(), server.hosts(), server.neverSave(),
-                            server.autofill(), storedTemplate, server.accounts(), server.unknownFields()));
+                            server.autofill(), storedTemplate, server.accounts()));
                     break;
                 }
             }
-            try { store.save(new Vault(current.v(), servers, current.unknownFields())); }
+            try { store.save(new Vault(current.v(), servers)); }
             catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
         });
@@ -490,14 +525,14 @@ public final class VaultRuntime implements VaultAccess {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(host)) {
                     servers.set(index, new ServerEntry(server.id(), server.name(), server.hosts(), neverSave,
-                            server.autofill(), server.templateId(), server.accounts(), server.unknownFields()));
+                            server.autofill(), server.templateId(), server.accounts()));
                     found = true;
                     break;
                 }
             }
             if (!found) servers.add(new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), neverSave,
-                    true, "auto", List.of(), null));
-            try { store.save(new Vault(current.v(), servers, current.unknownFields())); }
+                    true, "auto", List.of()));
+            try { store.save(new Vault(current.v(), servers)); }
             catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
         });
     }
@@ -509,14 +544,14 @@ public final class VaultRuntime implements VaultAccess {
                 Vault current = store.vault();
                 List<ServerEntry> servers = current.servers().stream()
                         .filter(server -> !server.hosts().contains(row.host())).toList();
-                try { store.save(new Vault(current.v(), servers, current.unknownFields())); }
+                try { store.save(new Vault(current.v(), servers)); }
                 catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
                 BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
                 return;
             }
             changeAccount(row.host(), row.username(), old -> {
                 if (old == null) return null;
-                com.google.gson.JsonObject fields = old.unknownFields();
+                com.google.gson.JsonObject fields = old.metadata();
                 fields.addProperty("deleted", true);
                 return new Account(row.username(), new char[0], old.status(), old.createdAt(), System.currentTimeMillis(),
                         old.lastUsedAt(), fields);
@@ -668,7 +703,7 @@ public final class VaultRuntime implements VaultAccess {
         List<ServerEntry> servers = new ArrayList<>(current.servers());
         int serverIndex = indexOfServer(servers, host);
         ServerEntry server = serverIndex < 0
-                ? new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), false, true, "auto", List.of(), null)
+                ? new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), false, true, "auto", List.of())
                 : servers.get(serverIndex);
         List<Account> accounts = new ArrayList<>(server.accounts());
         int accountIndex = -1;
@@ -682,9 +717,9 @@ public final class VaultRuntime implements VaultAccess {
         else if (accountIndex >= 0) accounts.set(accountIndex, replacement);
         else if (replacement != null) accounts.add(replacement);
         ServerEntry updated = new ServerEntry(server.id(), server.name(), server.hosts(), server.neverSave(),
-                server.autofill(), server.templateId(), accounts, server.unknownFields());
+                server.autofill(), server.templateId(), accounts);
         if (serverIndex < 0) servers.add(updated); else servers.set(serverIndex, updated);
-        try { store.save(new Vault(current.v(), servers, current.unknownFields())); }
+        try { store.save(new Vault(current.v(), servers)); }
         catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
     }
 
@@ -705,19 +740,19 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     private static boolean isDeleted(Account account) {
-        return account.unknownFields().has("deleted") && account.unknownFields().get("deleted").getAsBoolean();
+        return account.metadata().has("deleted") && account.metadata().get("deleted").getAsBoolean();
     }
 
     private static Account copyAccount(Account source) {
         char[] password = source.password();
         try {
             return new Account(source.username(), password, source.status(), source.createdAt(), source.modifiedAt(),
-                    source.lastUsedAt(), source.unknownFields());
+                    source.lastUsedAt(), source.metadata());
         } finally { Arrays.fill(password, '\0'); }
     }
 
     private static com.google.gson.JsonObject withoutDeletedFlag(Account account) {
-        com.google.gson.JsonObject fields = account.unknownFields();
+        com.google.gson.JsonObject fields = account.metadata();
         fields.remove("deleted");
         fields.remove("blockvaultPrevious");
         return fields;
@@ -734,7 +769,6 @@ public final class VaultRuntime implements VaultAccess {
             previous.addProperty("created", previousAccount.createdAt());
             previous.addProperty("modified", previousAccount.modifiedAt());
             previous.addProperty("used", previousAccount.lastUsedAt());
-            previous.add("unknown", previousAccount.unknownFields());
             com.google.gson.JsonObject fields = withoutDeletedFlag(previousAccount);
             fields.add("blockvaultPrevious", previous);
             return fields;

@@ -726,7 +726,7 @@ ServerEntry { String id (UUID); String name; List<String> hosts (normalized host
 Account { String username; char[] password; Status status (VERIFIED|PENDING);
           long createdAt; long modifiedAt; long lastUsedAt; }
 ```
-`Account.toString()` never reveals the password. JSON field names are short and stable: `v`, `servers`, `id`, `name`, `hosts`, `neverSave`, `autofill`, `template`, `accounts`, `user`, `pass`, `status`, `created`, `modified`, `used`. Unknown fields must be preserved on load/save (round-trip safe) so newer vaults are not damaged by older builds.
+`Account.toString()` never reveals the password. JSON field names are short and stable: `v`, `servers`, `id`, `name`, `hosts`, `neverSave`, `autofill`, `template`, `accounts`, `user`, `pass`, `status`, `created`, `modified`, `used`, plus active account metadata `deleted` and `blockvaultPrevious`. Unknown fields are discarded; missing required fields and unknown status values are errors. This intentionally does not provide forward compatibility with later vault schemas.
 
 ### 7.3 Key management
 - Key hierarchy: a random 256-bit vault key (VK) encrypts the vault JSON. `MasterPasswordKek` wraps VK with PBKDF2-HMAC-SHA512(masterPassword, salt, iterations, 32) and AES-GCM using the header prefix as AAD. Changing the master password only re-wraps VK; it never re-encrypts vault data.
@@ -735,7 +735,7 @@ Account { String username; char[] password; Status status (VERIFIED|PENDING);
 - Do not use OS keystores, OS commands, `java.lang.foreign`, telemetry, or network access for trust mode.
 
 ### 7.4 `vault` file and storage
-**Location** (`DataDirs`): Windows `%APPDATA%\BlockVault`; macOS `~/Library/Application Support/BlockVault`; Linux `$XDG_DATA_HOME/blockvault` else `~/.local/share/blockvault`. Overridable by a system property `blockvault.dataDir` (used by tests). Files: encrypted `vault.bv`, up to three encrypted backups `vault.bv.bak1..3`, optional plaintext 32-byte vault key `vault.bv.trust` when trust-device mode is enabled, settings-only `config.json`, and optional user patterns in `patterns.json`. Interrupted saves may leave `vault.bv.tmp`; the lock file is `vault.bv.lock`. No automatic full-directory cleanup. On POSIX set owner-only permissions (0600 files, 0700 dir); on Windows rely on the per-user AppData ACL.
+**Location** (`DataDirs`): Windows `%APPDATA%\BlockVault`; macOS `~/Library/Application Support/BlockVault`; Linux `$XDG_DATA_HOME/blockvault` else `~/.local/share/blockvault`. Overridable by a system property `blockvault.dataDir` (used by tests). Files: encrypted `vault.bv`, three automatic backups `vault.bv.bak1..3`, up to ten manual backups `vault.bv.manual1..10`, optional plaintext 32-byte vault key `vault.bv.trust` when trust-device mode is enabled, settings-only `config.json`, and optional user patterns in `patterns.json`. Interrupted saves may leave `vault.bv.tmp`; the lock file is `vault.bv.lock`. No automatic full-directory cleanup. On POSIX set owner-only permissions (0600 files, 0700 dir); on Windows rely on the per-user AppData ACL.
 
 **Binary format v1** (all integers big-endian):
 ```
@@ -760,7 +760,7 @@ Wrap AAD (for AES-GCM wrapping) = header bytes [0, 28).
 **`VaultStore`** (thread-confined: call only from the background executor):
 - `static VaultStore open(Path dir)` (no key needed; reads header only), `boolean exists()`, `KeyMode keyMode()`.
 - `create(char[] masterPassword)`, `unlock(char[] masterPassword)`, trusted-device enable/disable and trusted unlock methods, `Vault vault()`, `save(Vault)`, `lock()`, `changeMasterPassword(char[] old, char[] new)`. There is no mode-switch API.
-- Saving: write to `vault.bv.tmp`, `FileChannel.force(true)`, then `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)`. Rotate encrypted backups at most once per 24 hours (`.bak1` newest ... `.bak3`); repeated saves within the interval must not replace the recovery point. A restore validates and decrypts a selected backup first, snapshots the current vault as a recovery point, then atomically replaces current vault contents while retaining the current password wrapper.
+- Saving: write to `vault.bv.tmp`, `FileChannel.force(true)`, then `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)`. Rotate three automatic encrypted backups at most once per 24 hours (`.bak1` newest ... `.bak3`); repeated saves within the interval must not replace the recovery point. Players can create up to ten manual encrypted snapshots (`.manual1` newest ... `.manual10` oldest), rotating only that set. The backup screen lists type and local creation time and decrypts a selected snapshot for account/password inspection after unlock. A restore validates and decrypts a selected backup first, snapshots the current vault into the automatic set, then atomically replaces current vault contents while retaining the current password wrapper. Backups are encrypted full-vault snapshots; timestamps use file modification times.
 - Locking: take an exclusive `FileChannel.lock()` on `vault.bv.lock` for read-merge-write. Merge rule when the file changed on disk since load: per server `id`, per account `username`, keep the entry with the greater `modifiedAt`; keep union of servers/accounts; deletions are tombstoned (add `deleted: true, modified: <ts>` in JSON and purge after 30 days).
 - If authentication fails on unlock: throw, leave the file untouched, never create a new empty vault over it.
 
@@ -768,8 +768,8 @@ Wrap AAD (for AES-GCM wrapping) = header bytes [0, 28).
 - AES-GCM known-answer vectors; tamper any single byte of header, nonce, ciphertext -> auth failure.
 - PBKDF2 known-answer vector (RFC-style test vectors for HMAC-SHA512).
 - Vault encode/parse round trip; truncated files; every length field out of range; wrong magic; future version.
-- `VaultStore` create/unlock/save/lock cycles in a temp dir; distinguish wrong master password from damaged ciphertext; backup rotation at the interval boundary; restoring an encrypted backup replaces contents and remains unlockable with the current master password; master-password change preserves the vault key and rejects an incorrect current password; atomic save leaves old file intact if the write is interrupted (simulate by failing the move); merge behavior with two stores on the same dir.
-- JSON round trip preserves unknown fields.
+- `VaultStore` create/unlock/save/lock cycles in a temp dir; distinguish wrong master password from damaged ciphertext; automatic backup rotation at the interval boundary; manual backup creation/rotation and inspection; restoring either backup type replaces contents and remains unlockable with the current master password; master-password change preserves the vault key and rejects an incorrect current password; atomic save leaves old file intact if the write is interrupted (simulate by failing the move); merge behavior with two stores on the same dir.
+- JSON round trip preserves all fields defined by the current vault schema. Unknown fields are discarded; missing required fields and unknown enum values are errors.
 - Fuzz test: 5,000 random mutations of a valid file must either parse or throw a controlled exception (never hang, never `OutOfMemoryError`, never loop).
 
 ### 7.5 `gen` - `PasswordGenerator`

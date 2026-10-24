@@ -69,7 +69,7 @@ The M2 CI run showed that `Registration failed!` did not match the default failu
 
 - Verified `GuiGraphicsExtractor.blit` in the local Minecraft 26.3 client bytecode: the four destination integers are endpoint coordinates, and UV floats are min/max endpoints. The credential card passed x/y/width/height and UV origin/size, causing the stretched background. Updated both card and icon calls to endpoints.
 - Mark registration as in-progress before asynchronous pending-vault persistence. This suppresses repeated prompts during the write and discards any stale queued prompt after the registration card closes, addressing the card reopening immediately after Register.
-- Superseded 2026-10-24: the separate `disableAutoLogin` safety override was removed at the owner's request. The existing `autofill` setting is the sole global switch; old config files have the obsolete key removed during migration.
+- Superseded 2026-10-24: the separate `disableAutoLogin` safety override was removed at the owner's request. The existing `autofill` setting is the sole global switch; no migration for the removed setting is retained.
 - The owner supplied Mod Menu 21.0.0 for Minecraft 26.3 and its exact Modrinth Maven coordinate (`maven.modrinth:mOgUt4GM:kyy7dbrZ`), enabling the Fabric config-screen entrypoint. CI reported NeoForge overload ambiguity for the initial factory supplier; changed registration to an explicitly typed `IConfigScreenFactory` instance.
 - CI rejected `modCompileOnly` because Fabric Loom 1.18.2 does not create that configuration. The plan states that Minecraft 26.x is unobfuscated and dependencies use plain `implementation`, not `modImplementation`; apply that rule to Mod Menu 21.0.0. Gradle's `implementation` dependency is not bundled in the BlockVault jar, and `fabric.mod.json` keeps Mod Menu optional. This follows the actual dependency configuration available in the toolchain and the plan's Minecraft 26.x mapping rule.
 - Compact the credential card to username/server, masked password, optional required email, and essential actions, using a plain fill with an area cap of 30%; remove its bundled textures and secondary controls. Defer `OptionsSubScreen.init()` until settings finish loading: rebuilding the options layout after an initial empty initialization appended a second list/footer and interfered with pointer and scroll events.
@@ -89,7 +89,7 @@ Implemented in the current, unverified workspace:
 - Prevent lookup cleanup from zeroing the live vault account. A temporary account copy is returned to the session and wiped after the callback.
 - Preserve the prior verified account inside the encrypted vault while a replacement registration is pending; restore it on registration failure and drop the prior copy on success.
 - Give successful result text precedence over broad rule text, narrow default password-rule patterns, prioritize registration prompt matching, and expire prompt dismissal suppression after five seconds.
-- Enforce the KDF iteration range, merge imported server records by shared host as well as id, refuse export to existing files, make vault JSON defaults tolerant of missing/unknown fields, and make template replacement single-pass.
+- Enforce the KDF iteration range, merge imported server records by shared host as well as id, refuse export to existing files, parse the current vault JSON schema strictly without unknown-field preservation, and make template replacement single-pass.
 - Handle memorable-password policy adjustments, increase the captured-password UI limit, avoid common `/l` and `/log` aliases in built-in detection, and allow keybinds only with no screen open.
 - Bound/clear queued vault operations, catch individual queue failures, separate timer execution from vault I/O, discard canceled timers, fail closed for trusted unlock when settings cannot be read, validate settings values, and allow zero autofill delay.
 - Load optional `patterns.json` and ignore a malformed user file while retaining built-in patterns. Filter search before pagination and avoid searching hidden server addresses in streamer mode. Registration and rejected cards no longer auto-dismiss or close on outside clicks.
@@ -99,7 +99,7 @@ Implemented in the current, unverified workspace:
 
 Product choices and remaining limits:
 
-- Keep `Trust this device` enabled by default because the owner explicitly requested that default earlier. Document that its local trust file contains the plaintext vault key and that it weakens at-rest protection. If the owner changes that preference, update the default and migration behavior separately.
+- Keep `Trust this device` enabled by default because the owner explicitly requested that default earlier. Document that its local trust file contains the plaintext vault key and that it weakens at-rest protection. If the owner changes that preference, update the default separately.
 - On Windows, the code relies on the per-user data-directory ACL; it does not create or validate a dedicated owner-only ACL. README claims have been narrowed accordingly.
 - Remove the distinct `disableAutoLogin` setting because the owner explicitly requested its complete removal. Keep global and per-server autofill controls only.
 - Keep the duplicate English locale stubs because the implementation plan explicitly requires those locale files. Do not describe them as translations.
@@ -113,6 +113,7 @@ Regression tests have been added for the storage and matcher/template fixes belo
 ## 2026-10-24 — Recovery, password management, and trust notice
 
 - Backups rotate at most once per 24-hour interval during ordinary saves, keep three encrypted recovery points, and expose an in-game restore screen. Restore validates the selected backup with the active vault key, snapshots the current state so restore is reversible, writes the selected contents atomically, and retains the current password wrapper.
+- Reserve the three daily automatic backup slots for automatic rotation. Keep a separate ten-slot manual backup set so explicit snapshots do not displace scheduled recovery points. Show backup type and local creation time, decrypt snapshots only after unlock for inspection, and reveal each password only after the player selects Reveal.
 - Unlock now distinguishes an incorrect master password, malformed/authentication-failing vault contents, and unsupported future format. Failed unlock does not rewrite the vault.
 - A failed authentication of the password-wrapped key is reported as an incorrect password because this format has no independent verifier that can distinguish a typo from tampering of that wrapped-key blob. Once the wrapped key authenticates, malformed or unauthenticated vault payload data is reported as damaged.
 - Add an in-game master-password change screen; the core operation verifies the current password, rewraps the same random vault key, and refreshes the trusted-device key when applicable.

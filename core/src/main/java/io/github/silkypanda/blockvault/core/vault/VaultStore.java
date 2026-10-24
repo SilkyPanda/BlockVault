@@ -12,11 +12,15 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Set;
 
 /** Thread-confined encrypted vault storage. Call file and crypto methods off the game thread. */
 public final class VaultStore {
     private static final long BACKUP_INTERVAL_MILLIS = 24L * 60 * 60 * 1000;
+    public static final int MANUAL_BACKUP_SLOTS = 10;
     private final Path directory;
     private VaultFile.Header header;
     private byte[] wrappedKey;
@@ -305,12 +309,62 @@ public final class VaultStore {
         return Files.isRegularFile(path("vault.bv.bak" + slot));
     }
 
+    /** Returns all available automatic and manual backups, newest first within each group. */
+    public List<BackupSummary> backups() throws IOException {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        List<BackupSummary> result = new ArrayList<>();
+        Files.createDirectories(directory);
+        Path lockPath = path("vault.bv.lock");
+        try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = lockChannel.lock()) {
+            if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
+            setPermissions(lockPath, false);
+            addBackupSummaries(result, false, 3);
+            addBackupSummaries(result, true, MANUAL_BACKUP_SLOTS);
+        }
+        result.sort(Comparator.comparingLong(BackupSummary::createdAt).reversed());
+        return List.copyOf(result);
+    }
+
+    /** Makes a manually requested encrypted snapshot, retaining the ten newest. */
+    public void createManualBackup() throws IOException {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        Files.createDirectories(directory);
+        Path lockPath = path("vault.bv.lock");
+        try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = lockChannel.lock()) {
+            if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
+            setPermissions(lockPath, false);
+            rotateManualBackups();
+        }
+    }
+
+    /** Decrypts one backup for in-game inspection. The returned account passwords belong to the caller. */
+    public Vault inspectBackup(BackupSummary backup) throws Exception {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        Path file = backupPath(backup);
+        byte[] bytes = readBackup(backup, file);
+        byte[] plaintext = null;
+        try {
+            VaultFile.Parsed parsed = VaultFile.parse(bytes);
+            plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+            return VaultJson.read(plaintext);
+        } finally {
+            SecureBytes.wipe(bytes);
+            SecureBytes.wipe(plaintext);
+        }
+    }
+
     /** Restores an encrypted recovery point while retaining the current master-password wrapper. */
     public void restoreBackup(int slot) throws Exception {
+        restoreBackup(new BackupSummary(false, slot, 0));
+    }
+
+    /** Restores an automatic or manual backup while retaining the current master-password wrapper. */
+    public void restoreBackup(BackupSummary backupInfo) throws Exception {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
-        checkBackupSlot(slot);
-        Path backup = path("vault.bv.bak" + slot);
-        byte[] bytes = readBounded(backup);
+        Path backup = backupPath(backupInfo);
+        byte[] bytes = readBackup(backupInfo, backup);
         byte[] plaintext = null;
         Vault restored;
         try {
@@ -422,13 +476,70 @@ public final class VaultStore {
         Path current = path("vault.bv");
         if (!Files.isRegularFile(current)) return;
         Path newest = path("vault.bv.bak1");
+        long previousTimestamp = Files.isRegularFile(newest) ? Files.getLastModifiedTime(newest).toMillis() : 0;
         for (int i = 3; i >= 2; i--) {
             Path from = path("vault.bv.bak" + (i - 1));
             if (Files.exists(from)) Files.move(from, path("vault.bv.bak" + i), StandardCopyOption.REPLACE_EXISTING);
         }
         Files.copy(current, newest, StandardCopyOption.REPLACE_EXISTING);
         setPermissions(newest, false);
+        stampBackup(newest, previousTimestamp);
     }
+
+    private void rotateManualBackups() throws IOException {
+        Path current = path("vault.bv");
+        if (!Files.isRegularFile(current)) throw new IOException("Vault file is missing");
+        Path newest = manualBackupPath(1);
+        long previousTimestamp = Files.isRegularFile(newest) ? Files.getLastModifiedTime(newest).toMillis() : 0;
+        for (int slot = MANUAL_BACKUP_SLOTS; slot >= 2; slot--) {
+            Path from = manualBackupPath(slot - 1);
+            if (Files.exists(from)) Files.move(from, manualBackupPath(slot), StandardCopyOption.REPLACE_EXISTING);
+        }
+        Files.copy(current, newest, StandardCopyOption.REPLACE_EXISTING);
+        setPermissions(newest, false);
+        stampBackup(newest, previousTimestamp);
+    }
+
+    private static void stampBackup(Path backup, long previousTimestamp) throws IOException {
+        long nextTimestamp = Math.max(System.currentTimeMillis(), previousTimestamp + 1);
+        Files.setLastModifiedTime(backup, java.nio.file.attribute.FileTime.fromMillis(nextTimestamp));
+    }
+
+    private void addBackupSummaries(List<BackupSummary> result, boolean manual, int slots) throws IOException {
+        for (int slot = 1; slot <= slots; slot++) {
+            Path file = manual ? manualBackupPath(slot) : path("vault.bv.bak" + slot);
+            if (Files.isRegularFile(file)) {
+                result.add(new BackupSummary(manual, slot, Files.getLastModifiedTime(file).toMillis(), Files.size(file)));
+            }
+        }
+    }
+
+    private Path backupPath(BackupSummary backup) {
+        if (backup == null) throw new IllegalArgumentException("Backup is required");
+        if (backup.manual()) {
+            if (backup.slot() < 1 || backup.slot() > MANUAL_BACKUP_SLOTS) {
+                throw new IllegalArgumentException("Manual backup slot is invalid");
+            }
+            return manualBackupPath(backup.slot());
+        }
+        checkBackupSlot(backup.slot());
+        return path("vault.bv.bak" + backup.slot());
+    }
+
+    private byte[] readBackup(BackupSummary summary, Path file) throws IOException {
+        Path lockPath = path("vault.bv.lock");
+        try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = lockChannel.lock()) {
+            if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
+            setPermissions(lockPath, false);
+            if (summary.createdAt() > 0 && Files.getLastModifiedTime(file).toMillis() != summary.createdAt()) {
+                throw new IOException("Backup changed after it was listed");
+            }
+            return readBounded(file);
+        }
+    }
+
+    private Path manualBackupPath(int slot) { return path("vault.bv.manual" + slot); }
 
     private static void checkBackupSlot(int slot) {
         if (slot < 1 || slot > 3) throw new IllegalArgumentException("Backup slot must be between 1 and 3");
