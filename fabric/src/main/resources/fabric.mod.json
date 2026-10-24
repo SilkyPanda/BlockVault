@@ -4,6 +4,7 @@
   "version": "${version}",
   "name": "BlockVault",
   "description": "Client-side password manager for servers with login/register plugins. Generates, encrypts and autofills per-server passwords.",
+  "icon": "assets/blockvault/icon.png",
   "authors": ["SilkyPanda"],
   "contact": {
     "sources": "https://github.com/SilkyPanda/BlockVault"

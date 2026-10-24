@@ -16,7 +16,7 @@ There are independent Gradle builds in `core/`, `fabric/`, and `neoforge/`. CI u
 - `shared-client/src/main/java/.../blockvault` contains the Minecraft-facing runtime, session bridge, configuration, and screens. Those classes currently share one package because the screens call package-private runtime/config helpers directly.
 - `shared-client/.../blockvault/mixin` contains the small set of Minecraft interception points. Keep loader-specific APIs out of this source tree.
 - `fabric/.../fabric` and `neoforge/.../neoforge` contain loader entrypoints and event bridges. Shared behavior belongs in `shared-client`; game-independent behavior belongs in `core`.
-- `shared-client/src/main/resources` contains translations, prompt patterns, and mixin metadata; loader metadata stays under each loader's `src/main/resources`.
+- `shared-client/src/main/resources` contains translations, prompt patterns, mixin metadata, and the icon artwork. Edit `assets/blockvault/icon.svg`; `icon.png` is the loader metadata image. Loader metadata stays under each loader's `src/main/resources`.
 
 For a code change, follow the relevant section in `BLOCKVAULT_PLAN.md`, keep pure-Java behavior in `core` where possible, and use the GitHub Actions run for the commit as the build result.
 

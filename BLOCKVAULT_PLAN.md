@@ -102,7 +102,7 @@ BlockVault/
 |  `- src/main/
 |     |- java/io/github/silkypanda/blockvault/ (runtime, config, session bridge, screens)
 |     |- java/io/github/silkypanda/blockvault/mixin/ (Minecraft interception points)
-|     `- resources/{blockvault.mixins.json, assets/blockvault/{lang,textures,...}}
+|     `- resources/{blockvault.mixins.json, assets/blockvault/{lang,icon.svg,icon.png,textures,...}}
 |- fabric/                            standalone Gradle build (Loom)
 |  |- settings.gradle
 |  |- build.gradle
