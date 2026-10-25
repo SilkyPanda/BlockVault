@@ -40,14 +40,14 @@ final class VaultListScreen extends Screen {
         page = Math.min(page, totalPages() - 1);
         rowButtonWidth = Math.max(1, Math.min(54, (contentWidth - 94) / ROW_ACTIONS));
         rowLabelWidth = Math.max(0, contentWidth - 14 - ROW_ACTIONS * rowButtonWidth);
-        footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 30) / 6));
+        footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 36) / 7));
         int searchWidth = Math.max(1, Math.min(320, width - 24));
         search = new EditBox(font, (width - searchWidth) / 2, 32, searchWidth, 20,
                 Component.translatable("blockvault.vault.search"));
         search.setValue(searchQuery);
         search.setHint(Component.translatable("blockvault.vault.search"));
         search.setMaxLength(128);
-        search.setResponder(value -> { VaultRuntime.activity(); searchQuery = value; page = 0; updateVisibleRows(); });
+        search.setResponder(value -> { searchQuery = value; page = 0; updateVisibleRows(); });
         addRenderableWidget(search);
 
         for (int index = 0; index < pageSize; index++) {
@@ -66,12 +66,10 @@ final class VaultListScreen extends Screen {
                     MinecraftHolder.open(new VaultDeleteScreen(row, this)));
         }
         previousButton = Button.builder(Component.translatable("blockvault.vault.previous"), button -> {
-            VaultRuntime.activity();
             page = Math.max(0, page - 1);
             updateVisibleRows();
         }).bounds(contentLeft, height - 34, footerButtonWidth, 20).build();
         nextButton = Button.builder(Component.translatable("blockvault.vault.next"), button -> {
-            VaultRuntime.activity();
             page = Math.min(totalPages() - 1, page + 1);
             updateVisibleRows();
         }).bounds(contentLeft + footerButtonWidth + 6, height - 34, footerButtonWidth, 20).build();
@@ -80,23 +78,25 @@ final class VaultListScreen extends Screen {
         addRenderableWidget(previousButton);
         addRenderableWidget(nextButton);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.transfer.import.short"),
-                        button -> { VaultRuntime.activity(); MinecraftHolder.open(new VaultTransferScreen(this, true)); })
+                        button -> { MinecraftHolder.open(new VaultTransferScreen(this, true)); })
                 .bounds(contentLeft + (footerButtonWidth + 6) * 2, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.transfer.export.short"),
-                        button -> { VaultRuntime.activity(); MinecraftHolder.open(new VaultTransferScreen(this, false)); })
+                        button -> { MinecraftHolder.open(new VaultTransferScreen(this, false)); })
                 .bounds(contentLeft + (footerButtonWidth + 6) * 3, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.settings.short"),
-                        button -> { VaultRuntime.activity(); VaultRuntime.openSettingsScreen(this); })
+                        button -> { VaultRuntime.openSettingsScreen(this); })
                 .bounds(contentLeft + (footerButtonWidth + 6) * 4, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.lock.short"),
                         button -> VaultRuntime.lock())
+                .bounds(contentLeft + (footerButtonWidth + 6) * 6, height - 34, footerButtonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.trash.short"),
+                        button -> VaultRuntime.openTrashScreen(this))
                 .bounds(contentLeft + (footerButtonWidth + 6) * 5, height - 34, footerButtonWidth, 20).build());
         updateVisibleRows();
     }
 
     private Button addRowButton(int rowIndex, int x, int y, String key, java.util.function.Consumer<VaultRow> action) {
         Button button = Button.builder(Component.translatable(key), pressed -> {
-            VaultRuntime.activity();
             List<VaultRow> currentRows = pageRows();
             if (rowIndex < currentRows.size()) action.accept(currentRows.get(rowIndex));
         }).bounds(x, y, rowButtonWidth, 20).build();

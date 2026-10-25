@@ -2,16 +2,16 @@ package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.session.CommandTemplate;
 import io.github.silkypanda.blockvault.core.session.SavedCredential;
-import io.github.silkypanda.blockvault.core.session.Scheduler;
 import io.github.silkypanda.blockvault.core.session.VaultAccess;
 import io.github.silkypanda.blockvault.core.vault.Account;
 import io.github.silkypanda.blockvault.core.vault.BackupSummary;
 import io.github.silkypanda.blockvault.core.vault.BackupReencryptionException;
 import io.github.silkypanda.blockvault.core.vault.DataDirs;
-import io.github.silkypanda.blockvault.core.vault.KeyMode;
 import io.github.silkypanda.blockvault.core.vault.ServerEntry;
 import io.github.silkypanda.blockvault.core.vault.UnsupportedVaultVersionException;
+import io.github.silkypanda.blockvault.core.vault.TrashEntry;
 import io.github.silkypanda.blockvault.core.vault.Vault;
+import io.github.silkypanda.blockvault.core.vault.VaultTrash;
 import io.github.silkypanda.blockvault.core.vault.VaultStore;
 import io.github.silkypanda.blockvault.core.vault.WrongMasterPasswordException;
 import io.github.silkypanda.blockvault.core.vault.VaultCorruptException;
@@ -32,14 +32,15 @@ import org.slf4j.LoggerFactory;
 /** Background-thread vault facade used by the login session. */
 public final class VaultRuntime implements VaultAccess {
     private static final Logger LOGGER = LoggerFactory.getLogger("BlockVault");
-    private static final ConcurrentLinkedDeque<Runnable> WAITING = new ConcurrentLinkedDeque<>();
+    /** An operation waiting for the vault to be unlocked, plus what to do if the owner cancels the unlock. */
+    private record Waiting(Runnable action, Runnable cancelled) { }
+    private static final ConcurrentLinkedDeque<Waiting> WAITING = new ConcurrentLinkedDeque<>();
     private static final int MAX_WAITING = 32;
     private static VaultStore store;
     private static volatile boolean accessScreenOpen;
     private static volatile boolean openVaultAfterAccess;
     private static volatile boolean trustedUnlockAttempted;
     private static volatile boolean pendingTrustNotice;
-    private static Scheduler.Handle autoLockTimer;
 
     /** Returns the shared vault facade. */
     public static VaultRuntime access() { return Holder.INSTANCE; }
@@ -48,17 +49,20 @@ public final class VaultRuntime implements VaultAccess {
 
     @Override
     public void find(String host, String username, Consumer<SavedCredential> result) {
+        find(host, username, result, null);
+    }
+
+    @Override
+    public void find(String host, String username, Consumer<SavedCredential> result, Runnable cancelled) {
         withVault(() -> {
             Vault vault = store.vault();
             ServerEntry server = findServer(vault, host);
             Account account = server == null ? null : server.accounts().stream()
-                    .filter(value -> value.username().equals(username) && !isDeleted(value)).findFirst().orElse(null);
+                    .filter(value -> value.username().equals(username)).findFirst().orElse(null);
             Account callbackAccount = account == null ? null : copyAccount(account);
-            boolean templateExplicit = server != null && !"auto".equals(server.templateId())
-                    && !"authme".equals(server.templateId());
-            String templateId = server == null ? "authme" : server.templateId();
-            if ("authme".equals(templateId)) templateId = "auto";
-            if ("authme-explicit".equals(templateId)) templateId = "authme";
+            // "auto" means "detect from the server's prompt"; any other stored id is an explicit owner choice.
+            boolean templateExplicit = server != null && !"auto".equals(server.templateId());
+            String templateId = server == null ? "auto" : server.templateId();
             CommandTemplate template = CommandTemplate.builtins().getOrDefault(templateId, CommandTemplate.builtins().get("authme"));
             SavedCredential saved = server == null ? null
                     : new SavedCredential(callbackAccount, server.autofill(), server.neverSave(), template, templateExplicit);
@@ -66,7 +70,8 @@ public final class VaultRuntime implements VaultAccess {
                 try { result.accept(saved); }
                 finally { if (callbackAccount != null) callbackAccount.clearPassword(); }
             });
-        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(null)));
+        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(null)),
+                cancelled == null ? null : () -> BackgroundExecutor.onGameThread(cancelled));
     }
 
     @Override
@@ -81,7 +86,7 @@ public final class VaultRuntime implements VaultAccess {
             } catch (Exception failure) {
                 BackgroundExecutor.onGameThread(() -> saved.accept(false));
             } finally { Arrays.fill(copy, '\0'); }
-        }, () -> BackgroundExecutor.onGameThread(() -> saved.accept(false)));
+        }, () -> { Arrays.fill(copy, '\0'); BackgroundExecutor.onGameThread(() -> saved.accept(false)); });
     }
 
     @Override
@@ -91,29 +96,20 @@ public final class VaultRuntime implements VaultAccess {
             char[] secret = old.password();
             try {
                 return new Account(username, secret, Account.Status.VERIFIED, old.createdAt(),
-                        System.currentTimeMillis(), System.currentTimeMillis(), withoutDeletedFlag(old));
+                        System.currentTimeMillis(), System.currentTimeMillis(), withoutPrevious(old));
             } finally { Arrays.fill(secret, '\0'); }
         }));
     }
 
     @Override
     public void delete(String host, String username) {
-        withVault(() -> changeAccount(host, username, old -> {
-            if (old == null) return null;
-            com.google.gson.JsonObject fields = old.metadata();
-            if (old.status() == Account.Status.PENDING && fields.has("blockvaultPrevious")) {
-                com.google.gson.JsonObject previous = fields.getAsJsonObject("blockvaultPrevious");
-                char[] previousPassword = previous.get("pass").getAsString().toCharArray();
-                try {
-                    return new Account(username, previousPassword, Account.Status.valueOf(previous.get("status").getAsString()),
-                            previous.get("created").getAsLong(), previous.get("modified").getAsLong(),
-                            previous.get("used").getAsLong(), null);
-                } finally { Arrays.fill(previousPassword, '\0'); }
-            }
-            fields.addProperty("deleted", true);
-            return new Account(username, new char[0], old.status(), old.createdAt(), System.currentTimeMillis(),
-                    old.lastUsedAt(), fields);
-        }));
+        withVault(() -> {
+            Vault current = store.vault();
+            ServerEntry server = findServer(current, host);
+            if (server == null) return;
+            Vault next = VaultTrash.trashAccount(current, server.id(), username, System.currentTimeMillis());
+            if (next != current) saveVault(next);
+        });
     }
 
     @Override
@@ -123,7 +119,7 @@ public final class VaultRuntime implements VaultAccess {
             try {
                 changeAccount(host, username, old -> new Account(username, copy, Account.Status.VERIFIED,
                         old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
-                        System.currentTimeMillis(), old == null ? null : withoutDeletedFlag(old)));
+                        System.currentTimeMillis(), old == null ? null : withoutPrevious(old)));
             } finally { Arrays.fill(copy, '\0'); }
         });
     }
@@ -135,7 +131,6 @@ public final class VaultRuntime implements VaultAccess {
                 ensureStore();
                 if (create) store.create(password);
                 else {
-                    if (store.keyMode() != KeyMode.MASTER_PASSWORD) throw new IllegalStateException("Unsupported vault key mode");
                     store.unlock(password);
                 }
                 trustedUnlockAttempted = true;
@@ -148,7 +143,7 @@ public final class VaultRuntime implements VaultAccess {
                     }
                 }
                 accessScreenOpen = false;
-                List<Runnable> resumed = new ArrayList<>(WAITING);
+                List<Waiting> resumed = new ArrayList<>(WAITING);
                 WAITING.clear();
                 boolean showVaultAfterUnlock = openVaultAfterAccess && resumed.isEmpty();
                 openVaultAfterAccess = false;
@@ -156,14 +151,13 @@ public final class VaultRuntime implements VaultAccess {
                     closeAccessScreen();
                     toast("blockvault.toast.unlocked");
                     if (create && trustReady[0]) showTrustedDeviceNotice();
-                    activity();
                     if (showVaultAfterUnlock) BackgroundExecutor.submit(() -> {
                         showVaultRows();
                         return null;
                     });
                     BackgroundExecutor.submit(() -> {
                         while (!resumed.isEmpty()) {
-                            try { resumed.remove(0).run(); }
+                            try { resumed.remove(0).action().run(); }
                             catch (RuntimeException failure) { LOGGER.warn("BlockVault queued operation failed ({})", failure.getClass().getSimpleName()); }
                         }
                         return null;
@@ -209,9 +203,28 @@ public final class VaultRuntime implements VaultAccess {
     public static void accessScreenClosed() {
         accessScreenOpen = false;
         openVaultAfterAccess = false;
+        List<Waiting> dropped = new ArrayList<>(WAITING);
         WAITING.clear();
+        // Tell every operation that was waiting that the owner declined, so nothing is left hanging.
+        for (Waiting waiting : dropped) {
+            if (waiting.cancelled() != null) {
+                try { waiting.cancelled().run(); }
+                catch (RuntimeException failure) { LOGGER.warn("BlockVault cancel callback failed ({})", failure.getClass().getSimpleName()); }
+            }
+        }
     }
-    public static void clearWaiting() { WAITING.clear(); }
+
+    /**
+     * The access screen was replaced by another screen without being cancelled (a kick screen, a credential card).
+     * Minecraft calls {@code removed()} but not {@code onClose()} then, so the flag must be reset here or no new
+     * unlock screen could ever be shown. Waiting operations are kept for the next time the screen is shown.
+     */
+    public static void accessScreenReplaced() { accessScreenOpen = false; }
+
+    public static void clearWaiting() {
+        WAITING.clear();
+        accessScreenOpen = false;
+    }
 
     /** Opens the vault view if unlocked, otherwise asks for its master password. */
     public static void openVaultScreen() {
@@ -444,7 +457,6 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Locks and wipes the in-memory vault key. */
     public static void lock() {
-        cancelAutoLock();
         trustedUnlockAttempted = true;
         BackgroundExecutor.submit(() -> {
             if (store != null) store.lock();
@@ -454,50 +466,6 @@ public final class VaultRuntime implements VaultAccess {
             });
             return null;
         });
-    }
-
-    /** Resets the inactivity lock timer after user interaction with vault UI. */
-    public static void activity() {
-        net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().gui.screen();
-        if (!(screen instanceof VaultListScreen || screen instanceof VaultCredentialScreen
-                || screen instanceof VaultTemplateScreen || screen instanceof VaultDeleteScreen
-                || screen instanceof VaultTransferScreen || screen instanceof VaultSettingsScreen
-                || screen instanceof VaultRecoveryScreen || screen instanceof VaultBackupDetailScreen
-                || screen instanceof VaultBackupRecoveryScreen || screen instanceof VaultMasterPasswordScreen
-                || screen instanceof VaultEraseScreen)) return;
-        cancelAutoLock();
-        int minutes = BlockVaultConfig.current().autoLockMinutes();
-        if (minutes > 0) {
-            autoLockTimer = BackgroundExecutor.scheduler().schedule(minutes * 60_000L, () -> {
-                autoLockTimer = null;
-                BackgroundExecutor.submit(() -> {
-                    if (store != null) store.lock();
-                    trustedUnlockAttempted = false;
-                    BackgroundExecutor.onGameThread(() -> {
-                        if (Minecraft.getInstance().gui.screen() instanceof VaultListScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultCredentialScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultTemplateScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultDeleteScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultTransferScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultSettingsScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultRecoveryScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultBackupDetailScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultBackupRecoveryScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultMasterPasswordScreen
-                                || Minecraft.getInstance().gui.screen() instanceof VaultEraseScreen) {
-                            closeBlockVaultScreen();
-                        }
-                        toast("blockvault.toast.locked");
-                    });
-                    return null;
-                });
-            });
-        }
-    }
-
-    private static void cancelAutoLock() {
-        if (autoLockTimer != null) autoLockTimer.cancel();
-        autoLockTimer = null;
     }
 
     /** Opens settings while retaining the calling screen as its back destination. */
@@ -578,7 +546,7 @@ public final class VaultRuntime implements VaultAccess {
                 changeAccount(row.host(), row.username(), old -> new Account(row.username(), copy,
                         Account.Status.VERIFIED, old == null ? System.currentTimeMillis() : old.createdAt(),
                         System.currentTimeMillis(), old == null ? 0 : old.lastUsedAt(),
-                        old == null ? null : withoutDeletedFlag(old)));
+                        old == null ? null : withoutPrevious(old)));
                 BackgroundExecutor.onGameThread(() -> toast("blockvault.toast.saved"));
             } finally { Arrays.fill(copy, '\0'); }
         });
@@ -597,15 +565,14 @@ public final class VaultRuntime implements VaultAccess {
                     break;
                 }
             }
-            try { store.saveExplicit(new Vault(current.v(), servers)); }
-            catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
+            saveVault(current.withServers(servers));
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
         });
     }
 
     static void updateServerTemplate(VaultRow row, String templateId) {
         if (!"auto".equals(templateId) && !io.github.silkypanda.blockvault.core.session.CommandTemplate.builtins().containsKey(templateId)) return;
-        String storedTemplate = "authme".equals(templateId) ? "authme-explicit" : templateId;
+        String storedTemplate = templateId;
         withVault(() -> {
             Vault current = store.vault();
             List<ServerEntry> servers = new ArrayList<>(current.servers());
@@ -617,8 +584,7 @@ public final class VaultRuntime implements VaultAccess {
                     break;
                 }
             }
-            try { store.saveExplicit(new Vault(current.v(), servers)); }
-            catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
+            saveVault(current.withServers(servers));
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
         });
     }
@@ -639,33 +605,81 @@ public final class VaultRuntime implements VaultAccess {
             }
             if (!found) servers.add(new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), neverSave,
                     true, "auto", List.of()));
-            try { store.saveExplicit(new Vault(current.v(), servers)); }
-            catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
+            saveVault(current.withServers(servers));
         });
     }
 
-    /** Deletes an account after the caller has confirmed the action. */
+    /** Moves an account (or an empty server entry) to the trash after the caller has confirmed the action. */
     static void deleteAccount(VaultRow row) {
         withVault(() -> {
-            if (row.serverOnly()) {
-                Vault current = store.vault();
-                List<ServerEntry> servers = current.servers().stream()
-                        .filter(server -> !server.hosts().contains(row.host())).toList();
-                try { store.saveExplicit(new Vault(current.v(), servers)); }
-                catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
-                BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
-                return;
+            Vault current = store.vault();
+            ServerEntry server = findServer(current, row.host());
+            if (server != null) {
+                long now = System.currentTimeMillis();
+                Vault next = row.serverOnly() ? VaultTrash.trashServer(current, server.id(), now)
+                        : VaultTrash.trashAccount(current, server.id(), row.username(), now);
+                if (next != current) saveVault(next);
             }
-            changeAccount(row.host(), row.username(), old -> {
-                if (old == null) return null;
-                com.google.gson.JsonObject fields = old.metadata();
-                fields.remove("blockvaultPrevious");
-                fields.addProperty("deleted", true);
-                return new Account(row.username(), new char[0], old.status(), old.createdAt(), System.currentTimeMillis(),
-                        old.lastUsedAt(), fields);
-            });
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
         });
+    }
+
+    /** Moves a whole server, with every account on it, to the trash. */
+    static void deleteServer(VaultRow row) {
+        withVault(() -> {
+            Vault current = store.vault();
+            ServerEntry server = findServer(current, row.host());
+            if (server != null) {
+                Vault next = VaultTrash.trashServer(current, server.id(), System.currentTimeMillis());
+                if (next != current) saveVault(next);
+            }
+            BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
+        });
+    }
+
+    /** Opens the trash screen, returning to {@code parent} when it closes. */
+    static void openTrashScreen(net.minecraft.client.gui.screens.Screen parent) {
+        withVault(() -> {
+            List<TrashRow> rows = trashRows();
+            BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultTrashScreen(parent, rows)));
+        });
+    }
+
+    /** Puts a trash entry back into the vault (newer copy wins if the same server and user already exist). */
+    static void restoreFromTrash(String trashId, Consumer<List<TrashRow>> result) {
+        changeTrash(result, vault -> VaultTrash.restore(vault, trashId, System.currentTimeMillis()));
+    }
+
+    /** Permanently deletes one trash entry. */
+    static void deleteFromTrash(String trashId, Consumer<List<TrashRow>> result) {
+        changeTrash(result, vault -> VaultTrash.deleteForever(vault, trashId));
+    }
+
+    /** Permanently deletes everything in the trash. */
+    static void emptyTrash(Consumer<List<TrashRow>> result) {
+        changeTrash(result, VaultTrash::emptyTrash);
+    }
+
+    private static void changeTrash(Consumer<List<TrashRow>> result, UnaryOperator<Vault> change) {
+        withVault(() -> {
+            Vault current = store.vault();
+            Vault next = change.apply(current);
+            if (next != current) saveVault(next);
+            List<TrashRow> rows = trashRows();
+            BackgroundExecutor.onGameThread(() -> result.accept(rows));
+        }, () -> BackgroundExecutor.onGameThread(() -> toast("blockvault.vault.error")));
+    }
+
+    private static List<TrashRow> trashRows() {
+        List<TrashRow> rows = new ArrayList<>();
+        for (TrashEntry entry : store.vault().trash()) {
+            ServerEntry server = entry.server();
+            String host = server.hosts().stream().findFirst().orElse(server.name());
+            List<String> users = server.accounts().stream().map(Account::username).toList();
+            rows.add(new TrashRow(entry.id(), server.name(), host, users, entry.wholeServer(), entry.deletedAt()));
+        }
+        rows.sort(java.util.Comparator.comparingLong(TrashRow::deletedAt).reversed());
+        return List.copyOf(rows);
     }
 
     static void showToast(String key) { toast(key); }
@@ -691,24 +705,33 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     private static void withVault(Runnable action) {
-        withVault(action, () -> BackgroundExecutor.onGameThread(() -> toast("blockvault.vault.error")));
+        withVault(action, () -> BackgroundExecutor.onGameThread(() -> toast("blockvault.vault.error")), null);
     }
 
     private static void withVault(Runnable action, Runnable failed) {
+        withVault(action, failed, failed);
+    }
+
+    /**
+     * Runs {@code action} once the vault is unlocked. {@code failed} runs on an I/O or authentication failure;
+     * {@code cancelled} (may be null) runs if the owner dismisses the master-password prompt instead.
+     */
+    private static void withVault(Runnable action, Runnable failed, Runnable cancelled) {
         BlockVaultConfig.load(settings -> BackgroundExecutor.submit(() -> {
             try {
                 ensureStore();
-                if (!store.exists() || store.keyMode() == null) {
-                    enqueue(action);
+                if (!store.exists()) {
+                    enqueue(action, cancelled);
                     requestAccessScreen(true);
                 } else {
                     boolean unlocked = isUnlocked() || tryTrustedUnlock(settings);
                     if (unlocked) {
                         store.reload();
+                        purgeTrash();
                         action.run();
                     }
                     else {
-                        enqueue(action);
+                        enqueue(action, cancelled);
                         requestAccessScreen(false);
                     }
                 }
@@ -718,6 +741,12 @@ public final class VaultRuntime implements VaultAccess {
             }
             return null;
         }));
+    }
+
+    /** Removes trash entries older than 60 days; failures are harmless and retried on the next operation. */
+    private static void purgeTrash() {
+        try { store.purgeExpiredTrash(); }
+        catch (IOException | RuntimeException failure) { LOGGER.warn("BlockVault could not purge the trash"); }
     }
 
     private static boolean isUnlocked() {
@@ -737,10 +766,10 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     private static void showVaultRows() {
+        purgeTrash();
         List<VaultRow> rows = vaultRows();
         BackgroundExecutor.onGameThread(() -> {
             Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows));
-            activity();
         });
     }
 
@@ -749,7 +778,7 @@ public final class VaultRuntime implements VaultAccess {
         List<VaultRow> result = new ArrayList<>();
         for (ServerEntry server : vault.servers()) {
             String host = server.hosts().stream().findFirst().orElse(server.name());
-            List<Account> active = server.accounts().stream().filter(account -> !isDeleted(account)).toList();
+            List<Account> active = server.accounts();
             if (active.isEmpty()) {
                 result.add(new VaultRow(server.name(), host, "", null, server.autofill(), server.neverSave(),
                         server.templateId(), true));
@@ -780,9 +809,12 @@ public final class VaultRuntime implements VaultAccess {
         BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultAccessScreen(create)));
     }
 
-    private static void enqueue(Runnable action) {
-        if (WAITING.size() >= MAX_WAITING) WAITING.pollFirst();
-        WAITING.addLast(action);
+    private static void enqueue(Runnable action, Runnable cancelled) {
+        if (WAITING.size() >= MAX_WAITING) {
+            Waiting evicted = WAITING.pollFirst();
+            if (evicted != null && evicted.cancelled() != null) evicted.cancelled().run();
+        }
+        WAITING.addLast(new Waiting(action, cancelled));
     }
 
     private static void closeAccessScreen() {
@@ -829,7 +861,11 @@ public final class VaultRuntime implements VaultAccess {
         ServerEntry updated = new ServerEntry(server.id(), server.name(), server.hosts(), server.neverSave(),
                 server.autofill(), server.templateId(), accounts);
         if (serverIndex < 0) servers.add(updated); else servers.set(serverIndex, updated);
-        try { store.saveExplicit(new Vault(current.v(), servers)); }
+        saveVault(current.withServers(servers));
+    }
+
+    private static void saveVault(Vault next) {
+        try { store.saveExplicit(next); }
         catch (IOException failure) { throw new IllegalStateException("Could not save the local vault", failure); }
     }
 
@@ -840,17 +876,13 @@ public final class VaultRuntime implements VaultAccess {
     private static Account findAccount(String host, String username) {
         ServerEntry server = findServer(store.vault(), host);
         return server == null ? null : server.accounts().stream()
-                .filter(account -> account.username().equals(username) && !isDeleted(account))
+                .filter(account -> account.username().equals(username))
                 .findFirst().orElse(null);
     }
 
     private static int indexOfServer(List<ServerEntry> servers, String host) {
         for (int i = 0; i < servers.size(); i++) if (servers.get(i).hosts().contains(host)) return i;
         return -1;
-    }
-
-    private static boolean isDeleted(Account account) {
-        return account.metadata().has("deleted") && account.metadata().get("deleted").getAsBoolean();
     }
 
     private static Account copyAccount(Account source) {
@@ -861,16 +893,16 @@ public final class VaultRuntime implements VaultAccess {
         } finally { Arrays.fill(password, '\0'); }
     }
 
-    private static com.google.gson.JsonObject withoutDeletedFlag(Account account) {
+    private static com.google.gson.JsonObject withoutPrevious(Account account) {
         com.google.gson.JsonObject fields = account.metadata();
-        fields.remove("deleted");
         fields.remove("blockvaultPrevious");
         return fields;
     }
 
     private static com.google.gson.JsonObject pendingFields(Account previousAccount) {
         if (previousAccount == null) return null;
-        if (previousAccount.status() != Account.Status.VERIFIED) return withoutDeletedFlag(previousAccount);
+        // A pending account keeps whatever verified password it was already protecting.
+        if (previousAccount.status() != Account.Status.VERIFIED) return previousAccount.metadata();
         char[] password = previousAccount.password();
         try {
             com.google.gson.JsonObject previous = new com.google.gson.JsonObject();
@@ -879,7 +911,7 @@ public final class VaultRuntime implements VaultAccess {
             previous.addProperty("created", previousAccount.createdAt());
             previous.addProperty("modified", previousAccount.modifiedAt());
             previous.addProperty("used", previousAccount.lastUsedAt());
-            com.google.gson.JsonObject fields = withoutDeletedFlag(previousAccount);
+            com.google.gson.JsonObject fields = withoutPrevious(previousAccount);
             fields.add("blockvaultPrevious", previous);
             return fields;
         } finally { Arrays.fill(password, '\0'); }

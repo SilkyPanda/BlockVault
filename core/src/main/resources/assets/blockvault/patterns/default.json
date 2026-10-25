@@ -1,18 +1,57 @@
 {
   "version": 1,
   "commandNames": {
-    "login": ["login"],
-    "register": ["register", "reg"],
-    "changePassword": ["changepassword", "changepass"],
-    "unregister": ["unregister"]
+    "login": [
+      "login"
+    ],
+    "register": [
+      "register",
+      "reg"
+    ],
+    "changePassword": [
+      "changepassword",
+      "changepass"
+    ],
+    "unregister": [
+      "unregister"
+    ]
   },
   "prompt": {
-    "login": ["(?iu)/login\\b"],
-    "register": ["(?iu)/(?:register|reg)\\b"]
+    "login": [
+      "(?iu)/login\\b",
+      "(?iu)/(?:l|log)\\s+<"
+    ],
+    "register": [
+      "(?iu)/(?:register|reg)\\b"
+    ]
   },
   "result": {
-    "success": ["(?iu)(successful(?:ly)?\\s+(?:log(?:ged)?\\s*in|login|registered)|logged\\s+in\\s+successfully|you(?:'| a)re\\s+now\\s+logged\\s+in|login\\s+successful|registration\\s+successful|successfully\\s+registered)", "(?iu)(sesi[oó]n\\s+iniciada|inicio\\s+de\\s+sesi[oó]n\\s+exitoso|registrado\\s+con\\s+[eé]xito|login\\s+realizado|registrado\\s+com\\s+sucesso)", "(?iu)(успешная\\s+(?:авторизация|регистрация)|вы\\s+успешно\\s+вошли)", "(?iu)(anmeldung\\s+erfolgreich|erfolgreich\\s+(?:angemeldet|registriert)|connexion\\s+réussie|inscription\\s+réussie|başarıyla\\s+(?:giriş|kaydol)|zalogowano\\s+pomyślnie|rejestracja\\s+(?:zakończona|pomyślna)|登录成功|注册成功)"],
-    "failure": ["(?iu)(wrong|incorrect|invalid)\\s+password|password\\s+(?:is\\s+)?(?:wrong|incorrect)", "(?iu)(?:registration|register(?:ing)?|account creation)\\s+(?:has\\s+)?(?:failed|unsuccessful|error)", "(?iu)(contraseña\\s+incorrecta|senha\\s+incorreta|mot\\s+de\\s+passe\\s+incorrect|falsches\\s+passwort|неверный\\s+пароль|falsches\\s+passwort|mot\\s+de\\s+passe\\s+incorrect|yanlış\\s+şifre|nieprawidłowe\\s+hasło|密码错误)"],
-    "passwordRules": ["(?iu)(?:password|passphrase)\\s+(?:is\\s+)?(?:too\\s+(?:short|long)|must\\s+be\\s+(?:at\\s+least|no\\s+more\\s+than)|contains?\\s+(?:illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+characters)|(?:too\\s+(?:short|long)|illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+(?:password|passphrase|characters?)", "(?iu)\\bpassword\\s+too\\s+(?:short|long)\\b", "(?iu)\\bpassword\\b.*\\b(?:unallowed|disallowed)\\s+characters?\\b"]
+    "success": [
+      "(?iu)(successful(?:ly)?\\s+(?:log(?:ged)?\\s*in|login|registered)|logged\\s+in\\s+successfully|you(?:'| a)re\\s+now\\s+logged\\s+in|login\\s+successful|registration\\s+successful|successfully\\s+registered)",
+      "(?iu)(sesi[oó]n\\s+iniciada|inicio\\s+de\\s+sesi[oó]n\\s+exitoso|registrado\\s+con\\s+[eé]xito|login\\s+realizado|registrado\\s+com\\s+sucesso)",
+      "(?iu)(успешная\\s+(?:авторизация|регистрация)|вы\\s+успешно\\s+вошли)",
+      "(?iu)(anmeldung\\s+erfolgreich|erfolgreich\\s+(?:angemeldet|registriert)|connexion\\s+réussie|inscription\\s+réussie|başarıyla\\s+(?:giriş|kaydol)|zalogowano\\s+pomyślnie|rejestracja\\s+(?:zakończona|pomyślna)|登录成功|注册成功)",
+      "(?iu)password\\s+(?:has\\s+been\\s+|was\\s+)?(?:successfully\\s+)?(?:changed|updated)",
+      "(?iu)(?:changed|updated)\\s+(?:your\\s+)?password\\s+successfully|successfully\\s+(?:changed|updated)\\s+(?:your\\s+)?password",
+      "(?iu)successfully\\s+unregistered|unregistered\\s+successfully|account\\s+(?:has\\s+been\\s+|was\\s+)?(?:successfully\\s+)?(?:unregistered|deleted|removed)"
+    ],
+    "failure": [
+      "(?iu)(wrong|incorrect|invalid)\\s+password|password\\s+(?:is\\s+)?(?:wrong|incorrect)",
+      "(?iu)(?:registration|register(?:ing)?|account creation)\\s+(?:has\\s+)?(?:failed|unsuccessful|error)",
+      "(?iu)(contraseña\\s+incorrecta|senha\\s+incorreta|mot\\s+de\\s+passe\\s+incorrect|falsches\\s+passwort|неверный\\s+пароль|yanlış\\s+şifre|nieprawidłowe\\s+hasło|密码错误)"
+    ],
+    "passwordRules": [
+      "(?iu)(?:password|passphrase)\\s+(?:is\\s+)?too\\s+(?:short|long)",
+      "(?iu)(?:password|passphrase)\\s+must\\s+be\\s+(?:at\\s+least|no\\s+more\\s+than)",
+      "(?iu)(?:password|passphrase)\\s+contains?\\s+(?:illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+characters",
+      "(?iu)(?:too\\s+(?:short|long)|illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+(?:password|passphrase|characters?)",
+      "(?iu)\\bpassword\\s+too\\s+(?:short|long)\\b",
+      "(?iu)\\bpassword\\b.*\\b(?:unallowed|disallowed)\\s+characters?\\b",
+      "(?iu)\\b(?:maximum|minimum)\\s+of\\s+\\d+\\s+characters?",
+      "(?iu)\\bonly\\s+(?:alphanumeric|letters)\\b",
+      "(?iu)\\b(?:password|passphrase)\\b.*\\bbetween\\s+\\d+\\s+and\\s+\\d+",
+      "(?iu)\\bcontrase[ñn]a\\s+(?:demasiado\\s+)?(?:corta|larga|inv[aá]lida)",
+      "(?iu)\\bsenha\\s+(?:muito\\s+)?(?:curta|longa|inv[aá]lida)"
+    ]
   }
 }

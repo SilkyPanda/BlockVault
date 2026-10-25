@@ -93,4 +93,9 @@ final class VaultTransferScreen extends Screen {
         if (passwordBox != null) passwordBox.setValue("");
         super.onClose();
     }
+
+    @Override public void removed() {
+        if (passwordBox != null) passwordBox.setValue("");
+        super.removed();
+    }
 }

@@ -2,7 +2,6 @@ package io.github.silkypanda.blockvault.mixin;
 
 import io.github.silkypanda.blockvault.Keybinds;
 import net.minecraft.client.Minecraft;
-import io.github.silkypanda.blockvault.VaultRuntime;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.input.KeyEvent;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,7 +19,6 @@ public abstract class KeyboardHandlerMixin {
         if (action == GLFW_PRESS_ACTION) {
             net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().gui.screen();
             if (screen == null) Keybinds.onKeyPress(event);
-            else VaultRuntime.activity();
         }
     }
 }

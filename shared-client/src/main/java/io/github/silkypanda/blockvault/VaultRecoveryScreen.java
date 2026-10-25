@@ -44,7 +44,6 @@ final class VaultRecoveryScreen extends Screen {
         for (int i = 0; i < visible.size(); i++) {
             BackupSummary summary = visible.get(i);
             Button button = Button.builder(Component.literal(backupLabel(summary)), ignored -> {
-                        VaultRuntime.activity();
                         if (recoveryMode) net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
                                 new VaultBackupRecoveryScreen(summary, this));
                         else inspect(summary);
@@ -54,19 +53,16 @@ final class VaultRecoveryScreen extends Screen {
         }
         int controlsY = Math.min(height - 48, firstRowY + pageSize * 25 + 3);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.previous"), button -> {
-            VaultRuntime.activity();
             page = Math.max(0, page - 1);
             rebuildWidgets();
         }).bounds(center - 150, controlsY, 92, 20).build()).active = page > 0;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.next"), button -> {
-            VaultRuntime.activity();
             page = Math.min(totalPages() - 1, page + 1);
             rebuildWidgets();
         }).bounds(center + 58, controlsY, 92, 20).build()).active = page < totalPages() - 1;
         if (!recoveryMode) addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.manual.create"), button -> createManual())
                 .bounds(center - 150, height - 30, 148, 20).build()).active = !busy;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> {
-                VaultRuntime.activity();
                 net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
             })
                 .bounds(center + 2, height - 30, 148, 20).build());

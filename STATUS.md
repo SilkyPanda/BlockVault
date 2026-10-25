@@ -10,7 +10,7 @@ Updated: 2026-10-24
 - M3 — DONE (owner-reported build): Fabric and NeoForge hooks, mixins, background work, and vault access. Current removal of command-tree handling is not CI-verified.
 - M4 — DONE (owner-reported build): credential cards, vault list/editor, settings, and policies. Current prompt suppression, search focus, reauthentication removal, and recovery UI changes are not CI-verified or game-tested.
 - M5 — DONE (owner-reported build): master-password vault, trusted-device option, and password-change screen. Current 8-character minimum, same-password rejection, and backup re-encryption are not CI-verified.
-- M6 — PARTIAL: import/export, streamer mode, auto-lock, backups, inspection/restore, and regression coverage exist. Current review fixes are pending CI and in-game checks.
+- M6 — PARTIAL: import/export, streamer mode, trash, backups, inspection/restore, and regression coverage exist. Current review fixes are pending CI and in-game checks.
 
 ## Review round 2 work in this workspace
 
@@ -22,7 +22,7 @@ Implemented but not yet verified by CI:
 - Added damaged/missing-main-vault recovery using the password that encrypted the selected backup; separated ordinary file I/O errors from corruption.
 - Re-encrypt all automatic and manual backups on master-password change; enforce a minimum of 8 characters and reject reusing the current password.
 - Remove password reauthentication from editing and reveal flows after the vault is unlocked; update documentation to state this access model.
-- Let Trust silently unlock after inactivity auto-lock during the same session, while auto-lock closes sensitive screens; manual Lock now remains locked pending password entry.
+- Auto-lock was removed. Manual Lock now wipes the key and stays locked until the next password entry.
 - Registration Cancel suppresses the matching prompt until disconnect. Never save here is available on registration and remains a per-server preference.
 - Malformed user pattern structures and regexes are skipped while built-in detection stays active; each custom regex is limited to 256 characters.
 - Keep search focus by updating visible row controls without rebuilding the screen on each keystroke.

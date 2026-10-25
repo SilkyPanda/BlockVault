@@ -45,7 +45,6 @@ PASSWORD_RULE	Only alphanumeric characters are allowed
 PASSWORD_RULE	Contraseña demasiado corta
 PASSWORD_RULE	Senha inválida
 NONE	Welcome to the server!
-NONE	Steve: type /login if you forgot
 NONE	The password plugin will be updated tomorrow
 NONE	A player joined the game
 NONE	Have fun and respect the rules

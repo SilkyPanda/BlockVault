@@ -34,18 +34,18 @@ final class VaultCredentialScreen extends Screen {
                 ? FormattedCharSequence.forward(value, Style.EMPTY)
                 : FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(passwordBox);
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.save"), button -> { VaultRuntime.activity(); save(); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.save"), button -> { save(); })
                 .bounds(x, top + 52, 94, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.generate"), button -> { VaultRuntime.activity(); generate(); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.generate"), button -> { generate(); })
                 .bounds(x + 103, top + 52, 94, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.card.reveal"), button -> { VaultRuntime.activity(); showPassword = !showPassword; })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.card.reveal"), button -> { showPassword = !showPassword; })
                 .bounds(x + 206, top + 52, 94, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.activity(); VaultRuntime.copyPassword(row); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.copyPassword(row); })
                 .bounds(x, top + 78, 94, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete"), button ->
                         Minecraft.getInstance().setScreenAndShow(new VaultDeleteScreen(row, this)))
                 .bounds(x + 103, top + 78, 94, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { VaultRuntime.activity(); VaultRuntime.openVaultScreen(); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { VaultRuntime.openVaultScreen(); })
                 .bounds(x + 206, top + 78, 94, 20).build());
         setInitialFocus(passwordBox);
     }
@@ -67,19 +67,11 @@ final class VaultCredentialScreen extends Screen {
     }
 
     private void generate() {
-        char[] generated = PasswordGenerator.generate(policy(BlockVaultConfig.current().generator()));
+        char[] generated = PasswordGenerator.generate(BlockVaultConfig.generatorPolicy(BlockVaultConfig.current().generator()));
         try { passwordBox.setValue(new String(generated)); }
         finally { Arrays.fill(generated, '\0'); }
     }
 
-    private static PasswordGenerator.Policy policy(String preset) {
-        return switch (preset) {
-            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
-            case "max" -> PasswordGenerator.Policy.max();
-            case "memorable" -> PasswordGenerator.Policy.memorable();
-            default -> PasswordGenerator.Policy.defaults();
-        };
-    }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
@@ -99,5 +91,11 @@ final class VaultCredentialScreen extends Screen {
     public void onClose() {
         if (passwordBox != null) passwordBox.setValue("");
         super.onClose();
+    }
+
+    @Override
+    public void removed() {
+        if (passwordBox != null) passwordBox.setValue("");
+        super.removed();
     }
 }

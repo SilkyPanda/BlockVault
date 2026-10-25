@@ -183,31 +183,60 @@ final class LoginSessionTest {
     }
 
     @Test
-    void registerFailureDeletesPendingAndRuleComplaintOffersOneAdjustedRetry() throws Exception {
+    void ruleComplaintOffersOneAdjustedRetryAndNeverDeletesThePendingCredential() throws Exception {
         FakeEnv env = new FakeEnv();
         LoginSession session = session(env, new FakeScheduler());
         session.onJoin("example.org:25565", "Alex");
         session.onSystemMessage("Please register using /register <password> <confirmPassword>");
         session.confirmRegistration("first-secret".toCharArray());
         session.onSystemMessage("Password too short, at least 24 characters");
-        assertEquals(1, env.deleted);
+        assertEquals(0, env.deleted);
         assertEquals(CardVariant.REGISTER, env.card.variant());
+        assertEquals(24, env.card.policy().length());
         session.confirmRegistration(env.card.password());
         session.onSystemMessage("Password too short, at least 24 characters");
         assertEquals(SessionState.REJECTED, session.state());
-        assertEquals(2, env.deleted);
+        assertEquals(0, env.deleted);
     }
 
     @Test
-    void registerFailureDeletesPendingCredential() throws Exception {
+    void registerFailureKeepsThePendingCredentialInCaseTheServerAcceptedIt() throws Exception {
         FakeEnv env = new FakeEnv();
         LoginSession session = session(env, new FakeScheduler());
         session.onJoin("example.org:25565", "Alex");
         session.onSystemMessage("Please register using /register <password>");
         session.confirmRegistration("not-accepted".toCharArray());
         session.onSystemMessage("Registration failed!");
-        assertEquals(1, env.deleted);
+        assertEquals(0, env.deleted);
         assertEquals(SessionState.REJECTED, session.state());
+    }
+
+    @Test
+    void ruleComplaintWithoutNumbersFallsBackToAConservativePasswordInsteadOfGivingUp() throws Exception {
+        FakeEnv env = new FakeEnv();
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please register using /register <password> <confirmPassword>");
+        session.confirmRegistration("first-secret".toCharArray());
+        session.onSystemMessage("Your password is too short or too long!");
+        assertEquals(CardVariant.REGISTER, env.card.variant());
+        assertEquals(12, env.card.password().length);
+        assertEquals(false, env.card.policy().symbols());
+    }
+
+    @Test
+    void cancellingTheMasterPasswordPromptStopsFurtherPromptsForThisConnection() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.cancelUnlock = true;
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        session.onSystemMessage("Please login with /login <password>");
+        assertEquals(SessionState.UNKNOWN, session.state());
+        int cancelsAfterFirst = env.cancels;
+        clock.advance(10_000);
+        session.onSystemMessage("Please login with /login <password>");
+        assertEquals(cancelsAfterFirst, env.cancels, "the owner already declined; do not ask again");
     }
 
     @Test
@@ -287,7 +316,13 @@ final class LoginSessionTest {
         @Override public void toast(String translationKey) { }
         @Override public void chatMessage(String translationKey) { chatMessages.add(translationKey); }
         @Override public VaultAccess vault() { return this; }
+        private Runnable cancelAction;
+        private boolean cancelUnlock;
+        private int cancels;
         @Override public void find(String host, String username, Consumer<SavedCredential> result) { result.accept(credential); }
+        @Override public void find(String host, String username, Consumer<SavedCredential> result, Runnable cancelled) {
+            if (cancelUnlock) { cancels++; cancelAction = cancelled; cancelled.run(); } else result.accept(credential);
+        }
         @Override public void savePending(String host, String username, char[] password, Consumer<Boolean> saved) {
             order.add("pending"); saved.accept(true);
         }

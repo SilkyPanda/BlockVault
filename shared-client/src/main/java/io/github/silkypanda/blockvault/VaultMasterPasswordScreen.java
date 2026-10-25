@@ -39,7 +39,6 @@ final class VaultMasterPasswordScreen extends Screen {
         EditBox box = new EditBox(font, x, y, 240, 20, Component.translatable(key));
         box.setHint(Component.translatable(key));
         box.setMaxLength(256);
-        box.setResponder(ignored -> VaultRuntime.activity());
         box.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         return box;
     }
@@ -82,4 +81,5 @@ final class VaultMasterPasswordScreen extends Screen {
 
     @Override public boolean isPauseScreen() { return false; }
     @Override public void onClose() { clearFields(); super.onClose(); }
+    @Override public void removed() { clearFields(); super.removed(); }
 }

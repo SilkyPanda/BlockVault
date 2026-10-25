@@ -45,8 +45,6 @@ final class VaultSettingsScreen extends OptionsSubScreen {
         addSettingButton("blockvault.settings.autofill", settings.autofill(), current -> current.withAutofill(!current.autofill()));
         addSettingButton("blockvault.settings.delay", settings.autofillDelayMillis(),
                 current -> current.withDelay(next(current.autofillDelayMillis(), List.of(200, 400, 800, 1500, 3000))));
-        addSettingButton("blockvault.settings.auto_lock", settings.autoLockMinutes(),
-                current -> current.withAutoLock(next(current.autoLockMinutes(), List.of(0, 5, 15, 30, 60))));
         addSettingButton("blockvault.settings.duration", settings.cardDurationSeconds(),
                 current -> current.withDuration(next(current.cardDurationSeconds(), List.of(5, 10, 15, 30))));
         addSettingButton("blockvault.settings.position", settings.cardPosition(),
@@ -95,7 +93,6 @@ final class VaultSettingsScreen extends OptionsSubScreen {
                     if (key.equals("blockvault.settings.unlock_policy")) {
                         VaultRuntime.setTrustedDevice(settings.trustDevice());
                     }
-                    VaultRuntime.activity();
                     pressed.setMessage(label(key, settingValue(key)));
                 } else VaultRuntime.showToast("blockvault.vault.error");
             });
@@ -109,7 +106,6 @@ final class VaultSettingsScreen extends OptionsSubScreen {
         return switch (key) {
             case "blockvault.settings.autofill" -> settings.autofill();
             case "blockvault.settings.delay" -> settings.autofillDelayMillis();
-            case "blockvault.settings.auto_lock" -> settings.autoLockMinutes();
             case "blockvault.settings.duration" -> settings.cardDurationSeconds();
             case "blockvault.settings.position" -> settings.cardPosition();
             case "blockvault.settings.streamer" -> settings.streamerMode();

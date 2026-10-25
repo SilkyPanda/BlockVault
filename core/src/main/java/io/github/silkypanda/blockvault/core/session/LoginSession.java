@@ -16,6 +16,11 @@ import java.util.regex.Pattern;
 public final class LoginSession {
     private static final long DEBOUNCE_MILLIS = 1500;
     private static final long RESULT_TIMEOUT_MILLIS = 5000;
+    /** Server text is untrusted and unbounded; only this many characters are ever matched. */
+    private static final int MAX_MESSAGE_CHARS = 2048;
+    /** Used when a server rejects a password but its message gives no usable numbers. */
+    private static final PasswordGenerator.Policy FALLBACK_POLICY =
+            new PasswordGenerator.Policy(12, true, true, true, false, "", false);
     private static final Pattern COMMAND = Pattern.compile("(?iu)^\\s*/?([\\p{L}0-9_]+)(?:\\s+(.*))?$");
 
     private enum Action { NONE, AUTOFILL, REGISTER, MANUAL, UNREGISTER }
@@ -33,6 +38,7 @@ public final class LoginSession {
     private String username;
     private CommandTemplate template = CommandTemplate.builtins().get("authme");
     private char[] pending;
+    private char[] autofillStaged;
     private Action action = Action.NONE;
     private long lastPromptAt = Long.MIN_VALUE;
     private PromptKind lastPromptKind;
@@ -61,8 +67,9 @@ public final class LoginSession {
     }
 
     /** Processes a plain system message only; callers must exclude signed player chat. */
-    public void onSystemMessage(String plain) {
-        if (host == null || state == SessionState.CONFIRMED) return;
+    public void onSystemMessage(String message) {
+        if (host == null || state == SessionState.CONFIRMED || message == null) return;
+        String plain = message.length() > MAX_MESSAGE_CHARS ? message.substring(0, MAX_MESSAGE_CHARS) : message;
         java.util.Set<PromptKind> matches = prompts.matchingPrompts(plain);
         if (matches.size() == 1) handlePrompt(matches.iterator().next(), plain);
         else if (matches.contains(PromptKind.LOGIN) && matches.contains(PromptKind.REGISTER)) {
@@ -75,7 +82,7 @@ public final class LoginSession {
                 PromptKind selected = existing != null && existing.status() == Account.Status.VERIFIED
                         ? PromptKind.LOGIN : PromptKind.REGISTER;
                 handlePrompt(selected, plain);
-            }));
+            }), () -> safely(() -> abandonPrompt(token)));
         }
         ResultKind result = results.classify(plain);
         if (result != ResultKind.NONE) onResult(result, plain);
@@ -264,7 +271,7 @@ public final class LoginSession {
                 } else {
                     char[] generated = PasswordGenerator.generate(policy);
                     try { env.showSavePrompt(new PromptModel(account == null ? CardVariant.REGISTER : CardVariant.UPDATE,
-                            host, username, generated, template.register().contains("{email}"))); }
+                            host, username, generated, template.register().contains("{email}"), policy)); }
                     finally { Arrays.fill(generated, '\0'); }
                 }
                 return;
@@ -275,15 +282,25 @@ public final class LoginSession {
             try { replacePending(storedPassword); }
             finally { Arrays.fill(storedPassword, '\0'); }
             action = Action.AUTOFILL;
-            char[] forSend = pending.clone();
+            wipeStaged();
+            autofillStaged = pending.clone();
             timer = scheduler.schedule(autofillDelayMillis, () -> {
+                char[] forSend = autofillStaged;
+                autofillStaged = null;
                 try {
-                    if (token != generation || revision != promptRevision || state != SessionState.PROMPTED || attempted) return;
+                    if (forSend == null || token != generation || revision != promptRevision
+                            || state != SessionState.PROMPTED || attempted) return;
                     replacePending(forSend);
                     send(false, null, token);
-                } finally { Arrays.fill(forSend, '\0'); }
+                } finally { if (forSend != null) Arrays.fill(forSend, '\0'); }
             });
-        }));
+        }), () -> safely(() -> { if (revision == promptRevision) abandonPrompt(token); }));
+    }
+
+    /** The owner cancelled the master-password unlock: stop prompting for this kind until disconnect. */
+    private void abandonPrompt(int token) {
+        if (token != generation || state != SessionState.PROMPTED) return;
+        dismissPrompt();
     }
 
     private void send(boolean registration, String email, int token) {
@@ -359,7 +376,8 @@ public final class LoginSession {
         } else if (result == ResultKind.FAILURE && state == SessionState.SENT) {
             cancelTimer();
             if (action == Action.REGISTER) {
-                env.vault().delete(host, username);
+                // The pending credential is kept: the server may have accepted it and a misread message must
+                // never cost the owner the only copy of a generated password.
                 attempted = false;
                 registerRetry = false;
                 dismissedPromptKind = PromptKind.REGISTER;
@@ -372,30 +390,22 @@ public final class LoginSession {
             action = Action.NONE;
         } else if (result == ResultKind.PASSWORD_RULE && state == SessionState.SENT && action == Action.REGISTER) {
             cancelTimer();
-            env.vault().delete(host, username);
             if (!registerRetry) {
+                registerRetry = true;
                 var hint = results.parseRuleHint(plain);
-                if (hint.isPresent()) {
-                    registerRetry = true;
-                    try { policy = policy.adjustFor(hint.orElseThrow()); }
-                    catch (IllegalArgumentException unsupportedRule) {
-                        attempted = false;
-                        registerRetry = false;
-                        wipePending();
-                        state = SessionState.UNKNOWN;
-                        action = Action.NONE;
-                        env.toast("blockvault.toast.rule_unsupported");
-                        return;
-                    }
-                    wipePending();
-                    action = Action.NONE;
-                    state = SessionState.PROMPTED;
-                    char[] generated = PasswordGenerator.generate(policy);
-                    try { env.showSavePrompt(new PromptModel(CardVariant.REGISTER, host, username, generated,
-                            template.register().contains("{email}"))); }
-                    finally { Arrays.fill(generated, '\0'); }
-                    return;
+                try { policy = hint.isPresent() ? policy.adjustFor(hint.orElseThrow()) : FALLBACK_POLICY; }
+                catch (IllegalArgumentException unsupportedRule) {
+                    // The configured preset cannot satisfy this rule (for example memorable words vs. alphanumeric).
+                    policy = FALLBACK_POLICY;
                 }
+                wipePending();
+                action = Action.NONE;
+                state = SessionState.PROMPTED;
+                char[] generated = PasswordGenerator.generate(policy);
+                try { env.showSavePrompt(new PromptModel(CardVariant.REGISTER, host, username, generated,
+                        template.register().contains("{email}"), policy)); }
+                finally { Arrays.fill(generated, '\0'); }
+                return;
             }
             wipePending();
             attempted = false;
@@ -418,6 +428,12 @@ public final class LoginSession {
     private void cancelTimer() {
         if (timer != null) timer.cancel();
         timer = null;
+        wipeStaged();
+    }
+
+    private void wipeStaged() {
+        if (autofillStaged != null) Arrays.fill(autofillStaged, '\0');
+        autofillStaged = null;
     }
 
     private void wipePending() {

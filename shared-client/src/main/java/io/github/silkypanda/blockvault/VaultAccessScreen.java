@@ -14,6 +14,7 @@ final class VaultAccessScreen extends Screen {
     private EditBox password;
     private EditBox confirmation;
     private boolean failed;
+    private boolean busy;
     private String failureKey;
 
     VaultAccessScreen(boolean create) {
@@ -48,6 +49,7 @@ final class VaultAccessScreen extends Screen {
     }
 
     private void submit() {
+        if (busy) return;
         failed = false;
         failureKey = null;
         String entered = password.getValue();
@@ -68,6 +70,7 @@ final class VaultAccessScreen extends Screen {
         char[] secret = entered.toCharArray();
         password.setValue("");
         if (confirmation != null) confirmation.setValue("");
+        busy = true;
         VaultRuntime.openWithMasterPassword(secret, create);
     }
 
@@ -91,7 +94,16 @@ final class VaultAccessScreen extends Screen {
         super.onClose();
     }
 
+    /** Called when another screen replaces this one without the owner cancelling (kick screen, credential card). */
+    @Override
+    public void removed() {
+        clearFields();
+        VaultRuntime.accessScreenReplaced();
+        super.removed();
+    }
+
     void showFailure(String translationKey) {
+        busy = false;
         failed = true;
         failureKey = translationKey;
         if (password != null) password.setValue("");

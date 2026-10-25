@@ -136,14 +136,18 @@ public final class PasswordGenerator {
     }
 
     private static List<String> loadWordList() {
-        List<String> words = new ArrayList<>(1024);
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(
-                PasswordGenerator.class.getResourceAsStream("/assets/blockvault/password-words.txt"),
+        java.io.InputStream resource = PasswordGenerator.class.getResourceAsStream("/assets/blockvault/password-words.txt");
+        if (resource == null) throw new IllegalStateException("Memorable word list is unavailable");
+        java.util.LinkedHashSet<String> words = new java.util.LinkedHashSet<>();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(resource,
                 java.nio.charset.StandardCharsets.UTF_8))) {
             String word;
-            while ((word = reader.readLine()) != null) words.add(word);
-        } catch (java.io.IOException | NullPointerException e) {
-            throw new IllegalStateException("Memorable word list is unavailable");
+            while ((word = reader.readLine()) != null) {
+                String trimmed = word.trim();
+                if (!trimmed.isEmpty()) words.add(trimmed);
+            }
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Memorable word list is unavailable", e);
         }
         if (words.size() != 1024) throw new IllegalStateException("Memorable word list is invalid");
         return List.copyOf(words);

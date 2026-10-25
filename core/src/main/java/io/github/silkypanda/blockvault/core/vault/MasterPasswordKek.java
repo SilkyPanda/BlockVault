@@ -17,7 +17,7 @@ public final class MasterPasswordKek {
         if (password == null || salt == null || salt.length != 16 || iterations <= 0) {
             throw new IllegalArgumentException("Invalid master-password key parameters");
         }
-        this.password = password.clone();
+        this.password = normalize(password);
         this.salt = salt.clone();
         this.iterations = iterations;
         this.aad = aad.clone();
@@ -70,5 +70,12 @@ public final class MasterPasswordKek {
     @Override
     public String toString() {
         return "MasterPasswordKek[masked]";
+    }
+
+    /** Normalises to Unicode NFC so the same typed password unlocks on every operating system and keyboard. */
+    private static char[] normalize(char[] value) {
+        java.nio.CharBuffer view = java.nio.CharBuffer.wrap(value);
+        if (java.text.Normalizer.isNormalized(view, java.text.Normalizer.Form.NFC)) return value.clone();
+        return java.text.Normalizer.normalize(view, java.text.Normalizer.Form.NFC).toCharArray();
     }
 }

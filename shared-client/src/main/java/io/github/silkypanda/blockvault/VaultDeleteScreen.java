@@ -5,7 +5,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Explicit second step before a credential is tombstoned. */
+/** Explicit second step before a credential or server is moved to the trash. */
 final class VaultDeleteScreen extends Screen {
     private final VaultRow row;
     private final Screen parent;
@@ -26,6 +26,12 @@ final class VaultDeleteScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("blockvault.card.cancel"), button ->
                         net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent))
                 .bounds(x + 116, height / 2 + 18, 104, 20).build());
+        if (!row.serverOnly()) {
+            addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete.server"), button -> {
+                VaultRuntime.deleteServer(row);
+                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+            }).bounds(x, height / 2 + 44, 220, 20).build());
+        }
     }
 
     @Override

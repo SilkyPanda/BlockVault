@@ -148,20 +148,13 @@ final class CredentialConfirmScreen extends Screen {
     }
 
     private void regenerate() {
-        char[] next = PasswordGenerator.generate(policy(BlockVaultConfig.current().generator()));
+        char[] next = PasswordGenerator.generate(model.policy() != null
+                ? model.policy() : BlockVaultConfig.generatorPolicy(BlockVaultConfig.current().generator()));
         wipePassword();
         password = next;
         passwordBox.setValue(new String(password));
     }
 
-    private static PasswordGenerator.Policy policy(String preset) {
-        return switch (preset) {
-            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
-            case "max" -> PasswordGenerator.Policy.max();
-            case "memorable" -> PasswordGenerator.Policy.memorable();
-            default -> PasswordGenerator.Policy.defaults();
-        };
-    }
 
     private void initRejectedButtons() {
         int pad = scaled(12);
@@ -192,7 +185,6 @@ final class CredentialConfirmScreen extends Screen {
 
     private void addButton(int x, int y, int buttonWidth, String key, Button.OnPress action) {
         addRenderableWidget(Button.builder(Component.translatable(key), pressed -> {
-            VaultRuntime.activity();
             action.onPress(pressed);
         }).bounds(x, y, buttonWidth, scaled(20)).build());
     }

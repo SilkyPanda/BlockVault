@@ -55,7 +55,7 @@ public final class Hooks {
             active.onJoin(host, minecraft.getUser().getName());
             BlockVaultConfig.load(settings -> {
                 if (session == active) active.configure(settings.autofill(), settings.autofillDelayMillis(),
-                        generatorPolicy(settings.generator()));
+                        BlockVaultConfig.generatorPolicy(settings.generator()));
             });
         } catch (Exception failure) {
             LOGGER.warn("BlockVault could not initialize login detection");
@@ -77,7 +77,7 @@ public final class Hooks {
     static void applySettings(BlockVaultConfig.Settings settings) {
         LoginSession active = session;
         if (active != null) active.configure(settings.autofill(), settings.autofillDelayMillis(),
-                generatorPolicy(settings.generator()));
+                BlockVaultConfig.generatorPolicy(settings.generator()));
     }
 
     /** Delivers plain system chat to the login detector. */
@@ -116,15 +116,4 @@ public final class Hooks {
         else minecraft.execute(send);
     }
 
-    /** Returns whether the outgoing-command hook is currently processing a BlockVault command. */
-    static boolean isSelfSent() { return Boolean.TRUE.equals(SELF_SENT.get()); }
-
-    private static PasswordGenerator.Policy generatorPolicy(String preset) {
-        return switch (preset) {
-            case "pickyServer" -> PasswordGenerator.Policy.pickyServer();
-            case "max" -> PasswordGenerator.Policy.max();
-            case "memorable" -> PasswordGenerator.Policy.memorable();
-            default -> PasswordGenerator.Policy.defaults();
-        };
-    }
 }

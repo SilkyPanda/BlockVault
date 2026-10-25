@@ -29,14 +29,11 @@ final class VaultTemplateScreen extends Screen {
         int x = width / 2 - 140;
         int y = height / 2 - 48;
         for (Map.Entry<String, String> template : LABELS) {
-            boolean selected = template.getKey().equals(row.templateId())
-                    || ("auto".equals(template.getKey()) && "authme".equals(row.templateId()))
-                    || ("authme".equals(template.getKey()) && "authme-explicit".equals(row.templateId()));
+            boolean selected = template.getKey().equals(row.templateId());
             Component label = selected
                     ? Component.translatable("blockvault.template.current", Component.translatable(template.getValue()))
                     : Component.translatable(template.getValue());
             addRenderableWidget(Button.builder(label, button -> {
-                VaultRuntime.activity();
                 VaultRuntime.updateServerTemplate(row, template.getKey());
                 net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
             }).bounds(x, y, 280, 20).build());

@@ -11,7 +11,7 @@ final class VaultJsonTest {
     void currentSchemaRoundTripPreservesCredentialAndMasksAccountString() {
         Account account = new Account("Alex", "secret".toCharArray(), Account.Status.VERIFIED, 1, 2, 3, null);
         ServerEntry server = new ServerEntry("id", "server", List.of("example.org:25565"), false, true, "authme", List.of(account));
-        Vault result = VaultJson.read(VaultJson.write(new Vault(1, List.of(server))));
+        Vault result = VaultJson.read(VaultJson.write(new Vault(Vault.VERSION, List.of(server))));
         assertTrue(VaultJson.write(result).length > 0);
         assertEquals("secret", new String(result.servers().getFirst().accounts().getFirst().password()));
         assertEquals("example.org:25565", result.servers().getFirst().hosts().getFirst());

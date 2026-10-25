@@ -24,6 +24,8 @@ final class VaultBackupDetailScreen extends Screen {
     private final Screen parent;
     private final List<Entry> entries = new ArrayList<>();
     private final List<char[]> revealed = new ArrayList<>();
+    /** Display text for revealed passwords, built once on reveal instead of once per rendered frame. */
+    private final List<String> revealedText = new ArrayList<>();
     private int page;
     private boolean confirmRestore;
     private boolean busy;
@@ -38,6 +40,7 @@ final class VaultBackupDetailScreen extends Screen {
                 if (account.metadata().has("deleted") && account.metadata().get("deleted").getAsBoolean()) continue;
                 entries.add(new Entry(server, account));
                 revealed.add(null);
+                revealedText.add(null);
             }
         }
     }
@@ -60,24 +63,21 @@ final class VaultBackupDetailScreen extends Screen {
         }
         int controlsY = height - 31;
         Button previous = Button.builder(Component.translatable("blockvault.backup.previous"), button -> {
-            VaultRuntime.activity();
             clearRevealed(); page--; rebuildWidgets();
         }).bounds(center - 205, controlsY, 92, 20).build();
         previous.active = page > 0 && !busy;
         addRenderableWidget(previous);
         Button next = Button.builder(Component.translatable("blockvault.backup.next"), button -> {
-            VaultRuntime.activity();
             clearRevealed(); page++; rebuildWidgets();
         }).bounds(center - 105, controlsY, 92, 20).build();
         next.active = page < totalPages - 1 && !busy;
         addRenderableWidget(next);
         addRenderableWidget(Button.builder(Component.translatable(confirmRestore
                         ? "blockvault.backup.confirm.restore" : "blockvault.backup.restore.selected"), button -> {
-                    VaultRuntime.activity(); restore();
+                    restore();
                 })
                 .bounds(center + 1, controlsY, 125, 20).build()).active = !busy;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> {
-                VaultRuntime.activity();
                 net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
             })
                 .bounds(center + 132, controlsY, 92, 20).build());
@@ -86,15 +86,15 @@ final class VaultBackupDetailScreen extends Screen {
     private int totalPages() { return Math.max(1, (entries.size() + PAGE_SIZE - 1) / PAGE_SIZE); }
 
     private void togglePassword(int index, Button button) {
-        VaultRuntime.activity();
         if (revealed.get(index) == null) {
             char[] password = entries.get(index).account().password();
-            try { revealed.set(index, password.clone()); }
+            try { revealed.set(index, password.clone()); revealedText.set(index, new String(password)); }
             finally { java.util.Arrays.fill(password, '\0'); }
             button.setMessage(Component.translatable("blockvault.backup.password.hide"));
         } else {
             java.util.Arrays.fill(revealed.get(index), '\0');
             revealed.set(index, null);
+            revealedText.set(index, null);
             button.setMessage(Component.translatable("blockvault.backup.password.reveal"));
         }
     }
@@ -138,8 +138,8 @@ final class VaultBackupDetailScreen extends Screen {
                     ? Component.translatable("blockvault.settings.streamer.hidden").getString() : entry.account().username();
             graphics.text(font, Component.literal(clip(server + " · " + username, width / 2 - 20)),
                     10, y + 5, 0xffffffff);
-            char[] password = revealed.get(index);
-            if (password != null) graphics.text(font, Component.literal(clip(new String(password), Math.max(1, width / 2 - 125))), width / 2 + 5,
+            String password = revealedText.get(index);
+            if (password != null) graphics.text(font, Component.literal(clip(password, Math.max(1, width / 2 - 125))), width / 2 + 5,
                     y + 5, 0xffd9d3e5);
         }
         graphics.centeredText(font, Component.translatable("blockvault.backup.page", page + 1, totalPages()),
@@ -158,10 +158,14 @@ final class VaultBackupDetailScreen extends Screen {
             char[] value = revealed.get(i);
             if (value != null) java.util.Arrays.fill(value, '\0');
             revealed.set(i, null);
+            revealedText.set(i, null);
         }
     }
 
-    private void clearContents() { contents.servers().forEach(server -> server.accounts().forEach(Account::clearPassword)); }
+    private void clearContents() {
+        contents.servers().forEach(server -> server.accounts().forEach(Account::clearPassword));
+        contents.trash().forEach(entry -> entry.server().accounts().forEach(Account::clearPassword));
+    }
 
     @Override public void removed() { clearRevealed(); clearContents(); super.removed(); }
     @Override public boolean isPauseScreen() { return false; }

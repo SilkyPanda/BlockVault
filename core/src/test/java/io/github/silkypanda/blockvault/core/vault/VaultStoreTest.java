@@ -55,7 +55,7 @@ final class VaultStoreTest {
         first.create("correct horse".toCharArray());
         Account verified = new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
                 1, 10, 2, null);
-        Vault initial = new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"),
+        Vault initial = new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"),
                 false, true, "auto", List.of(verified))));
         first.save(initial);
         first.reload();
@@ -64,19 +64,19 @@ final class VaultStoreTest {
 
         Account pending = new Account("Alex", "new-pass".toCharArray(), Account.Status.PENDING,
                 1, 20, 2, null);
-        first.saveExplicit(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"),
+        first.saveExplicit(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"),
                 false, true, "auto", List.of(pending)))));
         Account rollback = new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
                 1, 10, 2, null);
         first.reload();
-        first.saveExplicit(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"),
+        first.saveExplicit(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"),
                 false, true, "auto", List.of(rollback)))));
         assertEquals("old-pass", new String(first.vault().servers().getFirst().accounts().getFirst().password()));
 
         first.reload();
-        first.saveExplicit(new Vault(1, List.of()));
+        first.saveExplicit(new Vault(Vault.VERSION, List.of()));
         assertTrue(first.vault().servers().isEmpty());
-        assertThrows(java.io.IOException.class, () -> stale.saveExplicit(new Vault(1, List.of())));
+        assertThrows(java.io.IOException.class, () -> stale.saveExplicit(new Vault(Vault.VERSION, List.of())));
     }
 
     @Test
@@ -86,7 +86,7 @@ final class VaultStoreTest {
         ServerEntry before = new ServerEntry("one", "one", List.of("one.example"), false, true,
                 "auto", List.of(new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
                 1, 1, 1, null)));
-        store.save(new Vault(1, List.of(before)));
+        store.save(new Vault(Vault.VERSION, List.of(before)));
         Path backup1 = directory.resolve("vault.bv.bak1");
         assertTrue(Files.notExists(backup1));
         store.save(store.vault());
@@ -101,7 +101,7 @@ final class VaultStoreTest {
         assertTrue(store.backups().stream().anyMatch(backup -> !backup.manual() && backup.slot() == 2));
         ServerEntry after = new ServerEntry("two", "two", List.of("two.example"), false, true,
                 "auto", List.of());
-        store.save(new Vault(1, List.of(after)));
+        store.save(new Vault(Vault.VERSION, List.of(after)));
         BackupSummary firstSnapshot = store.backups().stream()
                 .filter(backup -> !backup.manual() && backup.slot() == 1).findFirst().orElseThrow();
         store.restoreBackup(firstSnapshot);
@@ -127,7 +127,7 @@ final class VaultStoreTest {
                 10, 20, 30, null);
         ServerEntry server = new ServerEntry("id", "Example", List.of("example.org:25565"), false, true,
                 "auto", List.of(account));
-        store.save(new Vault(1, List.of(server)));
+        store.save(new Vault(Vault.VERSION, List.of(server)));
 
         store.createManualBackup();
         List<BackupSummary> backups = store.backups();
@@ -140,11 +140,7 @@ final class VaultStoreTest {
                 store.backups().stream().filter(BackupSummary::manual).count());
         assertTrue(Files.isRegularFile(directory.resolve("vault.bv.manual10")));
         BackupSummary selected = store.backups().stream().filter(BackupSummary::manual).findFirst().orElseThrow();
-        com.google.gson.JsonObject deleted = new com.google.gson.JsonObject();
-        deleted.addProperty("deleted", true);
-        Account tombstone = new Account("Alex", new char[0], Account.Status.VERIFIED, 10, 40, 30, deleted);
-        store.save(new Vault(1, List.of(new ServerEntry("id", "Example", List.of("example.org:25565"),
-                false, true, "auto", List.of(tombstone)))));
+        store.save(VaultTrash.trashAccount(store.vault(), "id", "Alex", 40));
         store.restoreBackup(selected);
         assertEquals("backup-secret", new String(store.vault().servers().getFirst().accounts().getFirst().password()));
     }
@@ -155,7 +151,7 @@ final class VaultStoreTest {
         store.create("correct horse".toCharArray());
         Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
                 10, 20, 30, null);
-        store.save(new Vault(1, List.of(new ServerEntry("id", "Example", List.of("example.org"), false,
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("id", "Example", List.of("example.org"), false,
                 true, "auto", List.of(account)))));
         store.createManualBackup();
         BackupSummary selected = store.backups().stream().filter(BackupSummary::manual).findFirst().orElseThrow();
@@ -174,7 +170,7 @@ final class VaultStoreTest {
         store.create("old password".toCharArray());
         Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
                 1, 1, 1, null);
-        store.save(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"), false,
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), false,
                 true, "auto", List.of(account)))));
         store.createManualBackup();
         store.changeMasterPassword("old password".toCharArray(), "new password".toCharArray());
@@ -190,12 +186,12 @@ final class VaultStoreTest {
     }
 
     @Test
-    void masterPasswordCanBeChangedWithoutChangingVaultKey() throws Exception {
+    void masterPasswordChangeRotatesTheVaultKeyAndRefreshesTheTrustFile() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("old password".toCharArray());
         Account account = new Account("Alex", "retained-secret".toCharArray(), Account.Status.VERIFIED,
                 1, 1, 1, null);
-        store.save(new Vault(1, List.of(new ServerEntry("one", "one", List.of("one.example"), false,
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), false,
                 true, "auto", List.of(account)))));
         assertThrows(WrongMasterPasswordException.class,
                 () -> store.changeMasterPassword("incorrect".toCharArray(), "new password".toCharArray()));
@@ -203,8 +199,16 @@ final class VaultStoreTest {
                 () -> store.changeMasterPassword("old password".toCharArray(), "short".toCharArray()));
         assertThrows(IllegalArgumentException.class,
                 () -> store.changeMasterPassword("old password".toCharArray(), "old password".toCharArray()));
+        store.trustThisDevice();
+        byte[] oldKeyFile = Files.readAllBytes(directory.resolve("vault.bv.trust"));
         store.changeMasterPassword("old password".toCharArray(), "new password".toCharArray());
+        assertTrue(!java.util.Arrays.equals(oldKeyFile, Files.readAllBytes(directory.resolve("vault.bv.trust"))),
+                "the vault key must change with the password");
         store.lock();
+        VaultStore viaTrust = VaultStore.open(directory);
+        viaTrust.unlockTrustedDevice();
+        assertEquals("retained-secret", new String(viaTrust.vault().servers().get(0).accounts().get(0).password()));
+        viaTrust.lock();
         VaultStore reopened = VaultStore.open(directory);
         assertThrows(WrongMasterPasswordException.class, () -> reopened.unlock("old password".toCharArray()));
         reopened.unlock("new password".toCharArray());
@@ -254,5 +258,43 @@ final class VaultStoreTest {
         store.trustThisDevice();
         store.forgetTrustedDevice();
         assertTrue(Files.notExists(directory.resolve("vault.bv.trust")));
+    }
+
+    @Test
+    void oneUnreadableBackupDoesNotStopTheOthersFromBeingReencrypted() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        store.create("old password".toCharArray());
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), false, true,
+                "auto", List.of(new Account("Alex", "s".toCharArray(), Account.Status.VERIFIED, 1, 1, 1, null))))));
+        store.createManualBackup();
+        store.createManualBackup();
+        Files.writeString(directory.resolve("vault.bv.manual1"), "not a vault");
+        assertThrows(BackupReencryptionException.class,
+                () -> store.changeMasterPassword("old password".toCharArray(), "new password".toCharArray()));
+        // The password change itself was committed, and the healthy backup was re-encrypted.
+        Path isolated = Files.createDirectory(directory.resolve("check"));
+        Files.copy(directory.resolve("vault.bv.manual2"), isolated.resolve("vault.bv"));
+        VaultStore check = VaultStore.open(isolated);
+        check.unlock("new password".toCharArray());
+    }
+
+    @Test
+    void trashSurvivesSaveAndReopenAndExpiredEntriesArePurged() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        store.create("correct horse".toCharArray());
+        long day = 24L * 60 * 60 * 1000;
+        Vault base = new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), false, true,
+                "auto", List.of(new Account("Alex", "a".toCharArray(), Account.Status.VERIFIED, 1, 1, 1, null),
+                        new Account("Sam", "b".toCharArray(), Account.Status.VERIFIED, 1, 1, 1, null)))));
+        long now = System.currentTimeMillis();
+        Vault withTrash = VaultTrash.trashAccount(VaultTrash.trashAccount(base, "one", "Alex", now - 61 * day),
+                "one", "Sam", now - 1 * day);
+        store.saveExplicit(withTrash);
+        // save() purges anything older than 60 days.
+        assertEquals(1, store.vault().trash().size());
+        store.lock();
+        VaultStore reopened = VaultStore.open(directory);
+        reopened.unlock("correct horse".toCharArray());
+        assertEquals("Sam", reopened.vault().trash().getFirst().server().accounts().getFirst().username());
     }
 }

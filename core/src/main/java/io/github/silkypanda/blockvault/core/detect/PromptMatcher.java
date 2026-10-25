@@ -9,6 +9,8 @@ import java.util.regex.Pattern;
 /** Cheap-prefiltered matching for plain system-message text. */
 public final class PromptMatcher {
     private static final String[] KEYWORDS = {"login", "register", "password", "authenticate", "log in", "connexion", "senha", "contraseña"};
+    /** Legacy colour codes, including the 14-character "section-x" RGB form, compiled once. */
+    private static final Pattern COLOR_CODES = Pattern.compile("(?i)\u00a7x(?:\u00a7[0-9a-f]){6}|\u00a7[0-9A-FK-OR]");
     private final PatternPack pack;
 
     public PromptMatcher(PatternPack pack) { this.pack = pack; }
@@ -39,6 +41,6 @@ public final class PromptMatcher {
 
     static String clean(String plain) {
         if (plain == null) return "";
-        return plain.replaceAll("(?i)\\u00a7[0-9A-FK-OR]", "");
+        return COLOR_CODES.matcher(plain).replaceAll("");
     }
 }

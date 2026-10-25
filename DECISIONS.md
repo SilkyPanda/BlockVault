@@ -114,7 +114,7 @@ The first review pass led to storage, matcher, backup, UI, and security work. It
 - If the main vault is missing or damaged, recovery lists backup files without opening the main vault and asks for the password used to encrypt the chosen backup. Recovery validates the complete backup and restores its encrypted file as the main vault.
 - A new master password must have at least 8 characters. A password change rejects the old password as the replacement, verifies the current password, rewraps the same vault key, and re-encrypts every automatic and manual backup so the old password no longer unlocks backups.
 - Unlock distinguishes a wrong master password, damaged/authentication-failing vault content, unsupported format, and ordinary file I/O failures where the format permits. Failed unlock does not rewrite the vault.
-- Keep `Trust this device` enabled by default. Inactivity auto-lock closes sensitive screens; trusted mode may unlock silently again on the next vault action during the same session. Manual Lock now still requires password entry.
+- Keep `Trust this device` enabled by default. There is no inactivity auto-lock. Manual Lock now requires password entry.
 - Once the vault is unlocked, reveal, copy, edit, and backup inspection do not require reauthentication. Document this explicitly as the chosen access model.
 
 ## 2026-10-24 — Pending credential recovery and login UI clarification
@@ -125,3 +125,11 @@ The first review pass led to storage, matcher, backup, UI, and security work. It
 - Superseded on 2026-10-24: after the vault is unlocked, saved-entry reveal, copy, and edit do not ask for the master password again.
 - Clarify the initial trusted-device chat notice: state the setting is enabled by default, explain BlockVault stores the local vault key rather than the master password, state the local-access implication, give the settings path, and use an identifiable colored BlockVault sender.
 - Owner reported Fabric checks 1–7 and 10–13 passed on a prior build; checks 8, 9, and 14 remain unchecked. These results predate the current edits. NeoForge remains untested. These new source edits need CI and both-loader game verification before being called complete.
+
+## Review round 3 (owner-approved)
+
+- Remove auto-lock completely (setting, timer, screens, strings).
+- Replace tombstones with a trash inside the encrypted vault: deleted accounts and deleted servers (with their accounts) are kept for 60 days, restorable or deletable by hand. Vault format version is now 2; older vault files are not supported (pre-release, no migration).
+- Merge rule: same server (shared host) plus same username is the same account; the newer `modifiedAt` wins, the local copy wins a tie, future timestamps count as now. Merging never deletes; an old copy can bring a deleted account back.
+- Master-password change rotates the vault key, re-encrypts all backups (continuing past unreadable ones) and refreshes the trusted-device key file.
+- A failure-looking server message never deletes a pending credential.
