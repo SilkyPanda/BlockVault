@@ -136,7 +136,7 @@ final class BlockVaultConfig {
     record Settings(boolean autofill, int autofillDelayMillis, int cardDurationSeconds,
                     String cardPosition, boolean streamerMode, String generator, boolean scrubHistory,
                     boolean trustDevice) {
-        static Settings defaults() { return new Settings(true, 400, 10, "top_right", false, "defaults", true, true); }
+        static Settings defaults() { return new Settings(true, 400, 10, "top_right", false, "pickyServer", true, true); }
         Settings withAutofill(boolean value) { return new Settings(value, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
         Settings withDelay(int value) { return new Settings(autofill, value, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
         Settings withDuration(int value) { return new Settings(autofill, autofillDelayMillis, value, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }

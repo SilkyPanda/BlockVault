@@ -43,7 +43,7 @@ Test on Paper with AuthMe (offline-mode or a cracked-friendly setup), then on a 
 
 BlockVault stores data outside the Minecraft game folder:
 
-- Windows: `%APPDATA%\BlockVault`
+- Windows: `%LOCALAPPDATA%\BlockVault`
 - macOS: `~/Library/Application Support/BlockVault`
 - Linux: `$XDG_DATA_HOME/blockvault`, or `~/.local/share/blockvault` when `XDG_DATA_HOME` is unset
 

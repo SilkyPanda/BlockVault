@@ -826,7 +826,7 @@ public final class VaultStore {
                     ? Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE)
                     : Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         } catch (UnsupportedOperationException ignored) {
-            // Windows uses the current user's AppData ACL.
+            // Windows uses the current user's Local AppData ACL.
         }
     }
 
@@ -838,7 +838,7 @@ public final class VaultStore {
                 throw new IOException("Trusted-device key permissions are not private");
             }
         } catch (UnsupportedOperationException ignored) {
-            // Windows uses the current user's AppData ACL.
+            // Windows uses the current user's Local AppData ACL.
         }
     }
 }

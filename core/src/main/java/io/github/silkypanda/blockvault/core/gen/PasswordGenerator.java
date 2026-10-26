@@ -8,6 +8,8 @@ import java.util.List;
 /** Uniform printable-ASCII password generation with required character classes. */
 public final class PasswordGenerator {
     private static final SecureRandom RANDOM = new SecureRandom();
+    /** Number of words used by the memorable preset (10 bits each). */
+    static final int WORD_COUNT = 1024;
     private static final String UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private static final String LOWER = "abcdefghijklmnopqrstuvwxyz";
     private static final String DIGITS = "0123456789";
@@ -138,19 +140,34 @@ public final class PasswordGenerator {
     private static List<String> loadWordList() {
         java.io.InputStream resource = PasswordGenerator.class.getResourceAsStream("/assets/blockvault/password-words.txt");
         if (resource == null) throw new IllegalStateException("Memorable word list is unavailable");
-        java.util.LinkedHashSet<String> words = new java.util.LinkedHashSet<>();
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(resource,
-                java.nio.charset.StandardCharsets.UTF_8))) {
-            String word;
-            while ((word = reader.readLine()) != null) {
-                String trimmed = word.trim();
-                if (!trimmed.isEmpty()) words.add(trimmed);
-            }
+        try (java.io.Reader reader = new java.io.InputStreamReader(resource, java.nio.charset.StandardCharsets.UTF_8)) {
+            return parseWordList(reader);
         } catch (java.io.IOException e) {
             throw new IllegalStateException("Memorable word list is unavailable", e);
         }
-        if (words.size() != 1024) throw new IllegalStateException("Memorable word list is invalid");
-        return List.copyOf(words);
+    }
+
+    /**
+     * Reads a word list: one word per line, or the EFF diceware format {@code 1111<TAB>word}. Words are lower-cased
+     * and de-duplicated, entries that are not purely letters (hyphenated words) are skipped, and exactly the first
+     * {@link #WORD_COUNT} words are used (any subset of equally likely words is itself uniform, so this keeps
+     * exactly 10 bits per word).
+     */
+    static List<String> parseWordList(java.io.Reader reader) throws java.io.IOException {
+        java.util.LinkedHashSet<String> words = new java.util.LinkedHashSet<>();
+        try (java.io.BufferedReader lines = new java.io.BufferedReader(reader)) {
+            String line;
+            while ((line = lines.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+                String[] parts = trimmed.split("\\s+");
+                String word = parts[parts.length - 1].toLowerCase(java.util.Locale.ROOT);
+                // Hyphenated entries such as "yo-yo" are skipped: the hyphen is the separator between words.
+                if (word.matches("[a-z]{3,8}")) words.add(word);
+            }
+        }
+        if (words.size() < WORD_COUNT) throw new IllegalStateException("Memorable word list is too short");
+        return List.copyOf(new ArrayList<>(words).subList(0, WORD_COUNT));
     }
 
     private static final class WordList {

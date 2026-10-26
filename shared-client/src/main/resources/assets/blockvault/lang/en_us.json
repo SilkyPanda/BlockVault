@@ -189,5 +189,7 @@
   "blockvault.trash.empty_all": "Empty trash",
   "blockvault.trash.empty_all.confirm": "Really empty?",
   "blockvault.trash.row.account": "Account %s · %s days left",
-  "blockvault.trash.row.server": "Whole server · %s accounts · %s days left"
+  "blockvault.trash.row.server": "Whole server · %s accounts · %s days left",
+  "blockvault.toast.hooks_inactive.history": "BlockVault warning: password hiding is not working on this Minecraft version. Typed passwords may be saved in your command history. Please update the mod.",
+  "blockvault.toast.hooks_inactive.commands": "BlockVault warning: it cannot read commands on this Minecraft version, so manual login capture is off. Please update the mod."
 }

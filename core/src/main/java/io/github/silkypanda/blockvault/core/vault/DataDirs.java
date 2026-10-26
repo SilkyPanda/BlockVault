@@ -16,9 +16,12 @@ public final class DataDirs {
         if (override != null && !override.isBlank()) return Path.of(override).toAbsolutePath().normalize();
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("win")) {
-            String appData = System.getenv("APPDATA");
-            if (appData == null || appData.isBlank()) throw new IllegalStateException("APPDATA is unavailable");
-            return Path.of(appData, "BlockVault");
+            // Local (not Roaming) AppData: the vault and its trusted-device key must never roam to a network profile.
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if (localAppData == null || localAppData.isBlank()) {
+                localAppData = Path.of(System.getProperty("user.home"), "AppData", "Local").toString();
+            }
+            return Path.of(localAppData, "BlockVault");
         }
         if (os.contains("mac")) return Path.of(System.getProperty("user.home"), "Library", "Application Support", "BlockVault");
         String xdg = System.getenv("XDG_DATA_HOME");

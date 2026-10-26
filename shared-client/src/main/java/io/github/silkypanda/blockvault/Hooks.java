@@ -22,6 +22,11 @@ public final class Hooks {
     private static volatile Set<String> sensitiveAliases = Set.of("login", "register", "reg", "changepassword", "changepass", "unregister");
     private static LoginSession session;
     private static McSessionEnv environment;
+    /** Set by the outgoing-command mixin; used to detect that the mixin is really applied. */
+    private static volatile boolean commandHookSeen;
+    private static volatile long historyScrubbedAt = Long.MIN_VALUE;
+    private static boolean warnedCommandHook;
+    private static boolean warnedHistoryHook;
 
     private Hooks() { }
 
@@ -49,7 +54,7 @@ public final class Hooks {
                         .flatMap(kind -> patterns.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
             }
             environment = new McSessionEnv();
-            LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.defaults());
+            LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.pickyServer());
             session = active;
             environment.attach(active);
             active.onJoin(host, minecraft.getUser().getName());
@@ -88,9 +93,34 @@ public final class Hooks {
 
     /** Captures an outgoing command without logging or retaining it outside the session. */
     public static void onOutgoingCommand(String command) {
+        commandHookSeen = true;
         if (Boolean.TRUE.equals(SELF_SENT.get())) return;
+        checkHistoryScrubbing(command);
         LoginSession active = session;
         if (active != null) guard(active, () -> active.onOutgoingCommand(command));
+    }
+
+    /** Called by the command-history mixin each time it keeps a sensitive command out of the history. */
+    public static void historyScrubbed() { historyScrubbedAt = System.currentTimeMillis(); }
+
+    /**
+     * When the player types a sensitive command, the history mixin should scrub it within moments. If it did not,
+     * the mixin is not applied (for example after a Minecraft update), so the owner is warned once.
+     */
+    private static void checkHistoryScrubbing(String command) {
+        if (warnedHistoryHook || !SensitiveCommands.isSensitive(command)) return;
+        long typedAt = System.currentTimeMillis();
+        SCHEDULER.schedule(2000, () -> {
+            if (historyScrubbedAt < typedAt - 5000) warnOnce(false);
+        });
+    }
+
+    private static void warnOnce(boolean commandHook) {
+        if (commandHook ? warnedCommandHook : warnedHistoryHook) return;
+        if (commandHook) warnedCommandHook = true; else warnedHistoryHook = true;
+        LOGGER.warn("BlockVault's {} hook is not active in this Minecraft version", commandHook ? "command" : "history");
+        VaultRuntime.showToast(commandHook ? "blockvault.toast.hooks_inactive.commands"
+                : "blockvault.toast.hooks_inactive.history");
     }
 
     private static void guard(LoginSession active, Runnable operation) {
@@ -109,8 +139,11 @@ public final class Hooks {
             ClientPacketListener connection = minecraft.getConnection();
             if (connection == null) return;
             SELF_SENT.set(true);
+            commandHookSeen = false;
             try { connection.sendCommand(commandWithoutSlash); }
             finally { SELF_SENT.remove(); }
+            // The command mixin runs at the start of sendCommand, so it must have run by now.
+            if (!commandHookSeen) warnOnce(true);
         };
         if (minecraft.isSameThread()) send.run();
         else minecraft.execute(send);

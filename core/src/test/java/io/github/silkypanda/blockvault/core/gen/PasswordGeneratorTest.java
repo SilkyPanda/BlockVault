@@ -64,4 +64,29 @@ final class PasswordGeneratorTest {
         assertEquals(5, new String(longPassword).chars().filter(c -> c == '-').count());
         java.util.Arrays.fill(longPassword, '\0');
     }
+
+    @Test
+    void wordListAcceptsTheEffDiceFormatAndUsesTheFirst1024Words() throws Exception {
+        StringBuilder file = new StringBuilder();
+        for (int i = 0; i < 1296; i++) {
+            file.append(1111 + i).append('\t').append(word(i)).append('\n');
+        }
+        file.append("6666\tyo-yo\n");
+        java.util.List<String> words = PasswordGenerator.parseWordList(new java.io.StringReader(file.toString()));
+        org.junit.jupiter.api.Assertions.assertEquals(1024, words.size());
+        org.junit.jupiter.api.Assertions.assertEquals(word(0), words.getFirst());
+    }
+
+    @Test
+    void wordListRejectsShortOrMalformedFiles() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> PasswordGenerator.parseWordList(new java.io.StringReader("1111\tacid\n1112\tacorn\n")));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> PasswordGenerator.parseWordList(new java.io.StringReader("1111\tnot-a-word\n")));
+    }
+
+    /** Distinct letters-only words: aaa, aab, ... */
+    private static String word(int i) {
+        return "w" + (char) ('a' + i / 676 % 26) + (char) ('a' + i / 26 % 26) + (char) ('a' + i % 26);
+    }
 }
