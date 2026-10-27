@@ -19,10 +19,15 @@ public final class PasswordGenerator {
 
     /** Password policy. Disabled classes are excluded; symbols are filtered to safe printable ASCII. */
     public record Policy(int length, boolean upper, boolean lower, boolean digits, boolean symbols,
-                         String symbolSet, boolean excludeAmbiguous, int memorableWordCount) {
+                         String symbolSet, boolean excludeAmbiguous, int memorableWordCount,
+                         int memorableMinLength, int memorableMaxLength) {
         public Policy(int length, boolean upper, boolean lower, boolean digits, boolean symbols,
                       String symbolSet, boolean excludeAmbiguous) {
-            this(length, upper, lower, digits, symbols, symbolSet, excludeAmbiguous, 0);
+            this(length, upper, lower, digits, symbols, symbolSet, excludeAmbiguous, 0, 0, 0);
+        }
+        public Policy(int length, boolean upper, boolean lower, boolean digits, boolean symbols,
+                      String symbolSet, boolean excludeAmbiguous, int memorableWordCount) {
+            this(length, upper, lower, digits, symbols, symbolSet, excludeAmbiguous, memorableWordCount, 0, 0);
         }
         public Policy {
             if (length < 8 || length > 64 || symbolSet == null || !(upper || lower || digits || symbols)
@@ -45,16 +50,21 @@ public final class PasswordGenerator {
                 int min = hint.minLength() == null ? 8 : hint.minLength();
                 int max = hint.maxLength() == null ? 64 : hint.maxLength();
                 if (min > max) throw new IllegalArgumentException("Server password length rules conflict");
+                // Word lengths vary, so pick the word count whose *expected* length fits, then make generation
+                // retry until the real length is inside the server's range.
+                double average = WordList.averageLength();
                 int selected = -1;
                 for (int words = 2; words <= 12; words++) {
-                    int candidateLength = 5 * words + 2;
-                    if (candidateLength >= min && candidateLength <= max
+                    double expected = words * average + words + 2;
+                    if (expected >= min && expected <= max
                             && (selected < 0 || Math.abs(words - memorableWordCount) < Math.abs(selected - memorableWordCount))) {
                         selected = words;
                     }
                 }
                 if (selected < 0) throw new IllegalArgumentException("Server length rule cannot fit the memorable preset");
-                return memorable(selected);
+                Policy base = memorable(selected);
+                return new Policy(base.length(), false, false, false, true, "", false, selected,
+                        hint.minLength() == null ? 0 : hint.minLength(), hint.maxLength() == null ? 0 : hint.maxLength());
             }
             int adjusted = length;
             if (hint.minLength() != null) adjusted = Math.max(adjusted, hint.minLength());
@@ -81,7 +91,9 @@ public final class PasswordGenerator {
 
     /** Generates a secret as a caller-owned character array. */
     public static char[] generate(Policy policy) {
-        if (policy.memorableWordCount() > 0) return generateMemorable(policy.memorableWordCount());
+        if (policy.memorableWordCount() > 0) {
+            return generateMemorable(policy.memorableWordCount(), policy.memorableMinLength(), policy.memorableMaxLength());
+        }
         List<String> classes = new ArrayList<>();
         if (policy.upper()) classes.add(filter(UPPER, policy.excludeAmbiguous()));
         if (policy.lower()) classes.add(filter(LOWER, policy.excludeAmbiguous()));
@@ -124,17 +136,24 @@ public final class PasswordGenerator {
         return result.toString();
     }
 
-    private static char[] generateMemorable(int wordCount) {
+    /** Builds "word-word-word-word-NN", retrying until the length is inside the optional bounds (0 = no bound). */
+    private static char[] generateMemorable(int wordCount, int minLength, int maxLength) {
         List<String> words = WordList.VALUE;
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < wordCount; i++) {
-            if (i > 0) result.append('-');
-            result.append(words.get(uniformIndex(RANDOM, words.size())));
+        for (int attempt = 0; attempt < 10_000; attempt++) {
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < wordCount; i++) {
+                if (i > 0) result.append('-');
+                result.append(words.get(uniformIndex(RANDOM, words.size())));
+            }
+            result.append('-').append(uniformIndex(RANDOM, 10)).append(uniformIndex(RANDOM, 10));
+            if ((minLength > 0 && result.length() < minLength) || (maxLength > 0 && result.length() > maxLength)) {
+                continue;
+            }
+            char[] password = new char[result.length()];
+            result.getChars(0, result.length(), password, 0);
+            return password;
         }
-        result.append('-').append(uniformIndex(RANDOM, 10)).append(uniformIndex(RANDOM, 10));
-        char[] password = new char[result.length()];
-        result.getChars(0, result.length(), password, 0);
-        return password;
+        throw new IllegalStateException("Could not build a memorable password inside the server's length rule");
     }
 
     private static List<String> loadWordList() {
@@ -172,5 +191,9 @@ public final class PasswordGenerator {
 
     private static final class WordList {
         private static final List<String> VALUE = loadWordList();
+
+        static double averageLength() {
+            return VALUE.stream().mapToInt(String::length).average().orElse(4);
+        }
     }
 }

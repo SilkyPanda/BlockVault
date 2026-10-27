@@ -26,13 +26,12 @@ public final class VaultTrash {
             entry = new TrashEntry(UUID.randomUUID().toString(), nowMillis, false, snapshot(server, List.of(found)));
             List<Account> remaining = new ArrayList<>(server.accounts());
             remaining.removeIf(a -> a.username().equals(username));
-            servers.add(new ServerEntry(server.id(), server.name(), server.hosts(), server.neverSave(),
-                    server.autofill(), server.templateId(), remaining));
+            servers.add(server.withAccounts(remaining));
         }
         if (entry == null) return vault;
         List<TrashEntry> trash = new ArrayList<>(vault.trash());
         trash.add(entry);
-        return new Vault(vault.v(), servers, trash);
+        return new Vault(vault.v(), servers, trash, vault.extra());
     }
 
     /** Moves a whole server, with all its accounts, into the trash. */
@@ -43,7 +42,7 @@ public final class VaultTrash {
         servers.removeIf(s -> s.id().equals(serverId));
         List<TrashEntry> trash = new ArrayList<>(vault.trash());
         trash.add(new TrashEntry(UUID.randomUUID().toString(), nowMillis, true, removed));
-        return new Vault(vault.v(), servers, trash);
+        return new Vault(vault.v(), servers, trash, vault.extra());
     }
 
     /**
@@ -56,7 +55,7 @@ public final class VaultTrash {
         List<TrashEntry> trash = new ArrayList<>(vault.trash());
         trash.removeIf(t -> t.id().equals(trashId));
         List<ServerEntry> servers = VaultMerger.mergeServers(vault.servers(), List.of(entry.server()), nowMillis);
-        return new Vault(vault.v(), servers, trash);
+        return new Vault(vault.v(), servers, trash, vault.extra());
     }
 
     /** Permanently removes one trash entry. */
@@ -79,7 +78,49 @@ public final class VaultTrash {
     }
 
     private static ServerEntry snapshot(ServerEntry server, List<Account> accounts) {
-        return new ServerEntry(server.id(), server.name(), server.hosts(), server.neverSave(), server.autofill(),
-                server.templateId(), accounts);
+        return server.withAccounts(accounts);
+    }
+
+    /**
+     * Removes every account matching one in {@code removed} (same host, username and password) from the live
+     * servers and from trash snapshots of {@code target}. Used to scrub backups after "delete forever".
+     */
+    public static Vault purgeAccounts(Vault target, List<ServerEntry> removed) {
+        boolean[] changed = {false};
+        List<ServerEntry> servers = new ArrayList<>();
+        for (ServerEntry server : target.servers()) servers.add(scrub(server, removed, changed));
+        List<TrashEntry> trash = new ArrayList<>();
+        for (TrashEntry entry : target.trash()) {
+            trash.add(new TrashEntry(entry.id(), entry.deletedAt(), entry.wholeServer(),
+                    scrub(entry.server(), removed, changed), entry.extra()));
+        }
+        return changed[0] ? new Vault(target.v(), servers, trash, target.extra()) : target;
+    }
+
+    private static ServerEntry scrub(ServerEntry server, List<ServerEntry> removed, boolean[] changed) {
+        List<Account> kept = new ArrayList<>();
+        for (Account account : server.accounts()) {
+            if (matchesAny(server, account, removed)) changed[0] = true;
+            else kept.add(account);
+        }
+        return kept.size() == server.accounts().size() ? server : server.withAccounts(kept);
+    }
+
+    private static boolean matchesAny(ServerEntry server, Account account, List<ServerEntry> removed) {
+        char[] password = account.password();
+        try {
+            for (ServerEntry gone : removed) {
+                if (gone.hosts().stream().noneMatch(server.hosts()::contains)) continue;
+                for (Account other : gone.accounts()) {
+                    char[] otherPassword = other.password();
+                    try {
+                        if (other.username().equals(account.username()) && java.util.Arrays.equals(otherPassword, password)) {
+                            return true;
+                        }
+                    } finally { java.util.Arrays.fill(otherPassword, '\0'); }
+                }
+            }
+            return false;
+        } finally { java.util.Arrays.fill(password, '\0'); }
     }
 }

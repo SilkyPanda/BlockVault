@@ -24,7 +24,8 @@ again in the meantime, the newer password wins.
 
 | Action | Behaviour |
 | --- | --- |
-| Create vault, import, master-password change | Merge with the file on disk using the rule above. A restore point is taken first when importing. |
+| Create vault, import | Merge with the file on disk using the rule above. An import is previewed first (new servers, new accounts, newer passwords, kept local passwords) and a restore point is taken before it is applied. |
+| Master-password change | Merges with the file on disk, then re-encrypts under a new vault key. |
 | Edit, delete, restore from trash, restore a backup | No merge. The edit is applied to the freshly reloaded vault and saved only if the file's SHA-256 is unchanged; otherwise it fails with "Vault changed on disk". |
 | Restore a backup | Replaces the vault; the current state is saved as a restore point first. |
 
@@ -32,3 +33,7 @@ again in the meantime, the newer password wins.
 
 Because deletions are not remembered, importing or merging an older copy can bring back an account you deleted (and
 emptied from the trash). Newest-wins still applies to accounts that exist in both copies.
+
+## Unknown fields
+
+Fields this version does not recognise (on the vault, a server, a trash entry or an account) are kept and written back unchanged. When two copies are merged, the local copy's unknown fields are the ones kept.

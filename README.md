@@ -1,73 +1,63 @@
 # BlockVault
 
-BlockVault is a client-side password manager for Minecraft servers that use login plugins. It creates unique passwords per server and stores them in an encrypted local vault. It makes no network connections. The server-side component and cloud sync are out of scope.
+BlockVault is a client-side password manager for Minecraft servers that use login plugins (AuthMe, nLogin and similar). It creates a unique password per server, fills it in on later joins, and keeps everything in an encrypted local vault. It makes no network connections. Server-side components and cloud sync are out of scope.
 
-## Builds and jars
+## Using it
 
-GitHub Actions builds and tests each push and pull request. The build workflow uploads one jar for Fabric and one for NeoForge as run artifacts; download them from the successful Actions run. There are no automated releases or publishing steps. The owner releases manually.
+- Open the vault with `/blockvault` (both loaders), a keybind (unbound by default; Controls > Multiplayer), the NeoForge mod-list Config button, or Mod Menu on Fabric. `/blockvault lock` wipes the key from memory.
+- On a register prompt a card shows a generated password; confirm to register. On a login prompt a verified account is filled in once per connection. Cards wait until no other screen is open.
+- The vault list lets you search, reveal, copy, edit, change a server's template or autofill policy, add a login by hand, import or export, and open Settings, backups and the trash.
+- Deleting an account or a whole server moves it to the **trash**. Restore it or delete it for good; anything left is removed after 60 days. Deleting for good can optionally also remove the password from backups.
 
-There are independent Gradle builds in `core/`, `fabric/`, and `neoforge/`. CI uses Java 25 and Gradle 9.7.1 when a Gradle wrapper is unavailable. Local builds are best-effort; only a green Actions run verifies a commit.
+## Statuses
 
-## Code map
+A saved account marked "Pending - server not confirmed" was written before the registration command was sent, but the server's success message was not seen. If registration succeeded, a successful manual login with that password promotes it to verified. Only verified accounts autofill.
 
-- `core/src/main/java/.../core/crypto` contains encryption, key derivation, and secret-buffer helpers.
-- `core/.../detect`, `gen`, `host`, and `session` contain pure-Java prompt matching, password generation, server identity, and login flow logic. Their tests live in matching packages under `core/src/test`.
-- `core/.../vault` contains the vault model, encrypted file format, backup handling, and storage.
-- `shared-client/src/main/java/.../blockvault` contains the Minecraft-facing runtime, session bridge, configuration, and screens. Those classes currently share one package because the screens call package-private runtime/config helpers directly.
-- `shared-client/.../blockvault/mixin` contains the small set of Minecraft interception points. Keep loader-specific APIs out of this source tree.
-- `fabric/.../fabric` and `neoforge/.../neoforge` contain loader entrypoints and event bridges. Shared behavior belongs in `shared-client`; game-independent behavior belongs in `core`.
-- `shared-client/src/main/resources` contains translations, prompt patterns, mixin metadata, and the icon artwork. Edit `assets/blockvault/icon.svg`; `icon.png` is the loader metadata image. Loader metadata stays under each loader's `src/main/resources`.
+## Local data
 
-For a code change, follow the relevant section in `BLOCKVAULT_PLAN.md`, keep pure-Java behavior in `core` where possible, and use the GitHub Actions run for the commit as the build result.
-
-## Manual in-game checks
-
-Test on Paper with AuthMe (offline-mode or a cracked-friendly setup), then on a server using nLogin or LoginSecurity if available.
-
-1. Fresh join -> register prompt -> BlockVault card shows a generated password -> confirm -> registered -> toast "Saved".
-2. Leave and rejoin -> autofill sends `/login` once -> logged in.
-3. Change the saved password in the vault manually -> rejoin -> wrong password message -> Rejected card appears, no retry loop.
-4. Type `/login <right password>` manually -> Update card appears.
-5. Check the game folder: typed login/register commands are NOT present in the command history file.
-6. Kill the game right after `/register` -> relaunch -> vault shows “Pending — server not confirmed” (the credential is retained so you can retry or update it). If the server did accept it, manually log in once; a matching pending entry becomes verified so auto-login can work on the next join.
-7. With the default `Trust this device` setting, unlock once with the master password, restart Minecraft, and confirm the vault opens without asking again. Then select `Ask for master password every launch`, restart, and confirm it asks again. Confirm inactivity auto-lock closes sensitive screens; with trust enabled, a later vault action in the same session may silently unlock again.
-8. Join a vanilla server (no login plugin) -> nothing happens, no log spam.
-9. Join singleplayer -> nothing happens.
-10. Confirm a successful auto-login prints “Logged in automatically.” in green BlockVault chat text.
-11. Both jars: Fabric and NeoForge behave identically.
-12. Disconnect and watch `logs/latest.log`: no passwords, no secrets, no stack traces from BlockVault.
-
-`Trust this device` is enabled by default, as an explicit product choice. It stores the 32-byte vault key in `vault.bv.trust`; it never stores the master password and does not use an operating-system keychain. This convenience weakens at-rest protection: anyone or any malware with access to the current OS account and data directory can open the vault without the master password. Select `Ask for master password every launch` to remove the trust file. POSIX permissions are restricted to the owner; Windows relies on the data directory's OS profile ACL and BlockVault does not independently verify or set a Windows ACL.
-
-## Local data and cleanup
-
-BlockVault stores data outside the Minecraft game folder:
+Data lives outside the game folder:
 
 - Windows: `%LOCALAPPDATA%\BlockVault`
 - macOS: `~/Library/Application Support/BlockVault`
-- Linux: `$XDG_DATA_HOME/blockvault`, or `~/.local/share/blockvault` when `XDG_DATA_HOME` is unset
+- Linux: `$XDG_DATA_HOME/blockvault`, or `~/.local/share/blockvault`
 
-The directory can also be overridden with the Java system property `blockvault.dataDir`.
+Override with the Java property `blockvault.dataDir`.
 
-`vault.bv`, the automatic `vault.bv.bak1` through `vault.bv.bak3` files, and manual `vault.bv.manual1` through `vault.bv.manual10` files hold encrypted vault snapshots, including saved server passwords. With `Trust this device` enabled, `vault.bv.trust` holds the random vault key, not the master password. `config.json` stores preferences only. Optional `patterns.json` adds prompt and result patterns and command aliases to the built-in pattern pack; user regexes are limited to 256 characters.
+| File | Contents |
+| --- | --- |
+| `vault.bv` | Encrypted vault (accounts, servers, trash) |
+| `vault.bv.bak1`-`bak3` | Automatic snapshots: at most one per 24 hours, newest is 1 |
+| `vault.bv.manual1`-`manual10` | Manual snapshots (Settings) |
+| `vault.bv.trust` | Raw vault key, only with `Trust this device` on (the default) |
+| `vault.bv.damaged` | Copy of a vault replaced during recovery |
+| `config.json` | Preferences only |
+| `patterns.json` | Optional extra prompt/result patterns (regexes limited to 256 characters) |
 
-The vault screen can export a byte-for-byte encrypted vault copy to a new file; export refuses to overwrite an existing file. Importing accepts that encrypted file and its master password, then merges server/account entries: the same server and the same username are one account, and the newer modification time wins (see `CONFLICT_HANDLING.md`). A restore point is taken before every import. Exports remain sensitive files: protect them as you would a password-protected vault and keep the master password separate.
+- **Export** writes a byte-for-byte encrypted copy and refuses to overwrite a file. **Import** shows a preview of what would change, takes a restore point, then merges; see `CONFLICT_HANDLING.md`.
+- **Backups** are snapshots of the whole vault. Restoring one first saves the current vault as a restore point and keeps your current master password. If the main vault is missing or damaged, choose `Recover from backup` on the unlock screen and enter the password that encrypted that backup.
+- **Changing the master password** creates a new vault key and re-encrypts the vault and all backups. Copies made earlier (exports, cloud-synced files) keep the old key and old password.
+- **Erase all data** (Settings) verifies the master password, then deletes BlockVault's own files. Other files in that folder are kept. It is not a secure wipe of disk blocks. Close other Minecraft instances first, and uninstall the mod from your launcher separately.
 
-Deleting an account or a whole server moves it to the trash inside the encrypted vault, with its password still protected. Open the trash from the vault screen to restore items or delete them for good; anything left in the trash is removed automatically after 60 days. See `CONFLICT_HANDLING.md` for how copies of the vault are merged. Backups are encrypted snapshots of the entire vault, including saved accounts, rather than separate copies for each password. On ordinary vault saves, BlockVault creates at most one automatic snapshot per 24-hour period and keeps three; backup 1 is newest and 3 oldest. Empty vaults do not produce automatic snapshots, so the first useful save can be preserved. This is save-triggered, not a timer. You can also create manual snapshots in Settings; up to ten are kept separately from automatic backups. The backup screen shows each snapshot's type, slot, and creation time. Once unlocked, copying, revealing, editing, and inspecting backups do not ask for the master password again. Open one to inspect saved server/account names and selectively reveal passwords while the vault is unlocked. Restoring either type validates the snapshot, saves the current vault into the automatic backup set so restore can be undone, replaces the vault contents, and keeps the current master password. If the main vault is missing or damaged, choose `Recover from backup` on the access screen and enter the password used to encrypt the selected backup. Changing the master password re-encrypts all automatic and manual backups so the old password no longer unlocks them. Settings can open the BlockVault data directory or erase all its contents after displaying a warning and verifying the master password. This permanently deletes the vault, saved passwords, backups, trusted-device key, preferences, patterns, and exports in that directory. Close other Minecraft instances first. The game cannot safely remove its own launcher-managed mod file; uninstall BlockVault from the launcher separately. Filesystem deletion is not a guaranteed secure wipe of recoverable disk blocks.
+## Security notes
 
-Copying a password places it on the operating-system clipboard. BlockVault does not clear it automatically. Clipboard history features or clipboard manager apps may retain additional copies; clear those separately if needed.
+- `Trust this device` is on by default. It stores the vault key in `vault.bv.trust`, never the master password, and does not use an OS keychain. Anyone or any malware with access to your OS account and data folder can open the vault without the master password. Choose `Ask for master password every launch` to remove the file. POSIX permissions are owner-only; Windows relies on the profile folder's ACL and BlockVault does not set one.
+- There is no inactivity auto-lock. `Lock now` wipes the key and waits for the next password entry.
+- Neither mode protects against malware running as your user, a compromised Minecraft process, screenshots, clipboard managers, or a server that receives your credentials. Java strings and text fields can keep temporary copies until garbage collection.
+- Copied passwords stay on the clipboard; BlockVault never clears it.
+- Prompt detection reads server messages (including action-bar text), which a server or plugin can spoof. A credential is only sent to the server Minecraft is connected to. A failure-looking message never deletes a pending credential.
+- The master password needs at least 8 characters. A forgotten master password cannot be recovered unless you know the password of an available backup. Wrong passwords are reported separately from damaged files, except where the format cannot tell them apart.
+- The memorable preset is easier to type but has fewer bits than the random presets.
 
-## Login statuses
+## Building and code map
 
-A saved account marked “Pending — server not confirmed” was written before BlockVault sent a registration command, but the server success response was not observed. This protects against losing the credential if Minecraft closes during registration. If registration succeeded, a successful manual login with that same password promotes it to verified; verified accounts are eligible for auto-login.
+CI (GitHub Actions, Java 25, Gradle 9.7.1) builds and tests every push and uploads one jar per loader; there are no automated releases. Each of `core/`, `fabric/` and `neoforge/` is an independent Gradle build with its own wrapper.
 
+- `core`: crypto, vault model, storage, backups, prompt detection, password generation, host keys and the login state machine. Pure Java with unit tests.
+- `shared-client`: the Minecraft-facing runtime, config, screens and the three mixins.
+- `fabric`, `neoforge`: loader entry points and event bridges only.
 
-## Security limits
+Other documents: `DESIGN.md` (rules for contributors), `CONFLICT_HANDLING.md`, `TESTING.md`, `DECISIONS.md`, `STATUS.md`.
 
-The encrypted vault protects data at rest when `Ask for master password every launch` is selected. There is no automatic inactivity lock; the explicit Lock now action wipes the key and waits for the next password entry. Trusted-device mode keeps the vault key alongside the vault. Neither mode protects against malware running as your OS user, a compromised Minecraft process, screenshots or clipboard history, or a server that receives credentials. Java strings and UI text fields can retain temporary secret copies until garbage collection.
+## Memorable word list
 
-Prompt detection uses server system messages, which a server or plugin can spoof. BlockVault only sends a credential to the server to which Minecraft is currently connected; review unexpected prompts before accepting them.
-
-Creating or changing a master password requires at least 8 characters; when changing it, the new password must differ from the current one. Use a long, unique master password and keep a separate backup of it. A forgotten master password cannot be recovered unless you still know the password that encrypted an available backup. The memorable password preset is easier to type but has lower entropy than the longer random presets.
-
-Unlock reports an incorrect password separately from malformed or unauthenticated vault contents. If authentication fails on the password-wrapped vault key, the file format cannot distinguish a mistyped password from damage to that wrapped key; BlockVault reports an incorrect password in that case.
+`core/src/main/resources/assets/blockvault/password-words.txt` feeds the memorable preset. To use EFF's short list, download https://www.eff.org/files/2016/09/08/eff_short_wordlist_1.txt and save it over that file; the loader accepts the dice-number format as downloaded, skips hyphenated entries and uses the first 1,024 words (10 bits each). EFF publishes its lists under a Creative Commons attribution license, so credit them here if you ship it.

@@ -297,4 +297,87 @@ final class VaultStoreTest {
         reopened.unlock("correct horse".toCharArray());
         assertEquals("Sam", reopened.vault().trash().getFirst().server().accounts().getFirst().username());
     }
+
+    @Test
+    void importPreviewDescribesChangesAndCommitMergesThemWithARestorePoint() throws Exception {
+        Path otherDirectory = Files.createDirectory(directory.resolve("other"));
+        VaultStore other = VaultStore.open(otherDirectory);
+        other.create("other password".toCharArray());
+        other.save(new Vault(Vault.VERSION, List.of(
+                new ServerEntry("a", "Alpha", List.of("alpha.example:25565"), false, true, "auto", List.of(
+                        new Account("Alex", "newer".toCharArray(), Account.Status.VERIFIED, 1, 500, 0, null),
+                        new Account("Sam", "added".toCharArray(), Account.Status.VERIFIED, 1, 500, 0, null))),
+                new ServerEntry("b", "Beta", List.of("beta.example:25565"), false, true, "auto", List.of(
+                        new Account("Kim", "k".toCharArray(), Account.Status.VERIFIED, 1, 500, 0, null))))));
+        Path exported = directory.resolve("vault.bv.export");
+        other.exportEncrypted(exported);
+
+        VaultStore store = VaultStore.open(directory.resolve("mine"));
+        store.create("my password".toCharArray());
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("a2", "Alpha", List.of("alpha.example:25565"),
+                false, true, "auto", List.of(new Account("Alex", "older".toCharArray(), Account.Status.VERIFIED, 1, 100, 0, null))))));
+        // exports must live inside the data directory of the exporting store
+        Path copy = directory.resolve("mine").resolve("incoming.bv");
+        Files.copy(exported, copy);
+
+        ImportPreview preview = store.previewImport(copy, "other password".toCharArray());
+        assertEquals(1, preview.count(ImportPreview.Kind.NEW_SERVER));
+        assertEquals(2, preview.count(ImportPreview.Kind.NEW_ACCOUNT));
+        assertEquals(1, preview.count(ImportPreview.Kind.UPDATED_ACCOUNT));
+        // Nothing has changed yet.
+        assertEquals("older", new String(store.vault().servers().get(0).accounts().get(0).password()));
+
+        store.commitImport();
+        Vault merged = store.vault();
+        assertEquals(2, merged.servers().size());
+        assertEquals("newer", new String(merged.servers().stream().filter(sv -> sv.name().equals("Alpha")).findFirst()
+                .orElseThrow().accounts().stream().filter(a -> a.username().equals("Alex")).findFirst().orElseThrow().password()));
+        assertTrue(Files.isRegularFile(directory.resolve("mine").resolve("vault.bv.bak1")), "restore point taken");
+    }
+
+    @Test
+    void wrongImportPasswordAndDiscardLeaveTheVaultUntouched() throws Exception {
+        VaultStore a = VaultStore.open(directory.resolve("a"));
+        a.create("password a".toCharArray());
+        Path exported = directory.resolve("exported-a.bv");
+        a.exportEncrypted(exported);
+        VaultStore b = VaultStore.open(directory.resolve("b"));
+        b.create("password b".toCharArray());
+        Path copy = directory.resolve("b").resolve("incoming.bv");
+        Files.copy(exported, copy);
+        assertThrows(WrongMasterPasswordException.class, () -> b.previewImport(copy, "nope nope".toCharArray()));
+        b.previewImport(copy, "password a".toCharArray());
+        b.discardImport();
+        assertThrows(IllegalStateException.class, b::commitImport);
+    }
+
+    @Test
+    void purgeFromBackupsRemovesOnlyMatchingAccounts() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        store.create("purge password".toCharArray());
+        ServerEntry server = new ServerEntry("s", "S", List.of("s.example:25565"), false, true, "auto", List.of(
+                new Account("Alex", "gone".toCharArray(), Account.Status.VERIFIED, 1, 1, 0, null),
+                new Account("Sam", "stay".toCharArray(), Account.Status.VERIFIED, 1, 1, 0, null)));
+        store.save(new Vault(Vault.VERSION, List.of(server)));
+        store.createManualBackup();
+        List<ServerEntry> removed = List.of(new ServerEntry("s", "S", List.of("s.example:25565"), false, true, "auto",
+                List.of(new Account("Alex", "gone".toCharArray(), Account.Status.VERIFIED, 1, 1, 0, null))));
+        assertEquals(1, store.purgeFromBackups(removed));
+        Vault backup = store.inspectBackup(store.backups().stream().filter(BackupSummary::manual).findFirst().orElseThrow());
+        assertEquals(1, backup.servers().get(0).accounts().size());
+        assertEquals("Sam", backup.servers().get(0).accounts().get(0).username());
+    }
+
+    @Test
+    void anInstanceWithAStaleKeyLocksItselfAndCanUnlockWithTheNewPassword() throws Exception {
+        VaultStore first = VaultStore.open(directory);
+        first.create("first password".toCharArray());
+        VaultStore second = VaultStore.open(directory);
+        second.unlock("first password".toCharArray());
+        first.changeMasterPassword("first password".toCharArray(), "second password".toCharArray());
+        assertThrows(Exception.class, second::reload);
+        assertThrows(IllegalStateException.class, second::vault);
+        second.unlock("second password".toCharArray());
+        assertEquals(0, second.vault().servers().size());
+    }
 }

@@ -9,6 +9,7 @@ import io.github.silkypanda.blockvault.core.vault.BackupReencryptionException;
 import io.github.silkypanda.blockvault.core.vault.DataDirs;
 import io.github.silkypanda.blockvault.core.vault.ServerEntry;
 import io.github.silkypanda.blockvault.core.vault.UnsupportedVaultVersionException;
+import io.github.silkypanda.blockvault.core.vault.ImportPreview;
 import io.github.silkypanda.blockvault.core.vault.TrashEntry;
 import io.github.silkypanda.blockvault.core.vault.Vault;
 import io.github.silkypanda.blockvault.core.vault.VaultTrash;
@@ -16,7 +17,6 @@ import io.github.silkypanda.blockvault.core.vault.VaultStore;
 import io.github.silkypanda.blockvault.core.vault.WrongMasterPasswordException;
 import io.github.silkypanda.blockvault.core.vault.VaultCorruptException;
 import java.io.IOException;
-import java.awt.Desktop;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -70,8 +70,12 @@ public final class VaultRuntime implements VaultAccess {
                 try { result.accept(saved); }
                 finally { if (callbackAccount != null) callbackAccount.clearPassword(); }
             });
-        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(null)),
-                cancelled == null ? null : () -> BackgroundExecutor.onGameThread(cancelled));
+        }, () -> {
+            // A vault read error is not "no saved account": treat it like a declined unlock so no bogus
+            // registration card is offered for an account that may already exist.
+            if (cancelled != null) BackgroundExecutor.onGameThread(cancelled);
+            else BackgroundExecutor.onGameThread(() -> result.accept(null));
+        }, cancelled == null ? null : () -> BackgroundExecutor.onGameThread(cancelled));
     }
 
     @Override
@@ -308,19 +312,7 @@ public final class VaultRuntime implements VaultAccess {
             java.nio.file.Path directory = null;
             try {
                 directory = DataDirs.createDirectory();
-                if (Desktop.isDesktopSupported()) {
-                    Desktop desktop = Desktop.getDesktop();
-                    try {
-                        if (!desktop.isSupported(Desktop.Action.OPEN)) throw new UnsupportedOperationException();
-                        desktop.open(directory.toFile());
-                        opened = true;
-                    } catch (Exception openFailure) {
-                        if (desktop.isSupported(Desktop.Action.BROWSE)) {
-                            desktop.browse(directory.toUri());
-                            opened = true;
-                        }
-                    }
-                }
+                opened = openWithMinecraft(directory);
             } catch (Exception failure) {
                 LOGGER.warn("BlockVault could not open its data directory ({})", failure.getClass().getSimpleName());
             }
@@ -335,6 +327,31 @@ public final class VaultRuntime implements VaultAccess {
             });
             return null;
         });
+    }
+
+    /**
+     * Opens a folder with Minecraft's own platform helper (the one behind the game's "Open Folder" buttons), which
+     * avoids starting AWT inside the game process. The helper is looked up by reflection under both known class
+     * names so a rename in a Minecraft update falls back to copying the path instead of breaking the build.
+     */
+    private static boolean openWithMinecraft(java.nio.file.Path directory) {
+        for (String className : new String[] {"net.minecraft.util.Util", "net.minecraft.Util"}) {
+            try {
+                Class<?> util = Class.forName(className);
+                java.lang.reflect.Method getPlatform = util.getMethod("getPlatform");
+                Object platform = getPlatform.invoke(null);
+                Class<?> platformType = getPlatform.getReturnType();
+                try {
+                    platformType.getMethod("openPath", java.nio.file.Path.class).invoke(platform, directory);
+                } catch (NoSuchMethodException noPathVariant) {
+                    platformType.getMethod("openFile", java.io.File.class).invoke(platform, directory.toFile());
+                }
+                return true;
+            } catch (ReflectiveOperationException | RuntimeException candidateFailed) {
+                // Try the next class name, then fall back to showing the path.
+            }
+        }
+        return false;
     }
 
     static void eraseAllData(char[] masterPassword, Consumer<String> result) {
@@ -522,19 +539,89 @@ public final class VaultRuntime implements VaultAccess {
         }, () -> BackgroundExecutor.onGameThread(() -> result.accept(false)));
     }
 
-    static void importVault(java.nio.file.Path source, char[] masterPassword, Consumer<Boolean> result) {
+    /**
+     * Reads an import file and reports what it would change, without changing anything. {@code result} receives
+     * the preview, or null together with a translation key describing the failure.
+     */
+    static void previewImport(java.nio.file.Path source, char[] masterPassword,
+            java.util.function.BiConsumer<ImportPreview, String> result) {
         char[] password = masterPassword.clone();
         Arrays.fill(masterPassword, '\0');
         withVault(() -> {
-            boolean success = false;
-            try { store.mergeEncrypted(source, password); success = true; }
-            catch (Exception failure) { LOGGER.warn("BlockVault could not import the encrypted vault"); }
+            ImportPreview preview = null;
+            String failureKey = null;
+            try { preview = store.previewImport(source, password); }
+            catch (WrongMasterPasswordException wrong) { failureKey = "blockvault.transfer.wrong_password"; }
+            catch (UnsupportedVaultVersionException | VaultCorruptException unreadable) {
+                failureKey = "blockvault.transfer.corrupt";
+            }
+            catch (Exception failure) {
+                LOGGER.warn("BlockVault could not read the import file ({})", failure.getClass().getSimpleName());
+                failureKey = "blockvault.transfer.failed";
+            }
             finally { Arrays.fill(password, '\0'); }
-            boolean imported = success;
-            BackgroundExecutor.onGameThread(() -> result.accept(imported));
+            ImportPreview shown = preview;
+            String key = failureKey;
+            BackgroundExecutor.onGameThread(() -> result.accept(shown, key));
         }, () -> {
             Arrays.fill(password, '\0');
-            BackgroundExecutor.onGameThread(() -> result.accept(false));
+            BackgroundExecutor.onGameThread(() -> result.accept(null, "blockvault.transfer.failed"));
+        });
+    }
+
+    /** Applies the import that was previewed. */
+    static void commitImport(Consumer<Boolean> result) {
+        withVault(() -> {
+            boolean success = false;
+            try { store.commitImport(); success = true; }
+            catch (Exception failure) { LOGGER.warn("BlockVault could not apply the import ({})", failure.getClass().getSimpleName()); }
+            boolean applied = success;
+            BackgroundExecutor.onGameThread(() -> result.accept(applied));
+        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(false)));
+    }
+
+    /** Forgets a previewed import and wipes its decrypted contents. */
+    static void discardImport() {
+        BackgroundExecutor.submit(() -> {
+            if (store != null) store.discardImport();
+            return null;
+        });
+    }
+
+    /**
+     * Saves a login the owner typed in. {@code result} receives null on success or a translation key on failure
+     * (invalid address or username, or an account that already exists).
+     */
+    static void addAccount(String hostText, String username, char[] password, Consumer<String> result) {
+        String host = io.github.silkypanda.blockvault.core.host.HostKey.normalize(hostText.trim()).orElse(null);
+        String name = username.trim();
+        if (host == null) { Arrays.fill(password, '\0'); result.accept("blockvault.add.bad_host"); return; }
+        if (name.isEmpty() || name.length() > 64 || name.chars().anyMatch(c -> Character.isWhitespace(c) || Character.isISOControl(c))) {
+            Arrays.fill(password, '\0');
+            result.accept("blockvault.add.bad_username");
+            return;
+        }
+        if (password.length == 0) { result.accept("blockvault.add.empty_password"); return; }
+        char[] copy = password.clone();
+        Arrays.fill(password, '\0');
+        withVault(() -> {
+            String failure = null;
+            try {
+                ServerEntry server = findServer(store.vault(), host);
+                boolean exists = server != null && server.accounts().stream().anyMatch(a -> a.username().equals(name));
+                if (exists) failure = "blockvault.add.exists";
+                else {
+                    long now = System.currentTimeMillis();
+                    changeAccount(host, name, old -> new Account(name, copy, Account.Status.VERIFIED, now, now, 0,
+                            new com.google.gson.JsonObject()));
+                }
+            } catch (RuntimeException error) { failure = "blockvault.vault.error"; }
+            finally { Arrays.fill(copy, '\0'); }
+            String key = failure;
+            BackgroundExecutor.onGameThread(() -> result.accept(key));
+        }, () -> {
+            Arrays.fill(copy, '\0');
+            BackgroundExecutor.onGameThread(() -> result.accept("blockvault.vault.error"));
         });
     }
 
@@ -560,8 +647,7 @@ public final class VaultRuntime implements VaultAccess {
             for (int index = 0; index < servers.size(); index++) {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
-                    servers.set(index, new ServerEntry(server.id(), server.name(), server.hosts(), neverSave,
-                            autofill, server.templateId(), server.accounts()));
+                    servers.set(index, server.withPolicy(neverSave, autofill));
                     break;
                 }
             }
@@ -579,8 +665,7 @@ public final class VaultRuntime implements VaultAccess {
             for (int index = 0; index < servers.size(); index++) {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
-                    servers.set(index, new ServerEntry(server.id(), server.name(), server.hosts(), server.neverSave(),
-                            server.autofill(), storedTemplate, server.accounts()));
+                    servers.set(index, server.withTemplate(storedTemplate));
                     break;
                 }
             }
@@ -597,8 +682,7 @@ public final class VaultRuntime implements VaultAccess {
             for (int index = 0; index < servers.size(); index++) {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(host)) {
-                    servers.set(index, new ServerEntry(server.id(), server.name(), server.hosts(), neverSave,
-                            server.autofill(), server.templateId(), server.accounts()));
+                    servers.set(index, server.withPolicy(neverSave, server.autofill()));
                     found = true;
                     break;
                 }
@@ -647,24 +731,37 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Puts a trash entry back into the vault (newer copy wins if the same server and user already exist). */
     static void restoreFromTrash(String trashId, Consumer<List<TrashRow>> result) {
-        changeTrash(result, vault -> VaultTrash.restore(vault, trashId, System.currentTimeMillis()));
+        changeTrash(result, vault -> VaultTrash.restore(vault, trashId, System.currentTimeMillis()), false);
     }
 
     /** Permanently deletes one trash entry. */
-    static void deleteFromTrash(String trashId, Consumer<List<TrashRow>> result) {
-        changeTrash(result, vault -> VaultTrash.deleteForever(vault, trashId));
+    static void deleteFromTrash(String trashId, boolean purgeBackups, Consumer<List<TrashRow>> result) {
+        changeTrash(result, vault -> VaultTrash.deleteForever(vault, trashId), purgeBackups);
     }
 
     /** Permanently deletes everything in the trash. */
-    static void emptyTrash(Consumer<List<TrashRow>> result) {
-        changeTrash(result, VaultTrash::emptyTrash);
+    static void emptyTrash(boolean purgeBackups, Consumer<List<TrashRow>> result) {
+        changeTrash(result, VaultTrash::emptyTrash, purgeBackups);
     }
 
-    private static void changeTrash(Consumer<List<TrashRow>> result, UnaryOperator<Vault> change) {
+    /**
+     * Applies a trash change. With {@code purgeBackups}, the passwords of every trash entry that disappears are
+     * also removed from the backup files (restored entries are never purged).
+     */
+    private static void changeTrash(Consumer<List<TrashRow>> result, UnaryOperator<Vault> change,
+            boolean purgeBackups) {
         withVault(() -> {
             Vault current = store.vault();
             Vault next = change.apply(current);
             if (next != current) saveVault(next);
+            if (purgeBackups) {
+                java.util.Set<String> remaining = new java.util.HashSet<>();
+                next.trash().forEach(entry -> remaining.add(entry.id()));
+                List<ServerEntry> gone = current.trash().stream().filter(entry -> !remaining.contains(entry.id()))
+                        .map(TrashEntry::server).toList();
+                try { store.purgeFromBackups(gone); }
+                catch (IOException failure) { LOGGER.warn("BlockVault could not scrub the backups"); }
+            }
             List<TrashRow> rows = trashRows();
             BackgroundExecutor.onGameThread(() -> result.accept(rows));
         }, () -> BackgroundExecutor.onGameThread(() -> toast("blockvault.vault.error")));
@@ -858,8 +955,7 @@ public final class VaultRuntime implements VaultAccess {
         if (replacement == null && accountIndex >= 0) accounts.remove(accountIndex);
         else if (accountIndex >= 0) accounts.set(accountIndex, replacement);
         else if (replacement != null) accounts.add(replacement);
-        ServerEntry updated = new ServerEntry(server.id(), server.name(), server.hosts(), server.neverSave(),
-                server.autofill(), server.templateId(), accounts);
+        ServerEntry updated = server.withAccounts(accounts);
         if (serverIndex < 0) servers.add(updated); else servers.set(serverIndex, updated);
         saveVault(current.withServers(servers));
     }

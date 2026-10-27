@@ -40,7 +40,7 @@ final class VaultListScreen extends Screen {
         page = Math.min(page, totalPages() - 1);
         rowButtonWidth = Math.max(1, Math.min(54, (contentWidth - 94) / ROW_ACTIONS));
         rowLabelWidth = Math.max(0, contentWidth - 14 - ROW_ACTIONS * rowButtonWidth);
-        footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 36) / 7));
+        footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 42) / 8));
         int searchWidth = Math.max(1, Math.min(320, width - 24));
         search = new EditBox(font, (width - searchWidth) / 2, 32, searchWidth, 20,
                 Component.translatable("blockvault.vault.search"));
@@ -89,6 +89,9 @@ final class VaultListScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.lock.short"),
                         button -> VaultRuntime.lock())
                 .bounds(contentLeft + (footerButtonWidth + 6) * 6, height - 34, footerButtonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.add.short"),
+                        button -> MinecraftHolder.open(new VaultAddScreen(this)))
+                .bounds(contentLeft + (footerButtonWidth + 6) * 7, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.trash.short"),
                         button -> VaultRuntime.openTrashScreen(this))
                 .bounds(contentLeft + (footerButtonWidth + 6) * 5, height - 34, footerButtonWidth, 20).build());

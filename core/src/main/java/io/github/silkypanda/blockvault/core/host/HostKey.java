@@ -34,7 +34,7 @@ public final class HostKey {
             } else host = value;
             host = host.toLowerCase(Locale.ROOT);
             if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
-            if (host.isEmpty() || !host.matches("[a-z0-9._-]+") || host.startsWith(".") || host.endsWith(".")) return Optional.empty();
+            if (!validHostname(host)) return Optional.empty();
         }
         int port = 25565;
         if (portText != null) {
@@ -44,5 +44,18 @@ public final class HostKey {
             if (port < 1 || port > 65535) return Optional.empty();
         }
         return Optional.of(host + ":" + port);
+    }
+
+    /** Letters, digits, hyphen and underscore in dot-separated labels of 1-63 characters, 253 in total. */
+    private static boolean validHostname(String host) {
+        if (host.isEmpty() || host.length() > 253) return false;
+        for (String label : host.split("\\.", -1)) {
+            if (label.isEmpty() || label.length() > 63 || label.startsWith("-") || label.endsWith("-")) return false;
+            for (int i = 0; i < label.length(); i++) {
+                char c = label.charAt(i);
+                if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_')) return false;
+            }
+        }
+        return true;
     }
 }

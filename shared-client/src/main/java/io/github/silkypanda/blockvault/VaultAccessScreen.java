@@ -16,6 +16,7 @@ final class VaultAccessScreen extends Screen {
     private boolean failed;
     private boolean busy;
     private String failureKey;
+    private final CapsLockHint capsLock = new CapsLockHint();
 
     VaultAccessScreen(boolean create) {
         super(Component.translatable(create ? "blockvault.vault.create.title" : "blockvault.vault.unlock.title"));
@@ -30,6 +31,7 @@ final class VaultAccessScreen extends Screen {
         password.setHint(Component.translatable("blockvault.vault.password"));
         password.setMaxLength(256);
         password.addFormatter(VaultAccessScreen::mask);
+        password.setResponder(capsLock::onValueChanged);
         addRenderableWidget(password);
         if (create) {
             confirmation = new EditBox(font, center - 100, height / 2, 200, 20,
@@ -37,6 +39,7 @@ final class VaultAccessScreen extends Screen {
             confirmation.setHint(Component.translatable("blockvault.vault.confirm"));
             confirmation.setMaxLength(256);
             confirmation.addFormatter(VaultAccessScreen::mask);
+            confirmation.setResponder(capsLock::onValueChanged);
             addRenderableWidget(confirmation);
         }
         addRenderableWidget(Button.builder(Component.translatable(create
@@ -77,7 +80,14 @@ final class VaultAccessScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        if (failed) {
+        if (capsLock.likelyOn()) {
+            graphics.centeredText(font, Component.translatable("blockvault.access.caps_lock"), width / 2,
+                    height / 2 - 42, 0xffffcc55);
+        }
+        if (busy) {
+            graphics.centeredText(font, Component.translatable(create ? "blockvault.access.creating"
+                    : "blockvault.access.unlocking"), width / 2, height / 2 + (create ? 59 : 32), 0xffcccccc);
+        } else if (failed) {
             graphics.centeredText(font, Component.translatable(failureKey != null ? failureKey : create
                     ? "blockvault.vault.password.mismatch" : "blockvault.vault.unlock.failed"), width / 2,
                     height / 2 + (create ? 59 : 32), 0xffff5555);
@@ -113,6 +123,7 @@ final class VaultAccessScreen extends Screen {
     private void clearFields() {
         if (password != null) password.setValue("");
         if (confirmation != null) confirmation.setValue("");
+        capsLock.reset();
     }
 
     private static FormattedCharSequence mask(String value, int cursor) {

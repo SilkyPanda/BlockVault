@@ -26,9 +26,13 @@ final class DataDirsTest {
         Path directory = java.nio.file.Files.createDirectory(parent.resolve("blockvault"));
         Path secret = java.nio.file.Files.writeString(directory.resolve("vault.bv"), "encrypted");
         Path outside = java.nio.file.Files.writeString(parent.resolve("keep.txt"), "keep");
+        Path ownersFile = java.nio.file.Files.writeString(directory.resolve("notes.txt"), "mine");
         try {
             DataDirs.delete(directory);
             assertFalse(java.nio.file.Files.exists(secret));
+            assertEquals("mine", java.nio.file.Files.readString(ownersFile), "files that are not BlockVault's stay");
+            java.nio.file.Files.delete(ownersFile);
+            java.nio.file.Files.delete(directory);
             assertEquals("keep", java.nio.file.Files.readString(outside));
             assertThrows(java.io.IOException.class, () -> DataDirs.delete(parent));
         } finally {

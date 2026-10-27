@@ -16,6 +16,7 @@ public abstract class KeyboardHandlerMixin {
 
     @Inject(method = "keyPress", at = @At("HEAD"), require = 0)
     private void blockvault$keyPressed(long window, int action, KeyEvent event, CallbackInfo callback) {
+        Keybinds.trackModifiers(event);
         if (action == GLFW_PRESS_ACTION) {
             net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().gui.screen();
             if (screen == null) Keybinds.onKeyPress(event);

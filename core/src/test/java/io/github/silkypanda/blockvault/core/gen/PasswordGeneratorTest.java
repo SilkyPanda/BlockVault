@@ -44,9 +44,9 @@ final class PasswordGeneratorTest {
     void memorablePresetUsesFourWordsAndTwoDigits() {
         char[] generated = PasswordGenerator.generate(PasswordGenerator.Policy.memorable());
         String value = new String(generated);
-        assertEquals(22, generated.length);
+        // Word length depends on the installed list (3-5 letters for the EFF list), so only the shape is fixed.
         assertEquals(4, value.chars().filter(c -> c == '-').count());
-        assertTrue(value.matches("[a-z]{4}(?:-[a-z]{4}){3}-[0-9]{2}"));
+        assertTrue(value.matches("[a-z]{3,8}(?:-[a-z]{3,8}){3}-[0-9]{2}"));
         java.util.Arrays.fill(generated, '\0');
     }
 
@@ -54,13 +54,13 @@ final class PasswordGeneratorTest {
     void memorablePresetChangesWordCountToFitServerLengthRules() {
         char[] shortPassword = PasswordGenerator.generate(PasswordGenerator.Policy.memorable()
                 .adjustFor(new ServerRuleHint(null, 12, false)));
-        assertEquals(12, shortPassword.length);
+        assertTrue(shortPassword.length >= 8 && shortPassword.length <= 12, "length " + shortPassword.length);
         assertEquals(2, new String(shortPassword).chars().filter(c -> c == '-').count());
         java.util.Arrays.fill(shortPassword, '\0');
 
         char[] longPassword = PasswordGenerator.generate(PasswordGenerator.Policy.memorable()
                 .adjustFor(new ServerRuleHint(24, null, false)));
-        assertEquals(27, longPassword.length);
+        assertTrue(longPassword.length >= 24, "length " + longPassword.length);
         assertEquals(5, new String(longPassword).chars().filter(c -> c == '-').count());
         java.util.Arrays.fill(longPassword, '\0');
     }

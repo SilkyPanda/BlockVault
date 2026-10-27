@@ -26,6 +26,9 @@ public final class Hooks {
     private static volatile boolean commandHookSeen;
     private static volatile long historyScrubbedAt = Long.MIN_VALUE;
     private static boolean warnedCommandHook;
+    private static String sessionHost;
+    private static String sessionUser;
+    private static int sessionErrors;
     private static boolean warnedHistoryHook;
 
     private Hooks() { }
@@ -56,6 +59,9 @@ public final class Hooks {
             environment = new McSessionEnv();
             LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.pickyServer());
             session = active;
+            sessionHost = host;
+            sessionUser = minecraft.getUser().getName();
+            sessionErrors = 0;
             environment.attach(active);
             active.onJoin(host, minecraft.getUser().getName());
             BlockVaultConfig.load(settings -> {
@@ -126,9 +132,16 @@ public final class Hooks {
     private static void guard(LoginSession active, Runnable operation) {
         try { operation.run(); }
         catch (RuntimeException failure) {
-            LOGGER.warn("BlockVault stopped login handling after an input error ({})", failure.getClass().getSimpleName());
+            LOGGER.warn("BlockVault hit an input error ({})", failure.getClass().getSimpleName());
+            if (session != active) return;
             active.onDisconnect();
-            if (session == active) session = null;
+            // One bad message must not end login handling: start the session over, and only give up after repeats.
+            if (++sessionErrors >= 3) {
+                LOGGER.warn("BlockVault stopped login handling for this connection after repeated errors");
+                session = null;
+            } else {
+                active.onJoin(sessionHost, sessionUser);
+            }
         }
     }
 

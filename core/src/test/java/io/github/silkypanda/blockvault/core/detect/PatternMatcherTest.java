@@ -168,4 +168,14 @@ final class PatternMatcherTest {
             assertEquals(ResultKind.FAILURE, matcher.classify(failure));
         }
     }
+
+    @Test
+    void catastrophicPatternsAreStoppedByTheTimeBudget() {
+        java.util.List<java.util.regex.Pattern> evil = java.util.List.of(java.util.regex.Pattern.compile("(a+)+$"));
+        long start = System.nanoTime();
+        boolean matched = PromptMatcher.matches(evil, "a".repeat(60) + "b");
+        long millis = (System.nanoTime() - start) / 1_000_000;
+        assertEquals(false, matched);
+        assertTrue(millis < 1000, "took " + millis + " ms");
+    }
 }

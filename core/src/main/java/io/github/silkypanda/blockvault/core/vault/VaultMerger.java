@@ -23,7 +23,7 @@ public final class VaultMerger {
         Map<String, TrashEntry> trash = new LinkedHashMap<>();
         for (TrashEntry entry : onDisk.trash()) trash.put(entry.id(), entry);
         for (TrashEntry entry : current.trash()) trash.put(entry.id(), entry);
-        Vault merged = new Vault(Math.max(current.v(), onDisk.v()), servers, new ArrayList<>(trash.values()));
+        Vault merged = new Vault(Math.max(current.v(), onDisk.v()), servers, new ArrayList<>(trash.values()), current.extra());
         return VaultTrash.purgeExpired(merged, nowMillis);
     }
 
@@ -55,11 +55,52 @@ public final class VaultMerger {
         }
         // Server settings and host list always come from the current side: servers carry no timestamp, and a
         // foreign file must not be able to add host aliases to an existing server.
-        return new ServerEntry(current.id(), current.name(), current.hosts(), current.neverSave(),
-                current.autofill(), current.templateId(), new ArrayList<>(accounts.values()));
+        return current.withAccounts(new ArrayList<>(accounts.values()));
     }
 
     private static long effective(Account account, long nowMillis) {
         return Math.min(account.modifiedAt(), nowMillis);
+    }
+
+    /** Describes what {@link #merge} would change in {@code current} if {@code other} were merged in. */
+    public static ImportPreview diff(Vault current, Vault other, long nowMillis) {
+        List<ImportPreview.Change> changes = new ArrayList<>();
+        for (ServerEntry incoming : other.servers()) {
+            ServerEntry local = current.servers().stream()
+                    .filter(candidate -> candidate.id().equals(incoming.id()) || sharesHost(candidate, incoming))
+                    .findFirst().orElse(null);
+            if (local == null) {
+                changes.add(new ImportPreview.Change(ImportPreview.Kind.NEW_SERVER, incoming.name(), null));
+                for (Account account : incoming.accounts()) {
+                    changes.add(new ImportPreview.Change(ImportPreview.Kind.NEW_ACCOUNT, incoming.name(), account.username()));
+                }
+                continue;
+            }
+            for (Account account : incoming.accounts()) {
+                Account mine = local.accounts().stream().filter(a -> a.username().equals(account.username()))
+                        .findFirst().orElse(null);
+                if (mine == null) {
+                    changes.add(new ImportPreview.Change(ImportPreview.Kind.NEW_ACCOUNT, local.name(), account.username()));
+                    continue;
+                }
+                char[] left = mine.password();
+                char[] right = account.password();
+                boolean same = java.util.Arrays.equals(left, right);
+                java.util.Arrays.fill(left, '\0');
+                java.util.Arrays.fill(right, '\0');
+                if (same) continue;
+                boolean importedWins = effective(mine, nowMillis) < effective(account, nowMillis);
+                changes.add(new ImportPreview.Change(importedWins ? ImportPreview.Kind.UPDATED_ACCOUNT
+                        : ImportPreview.Kind.KEPT_LOCAL, local.name(), account.username()));
+            }
+        }
+        for (TrashEntry entry : other.trash()) {
+            boolean known = current.trash().stream().anyMatch(t -> t.id().equals(entry.id()));
+            boolean expired = nowMillis - entry.deletedAt() > Vault.TRASH_RETENTION_MILLIS;
+            if (!known && !expired) {
+                changes.add(new ImportPreview.Change(ImportPreview.Kind.NEW_TRASH, entry.server().name(), null));
+            }
+        }
+        return new ImportPreview(changes);
     }
 }

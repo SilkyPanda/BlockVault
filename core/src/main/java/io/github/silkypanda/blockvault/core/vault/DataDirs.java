@@ -49,10 +49,21 @@ public final class DataDirs {
             throw new IOException("Refusing to delete a symbolic link as the data directory");
         }
         if (!java.nio.file.Files.exists(target)) return;
-        try (Stream<Path> paths = java.nio.file.Files.walk(target)) {
-            for (Path entry : paths.sorted(Comparator.reverseOrder()).toList()) {
-                java.nio.file.Files.delete(entry);
+        // Only BlockVault's own files are removed; anything else the owner keeps in this folder is left alone,
+        // and the folder itself is removed only if nothing else is in it.
+        try (Stream<Path> paths = java.nio.file.Files.list(target)) {
+            for (Path entry : paths.toList()) {
+                String fileName = entry.getFileName().toString();
+                if (java.nio.file.Files.isRegularFile(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                        && OWN_FILES.matcher(fileName).matches()) {
+                    java.nio.file.Files.delete(entry);
+                }
             }
         }
+        try { java.nio.file.Files.delete(target); }
+        catch (java.nio.file.DirectoryNotEmptyException keepsOtherFiles) { /* leave the owner's files */ }
     }
+
+    private static final java.util.regex.Pattern OWN_FILES =
+            java.util.regex.Pattern.compile("vault\\.bv(\\..+)?|config\\.json(\\..+)?");
 }

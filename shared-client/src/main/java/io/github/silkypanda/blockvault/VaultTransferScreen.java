@@ -53,6 +53,7 @@ final class VaultTransferScreen extends Screen {
         if (busy || pathBox.getValue().isBlank()) return;
         busy = true;
         failed = false;
+        failureKey = null;
         Path path;
         try { path = Path.of(pathBox.getValue().trim()); }
         catch (RuntimeException invalidPath) { busy = false; failed = true; return; }
@@ -62,15 +63,24 @@ final class VaultTransferScreen extends Screen {
         }
         char[] password = passwordBox.getValue().toCharArray();
         passwordBox.setValue("");
-        VaultRuntime.importVault(path, password, success -> {
+        VaultRuntime.previewImport(path, password, (preview, failureKey) -> {
             Arrays.fill(password, '\0');
-            finish(success);
+            busy = false;
+            if (preview == null) {
+                failed = true;
+                this.failureKey = failureKey;
+                return;
+            }
+            net.minecraft.client.Minecraft.getInstance().setScreenAndShow(new VaultImportPreviewScreen(parent, preview));
         });
     }
+
+    private String failureKey;
 
     private void finish(boolean success) {
         busy = false;
         failed = !success;
+        failureKey = null;
         if (success) VaultRuntime.openVaultScreen();
     }
 
@@ -83,7 +93,8 @@ final class VaultTransferScreen extends Screen {
                 height / 2 - 43, 0xffc5c0cf);
         if (busy) graphics.centeredText(font, Component.translatable("blockvault.transfer.working"),
                 width / 2, height / 2 + 65, 0xffaaaaaa);
-        else if (failed) graphics.centeredText(font, Component.translatable("blockvault.transfer.failed"),
+        else if (failed) graphics.centeredText(font, Component.translatable(failureKey != null ? failureKey
+                : "blockvault.transfer.failed"),
                 width / 2, height / 2 + 65, 0xffff7777);
     }
 

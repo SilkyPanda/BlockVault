@@ -36,6 +36,7 @@ public final class VaultStore {
     private byte[] wrappedKey;
     private byte[] vaultKey;
     private Vault vault;
+    private Vault pendingImport;
     private byte[] diskDigest;
 
     private VaultStore(Path directory) {
@@ -114,8 +115,7 @@ public final class VaultStore {
     /** Stores the currently unlocked vault key for the user's explicit trusted-device choice. */
     public void trustThisDevice() throws IOException {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
-        Files.createDirectories(directory);
-        setPermissions(directory, true);
+        ensurePrivateDirectory();
         Path temporary = path("vault.bv.trust.tmp");
         Path trusted = path("vault.bv.trust");
         byte[] copy = vaultKey.clone();
@@ -191,7 +191,14 @@ public final class VaultStore {
             byte[] currentDigest = digest(encoded);
             if (diskDigest != null && Arrays.equals(diskDigest, currentDigest)) return;
             VaultFile.Parsed parsed = VaultFile.parse(encoded);
-            plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+            try {
+                plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+            } catch (VaultAuthException keyChanged) {
+                // Another instance changed the master password (and so the vault key). Our key is stale, so lock
+                // and let the owner unlock with the new password instead of failing every later action.
+                lock();
+                throw keyChanged;
+            }
             Vault refreshed = VaultJson.read(plaintext);
             clearVaultPasswords(vault);
             header = parsed.header();
@@ -205,8 +212,7 @@ public final class VaultStore {
     }
 
     private byte[] readVaultSnapshot() throws IOException {
-        Files.createDirectories(directory);
-        setPermissions(directory, true);
+        ensurePrivateDirectory();
         try (FileChannel lockChannel = FileChannel.open(path("vault.bv.lock"), StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE);
              FileLock lock = lockChannel.lock()) {
@@ -252,39 +258,119 @@ public final class VaultStore {
         finally { SecureBytes.wipe(encrypted); }
     }
 
-    /** Decrypts an encrypted export using its master password, merges it, and re-encrypts locally. */
-    public void mergeEncrypted(Path source, char[] masterPassword) throws Exception {
+    /**
+     * Reads an encrypted export and reports what importing it would change, without modifying anything. The
+     * decrypted contents are held in memory until {@link #commitImport()} or {@link #discardImport()}.
+     */
+    public ImportPreview previewImport(Path source, char[] masterPassword) throws Exception {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
         Path normalized = source.toAbsolutePath().normalize();
         if (!Files.isRegularFile(normalized) || normalized.equals(path("vault.bv"))) {
             throw new IOException("Invalid encrypted vault import source");
         }
         byte[] encoded = readBounded(normalized);
-        // Always keep a restore point of the current vault before foreign data is merged in.
-        withLock(() -> { rotateBackupsNow(); return null; });
-        Path temporaryDirectory = Files.createTempDirectory("blockvault-import-");
-        VaultStore imported = null;
         try {
-            setPermissions(temporaryDirectory, true);
-            Path importedFile = temporaryDirectory.resolve("vault.bv");
-            Files.write(importedFile, encoded, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            setPermissions(importedFile, false);
-            imported = VaultStore.open(temporaryDirectory);
-            imported.unlock(masterPassword);
-            byte[] mergedJson = VaultJson.write(VaultMerger.merge(vault, imported.vault(), System.currentTimeMillis()));
-            try {
-                Vault independent = VaultJson.read(mergedJson);
-                save(independent);
-            } finally {
-                SecureBytes.wipe(mergedJson);
-            }
+            Vault imported = decryptExternal(encoded, masterPassword);
+            discardImport();
+            pendingImport = imported;
+            return VaultMerger.diff(vault, imported, System.currentTimeMillis());
         } finally {
             SecureBytes.wipe(encoded);
-            if (imported != null) imported.lock();
-            Files.deleteIfExists(temporaryDirectory.resolve("vault.bv"));
-            Files.deleteIfExists(temporaryDirectory.resolve("vault.bv.lock"));
-            Files.deleteIfExists(temporaryDirectory);
         }
+    }
+
+    /** Merges the previewed import into the vault (after taking a restore point) and saves it. */
+    public void commitImport() throws Exception {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        if (pendingImport == null) throw new IllegalStateException("No import is waiting");
+        Vault imported = pendingImport;
+        pendingImport = null;
+        byte[] mergedJson = null;
+        try {
+            withLock(() -> { rotateBackupsNow(); return null; });
+            mergedJson = VaultJson.write(VaultMerger.merge(vault, imported, System.currentTimeMillis()));
+            // Re-read so the saved vault does not share password arrays with the import that is wiped below.
+            // save() also merges with whatever another instance wrote to disk in the meantime.
+            save(VaultJson.read(mergedJson));
+        } finally {
+            SecureBytes.wipe(mergedJson);
+            clearVaultPasswords(imported);
+        }
+    }
+
+    /** Forgets a previewed import and wipes its decrypted contents. */
+    public void discardImport() {
+        clearVaultPasswords(pendingImport);
+        pendingImport = null;
+    }
+
+    /** Decrypts another vault file in memory with its own master password, without touching this store's state. */
+    private static Vault decryptExternal(byte[] encoded, char[] masterPassword) throws Exception {
+        if (masterPassword == null) throw new IllegalArgumentException("A master password is required");
+        VaultFile.Parsed parsed;
+        try { parsed = VaultFile.parse(encoded); }
+        catch (UnsupportedVaultVersionException version) { throw version; }
+        catch (Exception malformed) { throw new VaultCorruptException(malformed); }
+        byte[] wrapAad = Arrays.copyOf(parsed.headerAad(), PREFIX_BYTES);
+        MasterPasswordKek kek = new MasterPasswordKek(masterPassword, parsed.header().salt(),
+                parsed.header().iterations(), wrapAad);
+        byte[] key;
+        try { key = kek.unwrap(parsed.wrappedKey()); }
+        catch (VaultAuthException wrongPassword) { throw new WrongMasterPasswordException(wrongPassword); }
+        finally { kek.clear(); }
+        byte[] plaintext = null;
+        try {
+            plaintext = AesGcm.decrypt(key, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+            return VaultJson.read(plaintext);
+        } catch (VaultAuthException | IllegalArgumentException | IllegalStateException damaged) {
+            throw new VaultCorruptException(damaged);
+        } finally {
+            SecureBytes.wipe(key);
+            SecureBytes.wipe(plaintext);
+        }
+    }
+
+    /**
+     * Removes accounts matching {@code removed} (same host, username and password) from every readable backup.
+     * Returns how many backup files were changed. Backups made under another vault key are left alone.
+     */
+    public int purgeFromBackups(List<ServerEntry> removed) throws IOException {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        return withLock(() -> {
+            int changed = 0;
+            List<Path> files = new ArrayList<>();
+            for (int slot = 1; slot <= AUTO_BACKUP_SLOTS; slot++) files.add(path("vault.bv.bak" + slot));
+            for (int slot = 1; slot <= MANUAL_BACKUP_SLOTS; slot++) files.add(manualBackupPath(slot));
+            for (Path backup : files) {
+                if (!Files.isRegularFile(backup)) continue;
+                byte[] encoded = null;
+                byte[] plaintext = null;
+                byte[] replacement = null;
+                try {
+                    java.nio.file.attribute.FileTime createdAt = Files.getLastModifiedTime(backup);
+                    encoded = readBounded(backup);
+                    VaultFile.Parsed parsed = VaultFile.parse(encoded);
+                    plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+                    Vault contents = VaultJson.read(plaintext);
+                    Vault scrubbed = VaultTrash.purgeAccounts(contents, removed);
+                    if (scrubbed != contents) {
+                        replacement = VaultFile.encode(header, wrappedKey, vaultKey, VaultJson.write(scrubbed));
+                        atomicWrite(backup, replacement);
+                        Files.setLastModifiedTime(backup, createdAt);
+                        changed++;
+                    }
+                    clearVaultPasswords(contents);
+                    if (scrubbed != contents) clearVaultPasswords(scrubbed);
+                } catch (Exception unreadable) {
+                    // Backups from another key or an older format cannot be scrubbed; skip them.
+                } finally {
+                    SecureBytes.wipe(encoded);
+                    SecureBytes.wipe(plaintext);
+                    SecureBytes.wipe(replacement);
+                }
+            }
+            return changed;
+        });
     }
 
     /** Atomically encrypts and persists the supplied vault, rotating at most one backup per day. */
@@ -303,8 +389,7 @@ public final class VaultStore {
         byte[] json = null;
         byte[] encoded = null;
         Path lockPath = path("vault.bv.lock");
-        Files.createDirectories(directory);
-        setPermissions(directory, true);
+        ensurePrivateDirectory();
         try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              FileLock lock = lockChannel.lock()) {
             if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
@@ -504,6 +589,7 @@ public final class VaultStore {
 
     /** Wipes the in-memory vault key and drops decrypted account data. */
     public void lock() {
+        discardImport();
         SecureBytes.wipe(vaultKey);
         clearVaultPasswords(vault);
         vaultKey = null;
@@ -733,6 +819,25 @@ public final class VaultStore {
         for (ServerEntry server : value.servers()) for (Account account : server.accounts()) account.clearPassword();
         for (TrashEntry entry : value.trash()) {
             for (Account account : entry.server().accounts()) account.clearPassword();
+        }
+    }
+
+    /**
+     * Creates the data directory owner-only if it does not exist. An existing directory is tightened only when it
+     * is BlockVault's own folder, so a custom location chosen by the owner is never silently re-permissioned.
+     */
+    private void ensurePrivateDirectory() throws IOException {
+        if (!Files.isDirectory(directory)) {
+            try {
+                Files.createDirectories(directory, java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
+                        Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE,
+                                PosixFilePermission.OWNER_EXECUTE)));
+            } catch (UnsupportedOperationException windows) {
+                Files.createDirectories(directory);
+            }
+        } else if (directory.getFileName() != null
+                && "blockvault".equalsIgnoreCase(directory.getFileName().toString())) {
+            setPermissions(directory, true);
         }
     }
 

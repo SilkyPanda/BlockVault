@@ -19,6 +19,8 @@ final class VaultTrashScreen extends Screen {
     private Button nextButton;
     private Button emptyButton;
     private boolean confirmEmpty;
+    private boolean purgeBackups;
+    private Button purgeButton;
     private int page;
     private int contentLeft;
     private int contentWidth;
@@ -44,7 +46,7 @@ final class VaultTrashScreen extends Screen {
                     button -> withRow(rowIndex, row -> VaultRuntime.restoreFromTrash(row.id(), this::update)))
                     .bounds(actionsX, y, buttonWidth, 20).build();
             Button delete = Button.builder(Component.translatable("blockvault.trash.delete"),
-                    button -> withRow(rowIndex, row -> VaultRuntime.deleteFromTrash(row.id(), this::update)))
+                    button -> withRow(rowIndex, row -> VaultRuntime.deleteFromTrash(row.id(), purgeBackups, this::update)))
                     .bounds(actionsX + buttonWidth + 6, y, buttonWidth, 20).build();
             restoreButtons.add(restore);
             deleteButtons.add(delete);
@@ -67,8 +69,13 @@ final class VaultTrashScreen extends Screen {
                 return;
             }
             confirmEmpty = false;
-            VaultRuntime.emptyTrash(this::update);
+            VaultRuntime.emptyTrash(purgeBackups, this::update);
         }).bounds(contentLeft + (footer + 6) * 2, height - 34, footer, 20).build();
+        purgeButton = Button.builder(Component.empty(), button -> {
+            purgeBackups = !purgeBackups;
+            refreshButtons();
+        }).bounds(contentLeft, height - 58, contentWidth, 20).build();
+        addRenderableWidget(purgeButton);
         addRenderableWidget(previousButton);
         addRenderableWidget(nextButton);
         addRenderableWidget(emptyButton);
@@ -99,6 +106,8 @@ final class VaultTrashScreen extends Screen {
         previousButton.active = page > 0;
         nextButton.active = page < totalPages() - 1;
         emptyButton.active = !rows.isEmpty();
+        purgeButton.setMessage(Component.translatable(purgeBackups ? "blockvault.trash.purge_backups.on"
+                : "blockvault.trash.purge_backups.off"));
         emptyButton.setMessage(Component.translatable(confirmEmpty
                 ? "blockvault.trash.empty_all.confirm" : "blockvault.trash.empty_all"));
     }
@@ -130,7 +139,7 @@ final class VaultTrashScreen extends Screen {
             graphics.centeredText(font, Component.translatable("blockvault.trash.empty"), width / 2, 80, 0xffcccccc);
         }
         graphics.centeredText(font, Component.translatable("blockvault.vault.page",
-                Math.min(page + 1, totalPages()), totalPages()), width / 2, height - 50, 0xffaaaaaa);
+                Math.min(page + 1, totalPages()), totalPages()), width / 2, height - 72, 0xffaaaaaa);
     }
 
     private static String clip(String value, int maxPixels) {

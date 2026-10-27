@@ -75,8 +75,15 @@ public record CommandTemplate(String id, String login, String register) {
         return result;
     }
 
+    /** Control characters could split or corrupt the command, so they are refused rather than silently removed. */
     private static String safe(String value) {
-        return value == null ? "" : value.replaceAll("[\\p{Cc}]", "");
+        if (value == null) return "";
+        for (int i = 0; i < value.length(); i++) {
+            if (Character.isISOControl(value.charAt(i))) {
+                throw new IllegalArgumentException("Command argument contains control characters");
+            }
+        }
+        return value;
     }
 
     private static String argumentPlaceholder(String label, int index, int count) {

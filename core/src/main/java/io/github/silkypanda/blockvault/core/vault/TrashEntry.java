@@ -1,5 +1,7 @@
 package io.github.silkypanda.blockvault.core.vault;
 
+import com.google.gson.JsonObject;
+
 /**
  * One item in the vault's trash: either a single deleted account or a whole deleted server.
  *
@@ -7,10 +9,18 @@ package io.github.silkypanda.blockvault.core.vault;
  * deleted account it holds exactly that account; for a deleted server it holds every account the server had.
  * Passwords stay encrypted inside the vault file like any other entry.
  */
-public record TrashEntry(String id, long deletedAt, boolean wholeServer, ServerEntry server) {
+public record TrashEntry(String id, long deletedAt, boolean wholeServer, ServerEntry server, JsonObject extra) {
     public TrashEntry {
         if (id == null || id.isBlank() || server == null) {
             throw new IllegalArgumentException("Trash entry fields must not be null");
         }
+        extra = extra == null ? new JsonObject() : extra.deepCopy();
     }
+
+    public TrashEntry(String id, long deletedAt, boolean wholeServer, ServerEntry server) {
+        this(id, deletedAt, wholeServer, server, null);
+    }
+
+    @Override
+    public JsonObject extra() { return extra.deepCopy(); }
 }

@@ -64,6 +64,8 @@ public final class BackgroundExecutor implements Scheduler {
         return task -> {
             Thread thread = new Thread(task, name);
             thread.setDaemon(true);
+            // Key derivation is deliberately CPU-heavy; keep it from competing with the render thread.
+            if (name.equals("blockvault-io")) thread.setPriority(Thread.MIN_PRIORITY);
             return thread;
         };
     }

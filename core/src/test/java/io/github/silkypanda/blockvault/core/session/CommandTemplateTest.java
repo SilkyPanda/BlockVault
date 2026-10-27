@@ -23,10 +23,12 @@ final class CommandTemplateTest {
 
     @Test
     void rejectsSlashInjectionInRenderedCommand() {
-        String rendered = CommandTemplate.builtins().get("authme-noconfirm")
-                .render(true, "safe\n/logout".toCharArray(), null, "Alex");
-        assertTrue(rendered.startsWith("register safe"));
-        assertTrue(!rendered.contains("\n"));
+        // A newline followed by a second command is refused outright instead of being cleaned up.
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> CommandTemplate.builtins()
+                .get("authme-noconfirm").render(true, "safe\n/logout".toCharArray(), null, "Alex"));
+        // A leading slash would turn the argument into a different command.
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> new CommandTemplate("t", "{password}",
+                "{password}").render(false, "/op me".toCharArray(), null, "Alex"));
     }
 
     @Test
@@ -34,5 +36,11 @@ final class CommandTemplateTest {
         String rendered = new CommandTemplate("test", "login {password}", "register {password}")
                 .render(false, "{email}".toCharArray(), "secret@example.test", "Alex");
         assertEquals("login {email}", rendered);
+    }
+
+    @org.junit.jupiter.api.Test
+    void controlCharactersInArgumentsAreRefusedNotSilentlyRemoved() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> CommandTemplate.builtins().get("authme").render(false, "pa\nss".toCharArray(), "", "Alex"));
     }
 }

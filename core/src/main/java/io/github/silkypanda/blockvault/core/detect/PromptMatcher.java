@@ -35,8 +35,18 @@ public final class PromptMatcher {
         return Set.copyOf(result);
     }
 
+    /** Total matching time allowed for one message across all patterns. */
+    private static final long MATCH_BUDGET_NANOS = 25_000_000L;
+
+    /** Returns true if any pattern matches; a pattern that runs out of time counts as "no match". */
     static boolean matches(java.util.List<Pattern> patterns, String text) {
-        return patterns.stream().anyMatch(pattern -> pattern.matcher(text).find());
+        CharSequence guarded = new DeadlineCharSequence(text, MATCH_BUDGET_NANOS);
+        try {
+            for (Pattern pattern : patterns) if (pattern.matcher(guarded).find()) return true;
+            return false;
+        } catch (DeadlineCharSequence.TimeoutException slowPattern) {
+            return false;
+        }
     }
 
     static String clean(String plain) {
