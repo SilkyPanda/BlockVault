@@ -7,6 +7,8 @@ package io.github.silkypanda.blockvault.core.detect;
 final class DeadlineCharSequence implements CharSequence {
     /** Thrown from {@code charAt} when the budget is exhausted. */
     static final class TimeoutException extends RuntimeException {
+	private static final long serialVersionUID = 1L;
+
         TimeoutException() { super("Pattern matching exceeded its time budget", null, false, false); }
     }
 

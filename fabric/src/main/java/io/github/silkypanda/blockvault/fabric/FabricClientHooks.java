@@ -3,8 +3,9 @@ package io.github.silkypanda.blockvault.fabric;
 import io.github.silkypanda.blockvault.Hooks;
 import io.github.silkypanda.blockvault.Keybinds;
 import io.github.silkypanda.blockvault.VaultRuntime;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -20,9 +21,9 @@ final class FabricClientHooks {
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> Hooks.onSystemMessage(message));
         // /blockvault opens the vault without a keybind or Mod Menu; /blockvault lock wipes the key.
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-                ClientCommandManager.literal("blockvault")
+                LiteralArgumentBuilder.<FabricClientCommandSource>literal("blockvault")
                         .executes(context -> { VaultRuntime.openVaultScreen(); return 1; })
-                        .then(ClientCommandManager.literal("lock")
+                        .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("lock")
                                 .executes(context -> { VaultRuntime.lock(); return 1; }))));
         ClientPlayConnectionEvents.JOIN.register((listener, sender, minecraft) ->
                 Minecraft.getInstance().execute(Hooks::onJoin));
