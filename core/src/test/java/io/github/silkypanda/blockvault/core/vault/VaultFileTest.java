@@ -28,6 +28,14 @@ final class VaultFileTest {
     }
 
     @Test
+    void encoderRejectsFilesThatParserWouldConsiderOversized() {
+        VaultFile.Header header = new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, 210_000, new byte[16]);
+        int overhead = 28 + 2 + 60 + 12 + 4 + 16;
+        assertThrows(IllegalArgumentException.class, () -> VaultFile.encode(header, new byte[60], new byte[32],
+                new byte[VaultFile.MAX_BYTES - overhead + 1]));
+    }
+
+    @Test
     void everySingleByteMutationIsRejectedOrFailsAuthentication() throws Exception {
         byte[] key = new byte[32];
         byte[] source = VaultFile.encode(new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, 210_000, new byte[16]),

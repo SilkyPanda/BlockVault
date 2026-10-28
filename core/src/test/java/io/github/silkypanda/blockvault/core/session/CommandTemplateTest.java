@@ -22,6 +22,14 @@ final class CommandTemplateTest {
     }
 
     @Test
+    void registrationParsingStopsAtTheNextCommand() {
+        assertEquals("register {password} {password}", CommandTemplate.fromRegistrationPrompt(
+                "Use /register <password> <password> or /login <password>", java.util.Set.of("register")).register());
+        assertEquals("register {password}", CommandTemplate.fromRegistrationPrompt(
+                "Use /register <password> then /login <password>", java.util.Set.of("register")).register());
+    }
+
+    @Test
     void rejectsSlashInjectionInRenderedCommand() {
         // A newline followed by a second command is refused outright instead of being cleaned up.
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> CommandTemplate.builtins()

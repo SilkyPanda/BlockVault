@@ -17,7 +17,6 @@ final class VaultTrashTest {
         assertEquals(1, trashed.servers().getFirst().accounts().size());
         assertEquals(1, trashed.trash().size());
         TrashEntry entry = trashed.trash().getFirst();
-        assertEquals(false, entry.wholeServer());
         assertEquals("secret", new String(entry.server().accounts().getFirst().password()));
 
         Vault restored = VaultTrash.restore(trashed, entry.id(), 2000);
@@ -26,34 +25,22 @@ final class VaultTrashTest {
     }
 
     @Test
-    void deletingTheLastAccountLeavesItsServerSettingsLive() {
+    void deletingTheLastAccountMovesItsServerSettingsIntoTrashForRestore() {
         ServerEntry server = vault(account("Alex", "a", 1)).servers().getFirst();
         Vault trashed = VaultTrash.trashAccount(vault(account("Alex", "a", 1)), "id", "Alex", 1000);
-        assertEquals(0, trashed.servers().getFirst().accounts().size());
-        assertEquals(server.id(), trashed.servers().getFirst().id());
-        assertEquals(server.name(), trashed.servers().getFirst().name());
-        assertEquals(server.hosts(), trashed.servers().getFirst().hosts());
-        assertEquals(server.autofill(), trashed.servers().getFirst().autofill());
-        assertEquals(server.neverSave(), trashed.servers().getFirst().neverSave());
+        assertTrue(trashed.servers().isEmpty());
+        assertEquals(server.name(), trashed.trash().getFirst().server().name());
         assertEquals(1, trashed.trash().getFirst().server().accounts().size());
-    }
-
-    @Test
-    void legacyWholeServerTrashEntriesCanStillBeRestored() {
-        ServerEntry oldServer = vault(account("Alex", "a", 1), account("Sam", "b", 1)).servers().getFirst();
-        Vault trashed = new Vault(Vault.VERSION, List.of(), List.of(new TrashEntry("legacy", 1000, true, oldServer)));
-        assertTrue(trashed.trash().getFirst().wholeServer());
-        assertEquals(2, trashed.trash().getFirst().server().accounts().size());
-        Vault restored = VaultTrash.restore(trashed, "legacy", 2000);
+        Vault restored = VaultTrash.restore(trashed, trashed.trash().getFirst().id(), 2000);
         assertEquals(1, restored.servers().size());
-        assertEquals(2, restored.servers().getFirst().accounts().size());
+        assertEquals(server.autofill(), restored.servers().getFirst().autofill());
     }
 
     @Test
     void restoringOverALiveAccountUsesTheNewerOne() {
         Vault trashed = VaultTrash.trashAccount(vault(account("Alex", "old", 10)), "id", "Alex", 1000);
         // The user registered Alex again, with a newer password, while the old one sat in the trash.
-        Vault live = new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), false, true,
+        Vault live = new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), true,
                 "auto", List.of(account("Alex", "new", 50)))), trashed.trash());
         Vault restored = VaultTrash.restore(live, trashed.trash().getFirst().id(), 2000);
         assertEquals("new", new String(restored.servers().getFirst().accounts().getFirst().password()));
@@ -87,7 +74,7 @@ final class VaultTrashTest {
     }
 
     private static Vault vault(Account... accounts) {
-        return new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), false, true,
+        return new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), true,
                 "auto", List.of(accounts))));
     }
 }

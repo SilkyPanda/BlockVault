@@ -17,16 +17,16 @@ public final class VaultTrash {
                 servers.add(server);
                 continue;
             }
-            Account found = server.accounts().stream().filter(a -> a.username().equals(username)).findFirst()
+            Account found = server.accounts().stream().filter(a -> Usernames.same(a.username(), username)).findFirst()
                     .orElse(null);
             if (found == null) {
                 servers.add(server);
                 continue;
             }
-            entry = new TrashEntry(UUID.randomUUID().toString(), nowMillis, false, snapshot(server, List.of(found)));
+            entry = new TrashEntry(UUID.randomUUID().toString(), nowMillis, snapshot(server, List.of(found)));
             List<Account> remaining = new ArrayList<>(server.accounts());
-            remaining.removeIf(a -> a.username().equals(username));
-            servers.add(server.withAccounts(remaining));
+            remaining.removeIf(a -> Usernames.same(a.username(), username));
+            if (!remaining.isEmpty()) servers.add(server.withAccounts(remaining));
         }
         if (entry == null) return vault;
         List<TrashEntry> trash = new ArrayList<>(vault.trash());
@@ -60,56 +60,20 @@ public final class VaultTrash {
     /** Removes trash entries older than {@link Vault#TRASH_RETENTION_MILLIS}. */
     public static Vault purgeExpired(Vault vault, long nowMillis) {
         List<TrashEntry> kept = new ArrayList<>();
+        boolean changed = false;
         for (TrashEntry entry : vault.trash()) {
-            if (nowMillis - entry.deletedAt() <= Vault.TRASH_RETENTION_MILLIS) kept.add(entry);
+            long deletedAt = Math.min(entry.deletedAt(), nowMillis);
+            if (nowMillis - deletedAt <= Vault.TRASH_RETENTION_MILLIS) {
+                kept.add(deletedAt == entry.deletedAt() ? entry : new TrashEntry(entry.id(), deletedAt,
+                        entry.server(), entry.extra()));
+                changed |= deletedAt != entry.deletedAt();
+            } else changed = true;
         }
-        return kept.size() == vault.trash().size() ? vault : vault.withTrash(kept);
+        return changed ? vault.withTrash(kept) : vault;
     }
 
     private static ServerEntry snapshot(ServerEntry server, List<Account> accounts) {
         return server.withAccounts(accounts);
     }
 
-    /**
-     * Removes every account matching one in {@code removed} (same host, username and password) from the live
-     * servers and from trash snapshots of {@code target}. Used to scrub backups after "delete forever".
-     */
-    public static Vault purgeAccounts(Vault target, List<ServerEntry> removed) {
-        boolean[] changed = {false};
-        List<ServerEntry> servers = new ArrayList<>();
-        for (ServerEntry server : target.servers()) servers.add(scrub(server, removed, changed));
-        List<TrashEntry> trash = new ArrayList<>();
-        for (TrashEntry entry : target.trash()) {
-            trash.add(new TrashEntry(entry.id(), entry.deletedAt(), entry.wholeServer(),
-                    scrub(entry.server(), removed, changed), entry.extra()));
-        }
-        return changed[0] ? new Vault(target.v(), servers, trash, target.extra()) : target;
-    }
-
-    private static ServerEntry scrub(ServerEntry server, List<ServerEntry> removed, boolean[] changed) {
-        List<Account> kept = new ArrayList<>();
-        for (Account account : server.accounts()) {
-            if (matchesAny(server, account, removed)) changed[0] = true;
-            else kept.add(account);
-        }
-        return kept.size() == server.accounts().size() ? server : server.withAccounts(kept);
-    }
-
-    private static boolean matchesAny(ServerEntry server, Account account, List<ServerEntry> removed) {
-        char[] password = account.password();
-        try {
-            for (ServerEntry gone : removed) {
-                if (gone.hosts().stream().noneMatch(server.hosts()::contains)) continue;
-                for (Account other : gone.accounts()) {
-                    char[] otherPassword = other.password();
-                    try {
-                        if (other.username().equals(account.username()) && java.util.Arrays.equals(otherPassword, password)) {
-                            return true;
-                        }
-                    } finally { java.util.Arrays.fill(otherPassword, '\0'); }
-                }
-            }
-            return false;
-        } finally { java.util.Arrays.fill(password, '\0'); }
-    }
 }

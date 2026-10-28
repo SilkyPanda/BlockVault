@@ -31,12 +31,21 @@ public final class Kdf {
         }
         char[] password = "BlockVault calibration".toCharArray();
         byte[] salt = SecureBytes.random(16);
-        long start = System.nanoTime();
+        long[] samples = new long[3];
         try {
-            byte[] probe = pbkdf2HmacSha512(password, salt, floor, 32);
-            long elapsedNanos = Math.max(1L, System.nanoTime() - start);
-            long scaled = (long) floor * targetMillis * 1_000_000L / elapsedNanos;
-            SecureBytes.wipe(probe);
+            // Warm up the provider/JIT, then use a median to avoid calibrating from one cold or noisy sample.
+            for (int warmup = 0; warmup < 2; warmup++) {
+                byte[] probe = pbkdf2HmacSha512(password, salt, floor, 32);
+                SecureBytes.wipe(probe);
+            }
+            for (int index = 0; index < samples.length; index++) {
+                long start = System.nanoTime();
+                byte[] probe = pbkdf2HmacSha512(password, salt, floor, 32);
+                samples[index] = Math.max(1L, System.nanoTime() - start);
+                SecureBytes.wipe(probe);
+            }
+            java.util.Arrays.sort(samples);
+            double scaled = (double) floor * targetMillis * 1_000_000d / samples[1];
             return (int) Math.max(floor, Math.min((long) cap, scaled));
         } finally {
             SecureBytes.wipe(password);

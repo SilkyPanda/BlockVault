@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 
 /** Validated command template with explicit credential placeholders. */
 public record CommandTemplate(String id, String login, String register) {
-    private static final Pattern REGISTER_COMMAND = Pattern.compile("(?iu)/([\\p{L}]+)\\b([^\\r\\n]*)");
+    private static final Pattern REGISTER_COMMAND = Pattern.compile("(?iu)/(?<command>(?:[\\p{L}0-9_]+:)?[\\p{L}]+)\\b(?<args>[^\\r\\n]*?)(?=\\s+/(?:[\\p{L}0-9_]+:)?[\\p{L}]+\\b|$)");
     private static final Pattern PLACEHOLDER = Pattern.compile("<([^<>]+)>");
     private static final Pattern TOKEN = Pattern.compile("\\{(password|email|username)}");
     public CommandTemplate {
@@ -34,8 +34,10 @@ public record CommandTemplate(String id, String login, String register) {
         String text = plain == null ? "" : plain.replaceAll("(?i)\\u00a7[0-9A-FK-OR]", "");
         Matcher command = REGISTER_COMMAND.matcher(text);
         while (command.find()) {
-            if (!commandNames.contains(command.group(1).toLowerCase(java.util.Locale.ROOT))) continue;
-            String remainder = command.group(2);
+            String fullCommand = command.group("command").toLowerCase(java.util.Locale.ROOT);
+            String commandName = fullCommand.substring(fullCommand.lastIndexOf(':') + 1);
+            if (!commandNames.contains(commandName)) continue;
+            String remainder = command.group("args");
             Matcher placeholder = PLACEHOLDER.matcher(remainder);
             java.util.List<String> arguments = new java.util.ArrayList<>();
             while (placeholder.find()) arguments.add(placeholder.group(1));
@@ -43,7 +45,7 @@ public record CommandTemplate(String id, String login, String register) {
             if (arguments.isEmpty()) return builtins().get("authme");
             if (arguments.size() == 1 && !emailMentioned) return builtins().get("authme-noconfirm");
 
-            StringBuilder register = new StringBuilder(command.group(1).toLowerCase(java.util.Locale.ROOT));
+            StringBuilder register = new StringBuilder(fullCommand);
             for (int i = 0; i < arguments.size(); i++) {
                 register.append(' ').append(argumentPlaceholder(arguments.get(i), i, arguments.size()));
             }

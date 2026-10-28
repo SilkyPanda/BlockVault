@@ -40,7 +40,6 @@ public final class VaultJson {
             copyUnknown(entry.extra(), item, TRASH_KEYS);
             item.addProperty("id", entry.id());
             item.addProperty("deletedAt", entry.deletedAt());
-            item.addProperty("whole", entry.wholeServer());
             item.add("server", writeServer(entry.server()));
             trash.add(item);
         }
@@ -50,17 +49,22 @@ public final class VaultJson {
 
     /** Parses the current schema; missing required fields and unknown statuses are errors. */
     public static Vault read(byte[] jsonUtf8) {
+        try { return readCurrent(jsonUtf8); }
+        catch (UnsupportedVaultVersionException version) { throw version; }
+        catch (RuntimeException malformed) { throw new IllegalArgumentException("Malformed vault JSON", malformed); }
+    }
+
+    private static Vault readCurrent(byte[] jsonUtf8) {
         JsonObject root = JsonParser.parseString(new String(jsonUtf8, StandardCharsets.UTF_8)).getAsJsonObject();
         int version = root.get("v").getAsInt();
-        if (version != Vault.VERSION) throw new IllegalArgumentException("Unsupported vault JSON version");
+        if (version != Vault.VERSION) throw new UnsupportedVaultVersionException();
         List<ServerEntry> servers = new ArrayList<>();
         for (JsonElement element : root.getAsJsonArray("servers")) servers.add(readServer(element.getAsJsonObject()));
         List<TrashEntry> trash = new ArrayList<>();
         for (JsonElement element : root.getAsJsonArray("trash")) {
             JsonObject item = element.getAsJsonObject();
             trash.add(new TrashEntry(item.get("id").getAsString(), item.get("deletedAt").getAsLong(),
-                    item.get("whole").getAsBoolean(), readServer(item.getAsJsonObject("server")),
-                    unknown(item, TRASH_KEYS)));
+                    readServer(item.getAsJsonObject("server")), unknown(item, TRASH_KEYS)));
         }
         return new Vault(version, servers, trash, unknown(root, ROOT_KEYS));
     }
@@ -73,8 +77,6 @@ public final class VaultJson {
         JsonArray hosts = new JsonArray();
         server.hosts().forEach(hosts::add);
         item.add("hosts", hosts);
-        // Keep the legacy field for older vault readers; this version always allows saving credentials.
-        item.addProperty("neverSave", false);
         item.addProperty("autofill", server.autofill());
         item.addProperty("template", server.templateId());
         JsonArray accounts = new JsonArray();
@@ -90,9 +92,6 @@ public final class VaultJson {
             value.addProperty("created", account.createdAt());
             value.addProperty("modified", account.modifiedAt());
             value.addProperty("used", account.lastUsedAt());
-            if (metadata.has("blockvaultPrevious")) {
-                value.add("blockvaultPrevious", metadata.get("blockvaultPrevious").deepCopy());
-            }
             accounts.add(value);
         }
         item.add("accounts", accounts);
@@ -116,24 +115,13 @@ public final class VaultJson {
             }
         }
         return new ServerEntry(item.get("id").getAsString(), item.get("name").getAsString(), hosts,
-                false, item.get("autofill").getAsBoolean(),
+                item.get("autofill").getAsBoolean(),
                 item.get("template").getAsString(), accounts, unknown(item, SERVER_KEYS));
     }
 
-    /** Account metadata: the previous-password record plus any unknown account fields. */
+    /** Account metadata excluding the removed previous-password snapshot. */
     private static JsonObject readMetadata(JsonObject account) {
-        JsonObject metadata = unknown(account, ACCOUNT_KEYS);
-        if (account.has("blockvaultPrevious")) {
-            JsonObject source = account.getAsJsonObject("blockvaultPrevious");
-            JsonObject previous = new JsonObject();
-            previous.addProperty("pass", source.get("pass").getAsString());
-            previous.addProperty("status", source.get("status").getAsString());
-            previous.addProperty("created", source.get("created").getAsLong());
-            previous.addProperty("modified", source.get("modified").getAsLong());
-            previous.addProperty("used", source.get("used").getAsLong());
-            metadata.add("blockvaultPrevious", previous);
-        }
-        return metadata;
+        return unknown(account, ACCOUNT_KEYS);
     }
 
     private static JsonObject unknown(JsonObject source, Set<String> known) {

@@ -2,6 +2,7 @@ package io.github.silkypanda.blockvault.core.host;
 
 import java.util.Locale;
 import java.util.Optional;
+import java.net.IDN;
 
 /** Canonical server address normalization that performs no DNS or network access. */
 public final class HostKey {
@@ -34,7 +35,9 @@ public final class HostKey {
             } else host = value;
             host = host.toLowerCase(Locale.ROOT);
             if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
-            if (!validHostname(host)) return Optional.empty();
+            try { host = IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES).toLowerCase(Locale.ROOT); }
+            catch (IllegalArgumentException invalidIdn) { return Optional.empty(); }
+            if (!validHostname(host) || !validIpv4(host)) return Optional.empty();
         }
         int port = 25565;
         if (portText != null) {
@@ -55,6 +58,19 @@ public final class HostKey {
                 char c = label.charAt(i);
                 if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_')) return false;
             }
+        }
+        return true;
+    }
+
+    /** Rejects dotted numeric addresses that are not valid IPv4 literals. */
+    private static boolean validIpv4(String host) {
+        if (!host.matches("[0-9.]+")) return true;
+        String[] parts = host.split("\\.", -1);
+        if (parts.length != 4) return false;
+        for (String part : parts) {
+            if (part.isEmpty() || part.length() > 3) return false;
+            try { if (Integer.parseInt(part) > 255) return false; }
+            catch (NumberFormatException invalid) { return false; }
         }
         return true;
     }

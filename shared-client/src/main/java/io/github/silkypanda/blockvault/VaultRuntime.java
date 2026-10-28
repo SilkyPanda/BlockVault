@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.session.CommandTemplate;
+import io.github.silkypanda.blockvault.core.session.CredentialPassword;
 import io.github.silkypanda.blockvault.core.session.SavedCredential;
 import io.github.silkypanda.blockvault.core.session.VaultAccess;
 import io.github.silkypanda.blockvault.core.vault.Account;
@@ -13,6 +14,7 @@ import io.github.silkypanda.blockvault.core.vault.ImportPreview;
 import io.github.silkypanda.blockvault.core.vault.TrashEntry;
 import io.github.silkypanda.blockvault.core.vault.Vault;
 import io.github.silkypanda.blockvault.core.vault.VaultTrash;
+import io.github.silkypanda.blockvault.core.vault.Usernames;
 import io.github.silkypanda.blockvault.core.vault.VaultStore;
 import io.github.silkypanda.blockvault.core.vault.WrongMasterPasswordException;
 import io.github.silkypanda.blockvault.core.vault.VaultCorruptException;
@@ -58,7 +60,7 @@ public final class VaultRuntime implements VaultAccess {
             Vault vault = store.vault();
             ServerEntry server = findServer(vault, host);
             Account account = server == null ? null : server.accounts().stream()
-                    .filter(value -> value.username().equals(username)).findFirst().orElse(null);
+                    .filter(value -> Usernames.same(value.username(), username)).findFirst().orElse(null);
             Account callbackAccount = account == null ? null : copyAccount(account);
             // "auto" means "detect from the server's prompt"; any other stored id is an explicit owner choice.
             boolean templateExplicit = server != null && !"auto".equals(server.templateId());
@@ -85,7 +87,7 @@ public final class VaultRuntime implements VaultAccess {
             try {
                 changeAccount(host, username, old -> new Account(username, copy, Account.Status.PENDING,
                         old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
-                        old == null ? 0 : old.lastUsedAt(), pendingFields(old)));
+                        old == null ? 0 : old.lastUsedAt(), old == null ? null : withoutPrevious(old)));
                 BackgroundExecutor.onGameThread(() -> saved.accept(true));
             } catch (Exception failure) {
                 BackgroundExecutor.onGameThread(() -> saved.accept(false));
@@ -100,7 +102,7 @@ public final class VaultRuntime implements VaultAccess {
             char[] secret = old.password();
             try {
                 return new Account(username, secret, Account.Status.VERIFIED, old.createdAt(),
-                        System.currentTimeMillis(), System.currentTimeMillis(), withoutPrevious(old));
+                        old.modifiedAt(), System.currentTimeMillis(), withoutPrevious(old));
             } finally { Arrays.fill(secret, '\0'); }
         }));
     }
@@ -129,17 +131,19 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     /** Creates or unlocks a master-password vault, then resumes operations waiting on it. */
-    public static void openWithMasterPassword(char[] password, boolean create) {
+    public static void openWithMasterPassword(char[] password, boolean create, boolean trustOnCreate) {
         BlockVaultConfig.load(settings -> BackgroundExecutor.submit(() -> {
             try {
                 ensureStore();
+                boolean trustDevice = create ? trustOnCreate : settings.trustDevice();
+                if (create) BlockVaultConfig.saveTrustDeviceChoice(trustDevice);
                 if (create) store.create(password);
                 else {
                     store.unlock(password);
                 }
                 trustedUnlockAttempted = true;
                 boolean[] trustReady = {false};
-                if (settings.trustDevice()) {
+                if (trustDevice) {
                     try { store.trustThisDevice(); trustReady[0] = true; }
                     catch (IOException failure) {
                         LOGGER.warn("BlockVault could not save the trusted-device key");
@@ -226,8 +230,17 @@ public final class VaultRuntime implements VaultAccess {
     public static void accessScreenReplaced() { accessScreenOpen = false; }
 
     public static void clearWaiting() {
+        List<Waiting> dropped = new ArrayList<>(WAITING);
         WAITING.clear();
         accessScreenOpen = false;
+        for (Waiting waiting : dropped) {
+            if (waiting.cancelled() != null) {
+                try { waiting.cancelled().run(); }
+                catch (RuntimeException failure) {
+                    LOGGER.warn("BlockVault cancel callback failed ({})", failure.getClass().getSimpleName());
+                }
+            }
+        }
     }
 
     /** Opens the vault view if unlocked, otherwise asks for its master password. */
@@ -285,7 +298,15 @@ public final class VaultRuntime implements VaultAccess {
                 store = VaultStore.open(DataDirs.resolve());
                 store.unlock(password);
                 trustedUnlockAttempted = true;
-                if (settings.trustDevice()) store.trustThisDevice();
+                if (settings.trustDevice()) {
+                    try { store.trustThisDevice(); }
+                    catch (IOException failure) {
+                        // Recovery already replaced and unlocked the vault. A device-trust write failure must not
+                        // turn that completed recovery into a false failure screen.
+                        LOGGER.warn("BlockVault recovered the vault but could not save the trusted-device key");
+                        BackgroundExecutor.onGameThread(() -> toast("blockvault.toast.trust_failed"));
+                    }
+                }
             } catch (Exception failure) {
                 failureKey = failure instanceof WrongMasterPasswordException ? "blockvault.vault.unlock.wrong_password"
                         : failure instanceof UnsupportedVaultVersionException ? "blockvault.vault.unlock.unsupported"
@@ -371,13 +392,38 @@ public final class VaultRuntime implements VaultAccess {
                 }
                 DataDirs.delete(directory);
                 trustedUnlockAttempted = false;
-                accessScreenOpen = false;
-                WAITING.clear();
             } catch (Exception failure) {
                 failureKey = failure instanceof WrongMasterPasswordException
                         ? "blockvault.data.erase.wrong_password" : "blockvault.data.erase.failed";
                 LOGGER.warn("BlockVault data erasure failed ({})", failure.getClass().getSimpleName());
             } finally { Arrays.fill(password, '\0'); }
+            String completed = failureKey;
+            BackgroundExecutor.onGameThread(() -> {
+                if (completed == null) {
+                    BlockVaultConfig.resetAfterDataErasure();
+                    Hooks.onDisconnect();
+                }
+                result.accept(completed);
+            });
+            return null;
+        });
+    }
+
+    /** Separate confirmed erase path for a vault that is missing or too damaged to verify. */
+    static void eraseAllDataWithoutPassword(Consumer<String> result) {
+        BackgroundExecutor.submit(() -> {
+            String failureKey = null;
+            try {
+                if (store != null) {
+                    store.lock();
+                    store = null;
+                }
+                DataDirs.delete(DataDirs.resolve());
+                trustedUnlockAttempted = false;
+            } catch (Exception failure) {
+                failureKey = "blockvault.data.erase.failed";
+                LOGGER.warn("BlockVault data erasure failed ({})", failure.getClass().getSimpleName());
+            }
             String completed = failureKey;
             BackgroundExecutor.onGameThread(() -> {
                 if (completed == null) {
@@ -525,9 +571,9 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     /** Exports the encrypted vault to {@code folder}, or the BlockVault exports folder when omitted. */
-    static void exportVault(java.nio.file.Path folder, Consumer<Boolean> result) {
+    static void exportVault(java.nio.file.Path folder, Consumer<java.nio.file.Path> result) {
         withVault(() -> {
-            boolean success = false;
+            java.nio.file.Path exported = null;
             try {
                 java.nio.file.Path directory = folder == null
                         ? DataDirs.resolve().resolve("exports") : folder.toAbsolutePath().normalize();
@@ -539,12 +585,12 @@ public final class VaultRuntime implements VaultAccess {
                     destination = directory.resolve("blockvault-export-" + timestamp + "-" + suffix + ".bv");
                 }
                 store.exportEncrypted(destination);
-                success = true;
+                exported = destination;
             }
             catch (IOException failure) { LOGGER.warn("BlockVault could not export the encrypted vault"); }
-            boolean exported = success;
-            BackgroundExecutor.onGameThread(() -> result.accept(exported));
-        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(false)));
+            java.nio.file.Path completed = exported;
+            BackgroundExecutor.onGameThread(() -> result.accept(completed));
+        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(null)));
     }
 
     /**
@@ -609,14 +655,18 @@ public final class VaultRuntime implements VaultAccess {
             result.accept("blockvault.add.bad_username");
             return;
         }
-        if (password.length == 0) { result.accept("blockvault.add.empty_password"); return; }
+        if (!CredentialPassword.isValid(password)) {
+            Arrays.fill(password, '\0');
+            result.accept("blockvault.password.invalid");
+            return;
+        }
         char[] copy = password.clone();
         Arrays.fill(password, '\0');
         withVault(() -> {
             String failure = null;
             try {
                 ServerEntry server = findServer(store.vault(), host);
-                boolean exists = server != null && server.accounts().stream().anyMatch(a -> a.username().equals(name));
+                boolean exists = server != null && server.accounts().stream().anyMatch(a -> Usernames.same(a.username(), name));
                 if (exists) failure = "blockvault.add.exists";
                 else {
                     long now = System.currentTimeMillis();
@@ -635,6 +685,11 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Saves an edited credential as verified. */
     static void updatePassword(VaultRow row, char[] password) {
+        if (!CredentialPassword.isValid(password)) {
+            Arrays.fill(password, '\0');
+            toast("blockvault.password.invalid");
+            return;
+        }
         char[] copy = password.clone();
         withVault(() -> {
             try {
@@ -655,7 +710,7 @@ public final class VaultRuntime implements VaultAccess {
             for (int index = 0; index < servers.size(); index++) {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
-                    servers.set(index, server.withPolicy(false, autofill));
+                    servers.set(index, server.withAutofill(autofill));
                     break;
                 }
             }
@@ -710,33 +765,23 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     /** Permanently deletes one trash entry. */
-    static void deleteFromTrash(String trashId, boolean purgeBackups, Consumer<List<TrashRow>> result) {
-        changeTrash(result, vault -> VaultTrash.deleteForever(vault, trashId), purgeBackups);
+    static void deleteFromTrash(String trashId, Consumer<List<TrashRow>> result) {
+        changeTrash(result, vault -> VaultTrash.deleteForever(vault, trashId));
     }
 
     /** Permanently deletes everything in the trash. */
-    static void emptyTrash(boolean purgeBackups, Consumer<List<TrashRow>> result) {
-        changeTrash(result, VaultTrash::emptyTrash, purgeBackups);
+    static void emptyTrash(Consumer<List<TrashRow>> result) {
+        changeTrash(result, VaultTrash::emptyTrash);
     }
 
     /**
-     * Applies a trash change. With {@code purgeBackups}, the passwords of every trash entry that disappears are
-     * also removed from the backup files (restored entries are never purged).
+     * Applies a trash change. Encrypted backups are immutable snapshots and are never edited by trash operations.
      */
-    private static void changeTrash(Consumer<List<TrashRow>> result, UnaryOperator<Vault> change,
-            boolean purgeBackups) {
+    private static void changeTrash(Consumer<List<TrashRow>> result, UnaryOperator<Vault> change) {
         withVault(() -> {
             Vault current = store.vault();
             Vault next = change.apply(current);
             if (next != current) saveVault(next);
-            if (purgeBackups) {
-                java.util.Set<String> remaining = new java.util.HashSet<>();
-                next.trash().forEach(entry -> remaining.add(entry.id()));
-                List<ServerEntry> gone = current.trash().stream().filter(entry -> !remaining.contains(entry.id()))
-                        .map(TrashEntry::server).toList();
-                try { store.purgeFromBackups(gone); }
-                catch (IOException failure) { LOGGER.warn("BlockVault could not scrub the backups"); }
-            }
             List<TrashRow> rows = trashRows();
             BackgroundExecutor.onGameThread(() -> result.accept(rows));
         }, () -> BackgroundExecutor.onGameThread(() -> toast("blockvault.vault.error")));
@@ -748,7 +793,7 @@ public final class VaultRuntime implements VaultAccess {
             ServerEntry server = entry.server();
             String host = server.hosts().stream().findFirst().orElse(server.name());
             List<String> users = server.accounts().stream().map(Account::username).toList();
-            rows.add(new TrashRow(entry.id(), server.name(), host, users, entry.wholeServer(), entry.deletedAt()));
+            rows.add(new TrashRow(entry.id(), server.name(), host, users, entry.deletedAt()));
         }
         rows.sort(java.util.Comparator.comparingLong(TrashRow::deletedAt).reversed());
         return List.copyOf(rows);
@@ -916,15 +961,21 @@ public final class VaultRuntime implements VaultAccess {
         List<ServerEntry> servers = new ArrayList<>(current.servers());
         int serverIndex = indexOfServer(servers, host);
         ServerEntry server = serverIndex < 0
-                ? new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), false, true, "auto", List.of())
+                ? new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), true, "auto", List.of())
                 : servers.get(serverIndex);
         List<Account> accounts = new ArrayList<>(server.accounts());
         int accountIndex = -1;
         Account existing = null;
         for (int index = 0; index < accounts.size(); index++) {
-            if (accounts.get(index).username().equals(username)) { accountIndex = index; existing = accounts.get(index); break; }
+            if (Usernames.same(accounts.get(index).username(), username)) { accountIndex = index; existing = accounts.get(index); break; }
         }
         Account replacement = update.apply(existing);
+        if (replacement != null && existing != null && !replacement.username().equals(existing.username())) {
+            char[] password = replacement.password();
+            try { replacement = new Account(existing.username(), password, replacement.status(), replacement.createdAt(),
+                    replacement.modifiedAt(), replacement.lastUsedAt(), replacement.metadata()); }
+            finally { Arrays.fill(password, '\0'); }
+        }
         if (replacement == null && accountIndex < 0 && serverIndex < 0) return;
         if (replacement == null && accountIndex >= 0) accounts.remove(accountIndex);
         else if (accountIndex >= 0) accounts.set(accountIndex, replacement);
@@ -946,7 +997,7 @@ public final class VaultRuntime implements VaultAccess {
     private static Account findAccount(String host, String username) {
         ServerEntry server = findServer(store.vault(), host);
         return server == null ? null : server.accounts().stream()
-                .filter(account -> account.username().equals(username))
+                .filter(account -> Usernames.same(account.username(), username))
                 .findFirst().orElse(null);
     }
 
@@ -967,24 +1018,6 @@ public final class VaultRuntime implements VaultAccess {
         com.google.gson.JsonObject fields = account.metadata();
         fields.remove("blockvaultPrevious");
         return fields;
-    }
-
-    private static com.google.gson.JsonObject pendingFields(Account previousAccount) {
-        if (previousAccount == null) return null;
-        // A pending account keeps whatever verified password it was already protecting.
-        if (previousAccount.status() != Account.Status.VERIFIED) return previousAccount.metadata();
-        char[] password = previousAccount.password();
-        try {
-            com.google.gson.JsonObject previous = new com.google.gson.JsonObject();
-            previous.addProperty("pass", new String(password));
-            previous.addProperty("status", previousAccount.status().name());
-            previous.addProperty("created", previousAccount.createdAt());
-            previous.addProperty("modified", previousAccount.modifiedAt());
-            previous.addProperty("used", previousAccount.lastUsedAt());
-            com.google.gson.JsonObject fields = withoutPrevious(previousAccount);
-            fields.add("blockvaultPrevious", previous);
-            return fields;
-        } finally { Arrays.fill(password, '\0'); }
     }
 
     private static void toast(String key) {

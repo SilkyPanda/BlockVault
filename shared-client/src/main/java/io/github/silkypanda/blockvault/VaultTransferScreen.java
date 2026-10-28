@@ -18,6 +18,7 @@ final class VaultTransferScreen extends Screen {
     private EditBox passwordBox;
     private boolean failed;
     private boolean busy;
+    private String exportedPath;
 
     VaultTransferScreen(Screen parent, boolean importing) {
         super(Component.translatable(importing ? "blockvault.transfer.import.title" : "blockvault.transfer.export.title"));
@@ -62,7 +63,11 @@ final class VaultTransferScreen extends Screen {
         }
         final Path path = selectedPath;
         if (!importing) {
-            VaultRuntime.exportVault(path, success -> finish(success));
+            VaultRuntime.exportVault(path, exported -> {
+                busy = false;
+                failed = exported == null;
+                exportedPath = exported == null ? null : exported.toString();
+            });
             return;
         }
         char[] password = passwordBox.getValue().toCharArray();
@@ -95,7 +100,10 @@ final class VaultTransferScreen extends Screen {
         graphics.centeredText(font, Component.translatable(importing
                 ? "blockvault.transfer.import.help" : "blockvault.transfer.export.help"), width / 2,
                 height / 2 - 43, 0xffc5c0cf);
-        if (busy) graphics.centeredText(font, Component.translatable("blockvault.transfer.working"),
+        if (exportedPath != null) graphics.centeredText(font,
+                Component.translatable("blockvault.transfer.exported", exportedPath),
+                width / 2, height / 2 + 65, 0xff77dd88);
+        else if (busy) graphics.centeredText(font, Component.translatable("blockvault.transfer.working"),
                 width / 2, height / 2 + 65, 0xffaaaaaa);
         else if (failed) graphics.centeredText(font, Component.translatable(failureKey != null ? failureKey
                 : "blockvault.transfer.failed"),

@@ -43,7 +43,7 @@ final class VaultSettingsScreen extends Screen {
                 .title(Component.translatable("blockvault.settings.title"))
                 .category(loginCategory(draft))
                 .category(privacyCategory(draft))
-                .category(dataCategory(parent))
+                .category(dataCategory())
                 .save(() -> save(draft))
                 .build()
                 .generateScreen(parent);
@@ -131,22 +131,25 @@ final class VaultSettingsScreen extends Screen {
                 .build();
     }
 
-    private static ConfigCategory dataCategory(Screen parent) {
+    private static ConfigCategory dataCategory() {
         return ConfigCategory.createBuilder()
                 .name(Component.translatable("blockvault.config.category.data"))
                 .tooltip(Component.translatable("blockvault.config.category.data.description"))
                 .option(action("blockvault.config.action.vault", "blockvault.config.action.vault.description",
                         () -> VaultRuntime.openVaultScreen()))
-                .option(action("blockvault.config.action.backups", "blockvault.config.action.backups.description",
-                        () -> VaultRuntime.openBackupScreen(parent)))
-                .option(action("blockvault.config.action.master", "blockvault.config.action.master.description",
-                        () -> VaultRuntime.openMasterPasswordScreen(parent)))
+                .option(screenAction("blockvault.config.action.backups", "blockvault.config.action.backups.description",
+                        VaultRuntime::openBackupScreen))
+                .option(action("blockvault.config.action.reload_patterns", "blockvault.config.action.reload_patterns.description",
+                        () -> Hooks.reloadPatterns(success -> VaultRuntime.showToast(success
+                                ? "blockvault.patterns.reload.success" : "blockvault.patterns.reload.failed"))))
+                .option(screenAction("blockvault.config.action.master", "blockvault.config.action.master.description",
+                        VaultRuntime::openMasterPasswordScreen))
                 .option(transferAction("blockvault.transfer.import.short", "blockvault.transfer.import.help", true))
                 .option(transferAction("blockvault.transfer.export.short", "blockvault.transfer.export.help", false))
                 .option(action("blockvault.config.action.open_data", "blockvault.settings.description.data.open",
                         VaultRuntime::openDataDirectory))
-                .option(action("blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
-                        () -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(parent))))
+                .option(screenAction("blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
+                        screen -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(screen))))
                 .build();
     }
 
@@ -166,6 +169,14 @@ final class VaultSettingsScreen extends Screen {
                 .name(Component.translatable(name))
                 .description(description(description))
                 .action((screen, option) -> action.run())
+                .build();
+    }
+
+    private static ButtonOption screenAction(String name, String description, Consumer<Screen> action) {
+        return ButtonOption.createBuilder()
+                .name(Component.translatable(name))
+                .description(description(description))
+                .action((screen, option) -> action.accept(screen))
                 .build();
     }
 

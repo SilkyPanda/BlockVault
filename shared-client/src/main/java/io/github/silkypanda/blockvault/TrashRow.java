@@ -3,8 +3,7 @@ package io.github.silkypanda.blockvault;
 import java.util.List;
 
 /** One trash entry as shown on the trash screen; contains no passwords. */
-record TrashRow(String id, String serverName, String host, List<String> usernames, boolean wholeServer,
-                long deletedAt) {
+record TrashRow(String id, String serverName, String host, List<String> usernames, long deletedAt) {
     TrashRow {
         usernames = List.copyOf(usernames);
     }

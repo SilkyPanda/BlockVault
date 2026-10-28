@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import java.util.Arrays;
+import io.github.silkypanda.blockvault.core.session.CredentialPassword;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -15,6 +16,7 @@ final class VaultCredentialScreen extends Screen {
     private final VaultRow row;
     private boolean showPassword;
     private EditBox passwordBox;
+    private boolean invalidPassword;
 
     VaultCredentialScreen(VaultRow row) {
         super(Component.translatable("blockvault.vault.account.title"));
@@ -57,7 +59,13 @@ final class VaultCredentialScreen extends Screen {
 
     private void save() {
         char[] password = passwordBox.getValue().toCharArray();
-        if (password.length == 0) return;
+        if (!CredentialPassword.isValid(password)) {
+            Arrays.fill(password, '\0');
+            invalidPassword = true;
+            VaultRuntime.showToast("blockvault.password.invalid");
+            return;
+        }
+        invalidPassword = false;
         VaultRuntime.updatePassword(row, password);
         Arrays.fill(password, '\0');
         VaultRuntime.openVaultScreen();
@@ -73,6 +81,8 @@ final class VaultCredentialScreen extends Screen {
         if (!BlockVaultConfig.current().streamerMode()) {
             graphics.centeredText(font, Component.literal(row.host()), width / 2, height / 2 - 76, 0xffb9b4c5);
         }
+        if (invalidPassword) graphics.centeredText(font, Component.translatable("blockvault.password.invalid"),
+                width / 2, height / 2 + 20, 0xffff7777);
     }
 
     @Override public boolean isPauseScreen() { return false; }

@@ -8,6 +8,7 @@ import io.github.silkypanda.blockvault.core.detect.ResultMatcher;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.vault.Account;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,13 +16,13 @@ import java.util.regex.Pattern;
 /** Pure-Java login prompt state machine. Vault callbacks must return on the session thread. */
 public final class LoginSession {
     private static final long DEBOUNCE_MILLIS = 1500;
-    private static final long RESULT_TIMEOUT_MILLIS = 5000;
+    private static final long RESULT_TIMEOUT_MILLIS = 15_000;
     /** Server text is untrusted and unbounded; only this many characters are ever matched. */
     private static final int MAX_MESSAGE_CHARS = 2048;
     /** Used when a server rejects a password but its message gives no usable numbers. */
     private static final PasswordGenerator.Policy FALLBACK_POLICY =
             new PasswordGenerator.Policy(12, true, true, true, false, "", false);
-    private static final Pattern COMMAND = Pattern.compile("(?iu)^\\s*/?([\\p{L}0-9_]+)(?:\\s+(.*))?$");
+    private static final Pattern COMMAND = Pattern.compile("(?iu)^\\s*/?((?:[\\p{L}0-9_]+:)?[\\p{L}0-9_]+)(?:\\s+(.*))?$");
 
     private enum Action { NONE, AUTOFILL, PASSWORDLESS, REGISTER, MANUAL, UNREGISTER }
 
@@ -31,7 +32,8 @@ public final class LoginSession {
     private final ResultMatcher results;
     private final PatternPack pack;
     private PasswordGenerator.Policy policy;
-    private boolean globalAutofill = true;
+    // Fail closed while settings are still loading, so an early prompt cannot ignore the owner's opt-out.
+    private boolean globalAutofill;
     private long autofillDelayMillis = 400;
     private SessionState state = SessionState.IDLE;
     private String host;
@@ -42,7 +44,7 @@ public final class LoginSession {
     private Action action = Action.NONE;
     private long lastPromptAt = Long.MIN_VALUE;
     private PromptKind lastPromptKind;
-    private PromptKind dismissedPromptKind;
+    private final EnumSet<PromptKind> dismissedPromptKinds = EnumSet.noneOf(PromptKind.class);
     private boolean attempted;
     private boolean registerRetry;
     private int generation;
@@ -73,6 +75,17 @@ public final class LoginSession {
         java.util.Set<PromptKind> matches = prompts.matchingPrompts(plain);
         if (matches.size() == 1) handlePrompt(matches.iterator().next(), plain);
         else if (matches.contains(PromptKind.LOGIN) && matches.contains(PromptKind.REGISTER)) {
+            if (dismissedPromptKinds.contains(PromptKind.LOGIN)
+                    && dismissedPromptKinds.contains(PromptKind.REGISTER)) return;
+            long now = scheduler.nowMillis();
+            if (state == SessionState.SENT || state == SessionState.CONFIRMED
+                    || lastPromptAt != Long.MIN_VALUE && now - lastPromptAt < DEBOUNCE_MILLIS) return;
+            // Enter the prompted state before the asynchronous lookup so a cancelled unlock can
+            // dismiss both possible prompt kinds and repeated messages are debounced.
+            state = SessionState.PROMPTED;
+            action = Action.NONE;
+            lastPromptAt = now;
+            lastPromptKind = null;
             int token = generation;
             String expectedHost = host;
             String expectedUsername = username;
@@ -89,7 +102,7 @@ public final class LoginSession {
     }
 
     private void handlePrompt(PromptKind kind, String plain) {
-        if (kind == dismissedPromptKind) return;
+        if (dismissedPromptKinds.contains(kind)) return;
         arm(kind, plain);
     }
 
@@ -99,6 +112,8 @@ public final class LoginSession {
         Matcher matcher = COMMAND.matcher(commandWithoutSlash);
         if (!matcher.matches()) return;
         String command = matcher.group(1).toLowerCase(Locale.ROOT);
+        int namespace = command.lastIndexOf(':');
+        if (namespace >= 0) command = command.substring(namespace + 1);
         String[] words = matcher.group(2) == null ? new String[0] : matcher.group(2).trim().split("\\s+");
         if (words.length == 0 || words[0].isEmpty()) {
             if (!contains("login", command)) return;
@@ -168,6 +183,7 @@ public final class LoginSession {
     /** Confirms registration, including an optional email requested by the detected prompt. */
     public void confirmRegistration(char[] password, String email) {
         if (host == null || state != SessionState.PROMPTED || lastPromptKind != PromptKind.REGISTER || action == Action.REGISTER) return;
+        if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
         replacePending(password);
         action = Action.REGISTER;
         // Close the prompt race while the pending credential is persisted. Repeated
@@ -186,6 +202,7 @@ public final class LoginSession {
     /** Saves a manually captured password after the owner confirms its card. */
     public void confirmCapturedSave(char[] password) {
         if (host == null || state != SessionState.CONFIRMED) return;
+        if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
         char[] staged = password.clone();
         try { env.vault().saveVerified(host, username, staged); }
         finally { Arrays.fill(staged, '\0'); }
@@ -194,6 +211,7 @@ public final class LoginSession {
     /** Updates the rejected server credential after an explicit user confirmation. */
     public void updateRejectedPassword(char[] password) {
         if (host == null || state != SessionState.REJECTED) return;
+        if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
         char[] staged = password.clone();
         try { env.vault().saveVerified(host, username, staged); }
         finally { Arrays.fill(staged, '\0'); }
@@ -210,7 +228,7 @@ public final class LoginSession {
     /** Dismisses a rejected-password prompt without changing the vault. */
     public void dismissRejectedPrompt() {
         if (state == SessionState.REJECTED) {
-            dismissedPromptKind = lastPromptKind;
+            if (lastPromptKind != null) dismissedPromptKinds.add(lastPromptKind);
             state = SessionState.UNKNOWN;
         }
     }
@@ -218,7 +236,10 @@ public final class LoginSession {
     /** Dismisses the current prompt until this connection ends. */
     public void dismissPrompt() {
         if (state != SessionState.PROMPTED) return;
-        dismissedPromptKind = lastPromptKind;
+        if (lastPromptKind == null) {
+            dismissedPromptKinds.add(PromptKind.LOGIN);
+            dismissedPromptKinds.add(PromptKind.REGISTER);
+        } else dismissedPromptKinds.add(lastPromptKind);
         state = SessionState.UNKNOWN;
         action = Action.NONE;
         promptRevision++;
@@ -254,7 +275,7 @@ public final class LoginSession {
         registerRetry = false;
         lastPromptAt = Long.MIN_VALUE;
         lastPromptKind = null;
-        dismissedPromptKind = null;
+        dismissedPromptKinds.clear();
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
     }
@@ -275,7 +296,7 @@ public final class LoginSession {
     }
 
     private void arm(PromptKind kind, String plain) {
-        if (kind == dismissedPromptKind) return;
+        if (dismissedPromptKinds.contains(kind)) return;
         long now = scheduler.nowMillis();
         if ((lastPromptKind == kind && lastPromptAt != Long.MIN_VALUE && now - lastPromptAt < DEBOUNCE_MILLIS)
                 || state == SessionState.SENT || action == Action.REGISTER || attempted
@@ -368,6 +389,8 @@ public final class LoginSession {
             if (token == generation && state == SessionState.SENT) {
                 state = SessionState.UNKNOWN;
                 wipePending();
+                action = Action.NONE;
+                env.toast("blockvault.toast.result_timeout");
             }
         });
     }
@@ -415,9 +438,9 @@ public final class LoginSession {
                 // never cost the owner the only copy of a generated password.
                 attempted = false;
                 registerRetry = false;
-                dismissedPromptKind = PromptKind.REGISTER;
+                dismissedPromptKinds.add(PromptKind.REGISTER);
             }
-            if (action == Action.AUTOFILL) {
+            if (action == Action.AUTOFILL || action == Action.PASSWORDLESS) {
                 state = SessionState.REJECTED;
                 env.showSavePrompt(new PromptModel(CardVariant.REJECTED, host, username, null));
             } else state = SessionState.REJECTED;

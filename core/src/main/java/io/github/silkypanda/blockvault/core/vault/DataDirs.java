@@ -37,13 +37,12 @@ public final class DataDirs {
         return directory;
     }
 
-    /** Deletes only the BlockVault data directory, without following symbolic links. */
+    /** Deletes BlockVault-owned vault, settings, pattern and export files in its configured data directory. */
     public static void delete(Path directory) throws IOException {
         Path target = directory.toAbsolutePath().normalize();
-        Path name = target.getFileName();
-        if (target.getParent() == null || target.getNameCount() < 2 || name == null
-                || !"blockvault".equals(name.toString().toLowerCase(Locale.ROOT))) {
-            throw new IOException("Refusing to delete a path outside the BlockVault data directory");
+        if (!target.equals(resolve().toAbsolutePath().normalize()) || target.getParent() == null
+                || target.getNameCount() < 2) {
+            throw new IOException("Refusing to delete a path outside the configured BlockVault data directory");
         }
         if (java.nio.file.Files.isSymbolicLink(target)) {
             throw new IOException("Refusing to delete a symbolic link as the data directory");
@@ -57,6 +56,10 @@ public final class DataDirs {
                 if (java.nio.file.Files.isRegularFile(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS)
                         && OWN_FILES.matcher(fileName).matches()) {
                     java.nio.file.Files.delete(entry);
+                } else if ("exports".equals(fileName)
+                        && java.nio.file.Files.isDirectory(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                        && !java.nio.file.Files.isSymbolicLink(entry)) {
+                    deleteExportFiles(entry);
                 }
             }
         }
@@ -65,5 +68,18 @@ public final class DataDirs {
     }
 
     private static final java.util.regex.Pattern OWN_FILES =
-            java.util.regex.Pattern.compile("vault\\.bv(\\..+)?|config\\.json(\\..+)?");
+            java.util.regex.Pattern.compile("vault\\.bv(\\..+)?|config\\.json(\\..+)?|patterns\\.json(\\..+)?");
+
+    private static void deleteExportFiles(Path exports) throws IOException {
+        try (Stream<Path> files = java.nio.file.Files.list(exports)) {
+            for (Path file : files.toList()) {
+                if (java.nio.file.Files.isRegularFile(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                        && file.getFileName().toString().matches("blockvault-export-.*\\.bv")) {
+                    java.nio.file.Files.delete(file);
+                }
+            }
+        }
+        try { java.nio.file.Files.delete(exports); }
+        catch (java.nio.file.DirectoryNotEmptyException keepsOtherFiles) { /* preserve unrelated user files */ }
+    }
 }

@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.session.CardVariant;
+import io.github.silkypanda.blockvault.core.session.CredentialPassword;
 import io.github.silkypanda.blockvault.core.session.LoginSession;
 import io.github.silkypanda.blockvault.core.session.PromptModel;
 import io.github.silkypanda.blockvault.core.session.Scheduler;
@@ -42,6 +43,10 @@ final class CredentialConfirmScreen extends Screen {
     private long remainingNanos;
     private long lastTimerNanos;
     private Scheduler.Handle timer;
+    private String resizedPassword;
+    private String resizedEmail;
+    private boolean initialized;
+    private long focusAfterNanos;
 
     CredentialConfirmScreen(PromptModel model, LoginSession session, Runnable closed) {
         super(title(model.variant()));
@@ -67,13 +72,19 @@ final class CredentialConfirmScreen extends Screen {
 
     @Override
     protected void init() {
+        if (passwordBox != null) resizedPassword = passwordBox.getValue();
+        if (emailBox != null) resizedEmail = emailBox.getValue();
+        if (timer != null) timer.cancel();
+        timer = null;
         BlockVaultConfig.Settings config = BlockVaultConfig.current();
         registration = model.variant() == CardVariant.REGISTER
                 || model.variant() == CardVariant.UPDATE && session.state() == SessionState.PROMPTED;
         emailRequired = registration && model.emailRequired();
         int baseHeight = emailRequired ? EMAIL_HEIGHT : BASE_HEIGHT;
-        remainingNanos = (long) BlockVaultConfig.current().cardDurationSeconds() * 1_000_000_000L;
+        if (!initialized) remainingNanos = (long) config.cardDurationSeconds() * 1_000_000_000L;
+        initialized = true;
         lastTimerNanos = System.nanoTime();
+        focusAfterNanos = lastTimerNanos + 400_000_000L;
         scale = Math.min(1.0f, (float) (0.98 * Math.sqrt((width * (double) height * 0.30)
                 / (BASE_WIDTH * (double) baseHeight))));
         scale = Math.min(scale, Math.min((width - 16.0f) / BASE_WIDTH, (height - 16.0f) / baseHeight));
@@ -97,7 +108,9 @@ final class CredentialConfirmScreen extends Screen {
                 Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(256);
         passwordBox.setHint(Component.translatable("blockvault.card.password"));
-        passwordBox.setValue(model.variant() == CardVariant.REJECTED ? "" : new String(password));
+        passwordBox.setValue(resizedPassword != null ? resizedPassword
+                : model.variant() == CardVariant.REJECTED ? "" : new String(password));
+        resizedPassword = null;
         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
                 reveal ? value : "\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(passwordBox);
@@ -107,6 +120,8 @@ final class CredentialConfirmScreen extends Screen {
                     Component.translatable("blockvault.card.email"));
             emailBox.setHint(Component.translatable("blockvault.card.email"));
             emailBox.setMaxLength(254);
+            if (resizedEmail != null) emailBox.setValue(resizedEmail);
+            resizedEmail = null;
             addRenderableWidget(emailBox);
         }
 
@@ -156,7 +171,10 @@ final class CredentialConfirmScreen extends Screen {
             onClose();
         });
         addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.update", button -> {
-            if (passwordBox.getValue().isBlank()) return;
+            if (!CredentialPassword.isValid(passwordBox.getValue().toCharArray())) {
+                VaultRuntime.showToast("blockvault.password.invalid");
+                return;
+            }
             wipePassword();
             password = passwordBox.getValue().toCharArray();
             session.updateRejectedPassword(password);
@@ -187,6 +205,10 @@ final class CredentialConfirmScreen extends Screen {
     }
 
     private void accept(boolean registration) {
+        if (!CredentialPassword.isValid(passwordBox.getValue().toCharArray())) {
+            VaultRuntime.showToast("blockvault.password.invalid");
+            return;
+        }
         if (registration && emailBox != null
                 && !emailBox.getValue().matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) {
             VaultRuntime.showToast("blockvault.toast.email_invalid");
@@ -207,7 +229,8 @@ final class CredentialConfirmScreen extends Screen {
             lastTimerNanos = now;
             boolean hovering = mouseX >= cardX && mouseX < cardX + cardWidth
                     && mouseY >= cardY && mouseY < cardY + cardHeight;
-            boolean focused = passwordBox != null && passwordBox.isFocused()
+            if (now >= focusAfterNanos && passwordBox != null && !passwordBox.isFocused()) passwordBox.setFocused(true);
+            boolean focused = now < focusAfterNanos || passwordBox != null && passwordBox.isFocused()
                     || emailBox != null && emailBox.isFocused();
             if (!hovering && !focused) remainingNanos -= elapsed;
             if (remainingNanos <= 0) onClose();
@@ -227,8 +250,7 @@ final class CredentialConfirmScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (event.x() < cardX || event.x() >= cardX + cardWidth
                 || event.y() < cardY || event.y() >= cardY + cardHeight) {
-            if (registration || model.variant() == CardVariant.REJECTED) return true;
-            onClose();
+            // Keep the only copy of manually entered credentials on screen until the owner chooses an action.
             return true;
         }
         return super.mouseClicked(event, doubleClick);

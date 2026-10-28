@@ -1,13 +1,9 @@
 package io.github.silkypanda.blockvault;
 
 import java.util.Locale;
-import java.util.Set;
 
 /** Identifies authentication commands that must never enter vanilla command history. */
 public final class SensitiveCommands {
-    private static final Set<String> NAMES = Set.of(
-            "login", "register", "reg", "changepassword", "changepass", "unregister");
-
     private SensitiveCommands() { }
 
     public static boolean isSensitive(String command) {
@@ -20,6 +16,6 @@ public final class SensitiveCommands {
         String name = normalized.substring(0, end).toLowerCase(Locale.ROOT);
         int namespace = name.lastIndexOf(':');
         if (namespace >= 0) name = name.substring(namespace + 1);
-        return NAMES.contains(name) || Hooks.isSensitiveAlias(name);
+        return Hooks.isSensitiveAlias(name);
     }
 }

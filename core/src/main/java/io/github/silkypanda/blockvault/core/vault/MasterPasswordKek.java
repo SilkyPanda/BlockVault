@@ -11,6 +11,7 @@ public final class MasterPasswordKek {
     private final byte[] salt;
     private final int iterations;
     private final byte[] aad;
+    private boolean cleared;
 
     /** Creates a provider from caller-owned secret and header parameters. */
     public MasterPasswordKek(char[] password, byte[] salt, int iterations, byte[] aad) {
@@ -57,14 +58,15 @@ public final class MasterPasswordKek {
     }
 
     private byte[] derive() {
+        if (cleared) throw new IllegalStateException("Key provider has been cleared");
         return Kdf.pbkdf2HmacSha512(password, salt, iterations, 32);
     }
 
-    /** Clears the retained password copy. */
+    /** Clears the retained password copy; public salt and authenticated header bytes remain reusable. */
     public void clear() {
+        if (cleared) return;
         SecureBytes.wipe(password);
-        SecureBytes.wipe(salt);
-        SecureBytes.wipe(aad);
+        cleared = true;
     }
 
     @Override

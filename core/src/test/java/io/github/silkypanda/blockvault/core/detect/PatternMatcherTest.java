@@ -20,6 +20,9 @@ final class PatternMatcherTest {
         assertEquals(PromptKind.LOGIN, prompts.matchPrompt("Please login with /login <password>").orElseThrow());
         assertEquals(PromptKind.REGISTER, prompts.matchPrompt("Use /register <password>").orElseThrow());
         assertTrue(prompts.matchPrompt("hello there").isEmpty());
+        assertTrue(prompts.matchPrompt("[Ad] Join our discord. /register for rewards").isEmpty());
+        assertTrue(prompts.matchPrompt("<Steve> hey everyone use /register <password>").isEmpty());
+        assertTrue(prompts.matchPrompt("The word /login appears here as an example").isEmpty());
         assertEquals(ResultKind.SUCCESS, results.classify("Successfully registered!"));
         assertEquals(ResultKind.SUCCESS, results.classify(
                 "Successfully registered! You can change it after at least 5 minutes."));
@@ -34,6 +37,21 @@ final class PatternMatcherTest {
         assertEquals(ResultKind.FAILURE, matcher.classify("Unsuccessful login!"));
         assertEquals(ResultKind.FAILURE, matcher.classify("You were not successfully registered."));
         assertEquals(ResultKind.PASSWORD_RULE, matcher.classify("Password contains unallowed characters!"));
+    }
+
+    @Test
+    void distinguishesRegistrationRulesFromLoginFailures() throws Exception {
+        ResultMatcher matcher = new ResultMatcher(pack());
+        for (String rule : java.util.List.of("Invalid password: must contain a digit",
+                "Invalid password format", "Invalid password length, 8-16 characters",
+                "Your password is too weak", "The chosen password isn't safe, please choose another one.",
+                "Password is unsafe", "This password is too common")) {
+            assertEquals(ResultKind.PASSWORD_RULE, matcher.classify(rule), rule);
+        }
+        for (String failure : java.util.List.of("You are already logged in!", "Login failed",
+                "Incorrect login credentials", "Incorrect password")) {
+            assertEquals(ResultKind.FAILURE, matcher.classify(failure), failure);
+        }
     }
 
     @Test

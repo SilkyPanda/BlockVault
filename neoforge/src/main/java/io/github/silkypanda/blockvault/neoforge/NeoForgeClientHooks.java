@@ -27,8 +27,11 @@ final class NeoForgeClientHooks {
                 Commands.literal("blockvault")
                         .executes(context -> { VaultRuntime.openVaultScreen(); return 1; })
                         .then(Commands.literal("lock").executes(context -> { VaultRuntime.lock(); return 1; }))));
-        NeoForge.EVENT_BUS.addListener(ClientPlayerNetworkEvent.LoggingIn.class,
-                event -> Minecraft.getInstance().execute(Hooks::onJoin));
+        NeoForge.EVENT_BUS.addListener(ClientPlayerNetworkEvent.LoggingIn.class, event -> {
+            Minecraft client = Minecraft.getInstance();
+            if (client.isSameThread()) Hooks.onJoin();
+            else client.execute(Hooks::onJoin);
+        });
         NeoForge.EVENT_BUS.addListener(ClientPlayerNetworkEvent.LoggingOut.class, event -> Hooks.onDisconnect());
         modBus.addListener(NeoForgeClientHooks::registerKeyMappings);
     }

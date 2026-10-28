@@ -37,7 +37,6 @@ final class VaultBackupDetailScreen extends Screen {
         this.parent = parent;
         for (ServerEntry server : contents.servers()) {
             for (Account account : server.accounts()) {
-                if (account.metadata().has("deleted") && account.metadata().get("deleted").getAsBoolean()) continue;
                 entries.add(new Entry(server, account));
                 revealed.add(null);
                 revealedText.add(null);

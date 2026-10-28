@@ -20,8 +20,6 @@ final class VaultTrashScreen extends Screen {
     private Button emptyButton;
     private boolean confirmEmpty;
     private String confirmDeleteId;
-    private boolean purgeBackups;
-    private Button purgeButton;
     private int page;
     private int contentLeft;
     private int contentWidth;
@@ -74,13 +72,8 @@ final class VaultTrashScreen extends Screen {
                 return;
             }
             confirmEmpty = false;
-            VaultRuntime.emptyTrash(purgeBackups, this::update);
+            VaultRuntime.emptyTrash(this::update);
         }).bounds(footerLeft + (footer + 6) * 2, height - 34, footer, 20).build();
-        purgeButton = Button.builder(Component.empty(), button -> {
-            purgeBackups = !purgeBackups;
-            refreshButtons();
-        }).bounds(contentLeft, height - 58, contentWidth, 20).build();
-        addRenderableWidget(purgeButton);
         addRenderableWidget(previousButton);
         addRenderableWidget(nextButton);
         addRenderableWidget(emptyButton);
@@ -96,7 +89,7 @@ final class VaultTrashScreen extends Screen {
             return;
         }
         confirmDeleteId = null;
-        VaultRuntime.deleteFromTrash(row.id(), purgeBackups, this::update);
+        VaultRuntime.deleteFromTrash(row.id(), this::update);
     }
 
     private void withRow(int rowIndex, java.util.function.Consumer<TrashRow> action) {
@@ -125,8 +118,6 @@ final class VaultTrashScreen extends Screen {
         previousButton.active = page > 0;
         nextButton.active = page < totalPages() - 1;
         emptyButton.active = !rows.isEmpty();
-        purgeButton.setMessage(Component.translatable(purgeBackups ? "blockvault.trash.purge_backups.on"
-                : "blockvault.trash.purge_backups.off"));
         emptyButton.setMessage(Component.translatable(confirmEmpty
                 ? "blockvault.trash.empty_all.confirm" : "blockvault.trash.empty_all"));
     }
@@ -146,11 +137,8 @@ final class VaultTrashScreen extends Screen {
             int y = 40 + index * 34;
             String server = streamer ? Component.translatable("blockvault.settings.streamer.hidden").getString()
                     : row.serverName();
-            String detail = row.wholeServer()
-                    ? Component.translatable("blockvault.trash.row.server", row.usernames().size(),
-                            row.daysLeft(now)).getString()
-                    : Component.translatable("blockvault.trash.row.account",
-                            row.usernames().isEmpty() ? "" : row.usernames().getFirst(), row.daysLeft(now)).getString();
+            String detail = Component.translatable("blockvault.trash.row.account",
+                    row.usernames().isEmpty() ? "" : row.usernames().getFirst(), row.daysLeft(now)).getString();
             graphics.text(font, Component.literal(clip(server, labelWidth)), contentLeft, y, 0xffffffff);
             graphics.text(font, Component.literal(clip(detail, labelWidth)), contentLeft, y + 12, 0xffb9b4c5);
         }

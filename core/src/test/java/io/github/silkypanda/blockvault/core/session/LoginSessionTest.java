@@ -55,7 +55,7 @@ final class LoginSessionTest {
     void serverPolicyCanDisableAutofillButSavingRemainsAllowed() throws Exception {
         FakeEnv env = new FakeEnv();
         env.credential("secret");
-        env.credential = new SavedCredential(env.credential.account(), false, false, null);
+        env.credential = new SavedCredential(env.credential.account(), false, null, false);
         FakeScheduler clock = new FakeScheduler();
         LoginSession session = session(env, clock);
         session.onJoin("example.org:25565", "Alex");
@@ -63,7 +63,7 @@ final class LoginSessionTest {
         clock.advance(1000);
         assertTrue(env.commands.isEmpty());
 
-        env.credential = new SavedCredential(null, true, true, null);
+        env.credential = new SavedCredential(null, true, null, false);
         session.onDisconnect();
         session.onJoin("example.org:25565", "Alex");
         session.onSystemMessage("Please register using /register <password>");
@@ -96,6 +96,36 @@ final class LoginSessionTest {
         newAccountSession.onJoin("example.org:25565", "Alex");
         newAccountSession.onSystemMessage("Use /login <password> or /register <password>");
         assertEquals(CardVariant.REGISTER, newAccountEnv.card.variant());
+    }
+
+    @Test
+    void cancellingUnlockForCombinedPromptDismissesBothKindsAndDebouncesRepeats() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.cancelUnlock = true;
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        String message = "Use /login <password> or /register <password>";
+        session.onSystemMessage(message);
+        assertEquals(1, env.cancels);
+        assertEquals(SessionState.UNKNOWN, session.state());
+        session.onSystemMessage(message);
+        clock.advance(2000);
+        session.onSystemMessage(message);
+        assertEquals(1, env.cancels);
+    }
+
+    @Test
+    void failedPasswordlessLoginShowsRejectedCredentialActions() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("stale-secret");
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onOutgoingCommand("/login");
+        assertEquals(List.of("login stale-secret"), env.commands);
+        session.onSystemMessage("Wrong password!");
+        assertEquals(SessionState.REJECTED, session.state());
+        assertEquals(CardVariant.REJECTED, env.card.variant());
     }
 
     @Test
@@ -332,8 +362,8 @@ final class LoginSessionTest {
             savedPasswordArgument = password;
             savedVerified++;
         }
-        void credential(String secret) { credential = new SavedCredential(account(secret, Account.Status.VERIFIED), true, false, null); }
-        void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, false, null); }
+        void credential(String secret) { credential = new SavedCredential(account(secret, Account.Status.VERIFIED), true, null, false); }
+        void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, null, false); }
         private static Account account(String secret, Account.Status status) {
             return new Account("Alex", secret.toCharArray(), status, 0, 0, 0, null);
         }

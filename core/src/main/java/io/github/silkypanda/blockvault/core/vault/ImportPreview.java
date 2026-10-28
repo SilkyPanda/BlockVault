@@ -7,7 +7,7 @@ public record ImportPreview(List<Change> changes) {
     /** Kinds of change, in the order they are shown. */
     public enum Kind { NEW_SERVER, NEW_ACCOUNT, UPDATED_ACCOUNT, KEPT_LOCAL, NEW_TRASH }
 
-    /** One line of the preview; {@code username} is null for whole-server and trash lines. */
+    /** One line of the preview; {@code username} is null for server-level and trash lines. */
     public record Change(Kind kind, String server, String username) { }
 
     public ImportPreview {

@@ -56,7 +56,9 @@ public final class VaultFile {
 
     /** Encodes encrypted JSON, authenticating all metadata before ciphertext. */
     public static byte[] encode(Header header, byte[] wrapped, byte[] vaultKey32, byte[] jsonUtf8) {
-        if (wrapped == null || wrapped.length > 65535 || jsonUtf8 == null || jsonUtf8.length + 16 > MAX_BYTES) {
+        long fileLength = jsonUtf8 == null || wrapped == null ? Long.MAX_VALUE
+                : (long) PREFIX_BYTES + 2 + wrapped.length + 12 + 4 + jsonUtf8.length + 16;
+        if (wrapped == null || wrapped.length > 65535 || jsonUtf8 == null || fileLength > MAX_BYTES) {
             throw new IllegalArgumentException("Invalid vault payload size");
         }
         byte[] nonce = SecureBytes.random(12);

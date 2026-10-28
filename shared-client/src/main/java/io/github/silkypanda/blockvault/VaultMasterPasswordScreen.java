@@ -62,6 +62,10 @@ final class VaultMasterPasswordScreen extends Screen {
             Arrays.fill(oldPassword, '\0'); Arrays.fill(newPassword, '\0');
             busy = false; failed = failure != null;
             if (failure == null) Minecraft.getInstance().setScreenAndShow(parent);
+            else if ("blockvault.master.change.backups_failed".equals(failure)) {
+                Minecraft.getInstance().setScreenAndShow(parent);
+                VaultRuntime.showToast(failure);
+            }
             else statusKey = failure;
         });
     }

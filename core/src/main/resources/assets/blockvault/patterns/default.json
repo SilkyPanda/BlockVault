@@ -2,7 +2,9 @@
   "version": 1,
   "commandNames": {
     "login": [
-      "login"
+      "login",
+      "l",
+      "log"
     ],
     "register": [
       "register",
@@ -10,10 +12,12 @@
     ],
     "changePassword": [
       "changepassword",
-      "changepass"
+      "changepass",
+      "cp"
     ],
     "unregister": [
-      "unregister"
+      "unregister",
+      "unreg"
     ]
   },
   "prompt": {
@@ -38,13 +42,16 @@
     "failure": [
       "(?iu)(wrong|incorrect|invalid)\\s+password|password\\s+(?:is\\s+)?(?:wrong|incorrect)",
       "(?iu)(?:registration|register(?:ing)?|account creation)\\s+(?:has\\s+)?(?:failed|unsuccessful|error)",
+      "(?iu)\\b(?:login|log in|authentication)\\s+(?:has\\s+)?(?:failed|unsuccessful)|\\bincorrect\\s+(?:login|account)\\s+credentials\\b|\\balready\\s+logged\\s+in\\b",
       "(?iu)(contraseña\\s+incorrecta|senha\\s+incorreta|mot\\s+de\\s+passe\\s+incorrect|falsches\\s+passwort|неверный\\s+пароль|yanlış\\s+şifre|nieprawidłowe\\s+hasło|密码错误)"
     ],
     "passwordRules": [
       "(?iu)(?:password|passphrase)\\s+(?:is\\s+)?too\\s+(?:short|long)",
       "(?iu)(?:password|passphrase)\\s+must\\s+be\\s+(?:at\\s+least|no\\s+more\\s+than)",
       "(?iu)(?:password|passphrase)\\s+contains?\\s+(?:illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+characters",
-      "(?iu)(?:too\\s+(?:short|long)|illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+(?:password|passphrase|characters?)",
+      "(?iu)(?:too\\s+(?:short|long)|illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+characters?",
+      "(?iu)\\b(?:password|passphrase)\\b.{0,80}\\b(?:invalid\\s+(?:format|length)|weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|too\\s+common|too\\s+simple)\\b",
+      "(?iu)\\bchosen\\s+password\\b.{0,80}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|common)\\b",
       "(?iu)\\bpassword\\s+too\\s+(?:short|long)\\b",
       "(?iu)\\bpassword\\b.*\\b(?:unallowed|disallowed)\\s+characters?\\b",
       "(?iu)\\b(?:maximum|minimum)\\s+of\\s+\\d+\\s+characters?",

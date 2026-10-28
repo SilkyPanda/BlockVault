@@ -41,8 +41,8 @@ final class VaultMergerTest {
 
     @Test
     void importedHostAliasesAreNotAddedToAnExistingServer() {
-        ServerEntry mine = new ServerEntry("id", "name", List.of("host:25565"), false, true, "auto", List.of());
-        ServerEntry theirs = new ServerEntry("other", "name", List.of("host:25565", "evil.example:25565"), false, true,
+        ServerEntry mine = new ServerEntry("id", "name", List.of("host:25565"), true, "auto", List.of());
+        ServerEntry theirs = new ServerEntry("other", "name", List.of("host:25565", "evil.example:25565"), true,
                 "auto", List.of());
         Vault merged = VaultMerger.merge(new Vault(Vault.VERSION, List.of(mine)), new Vault(Vault.VERSION, List.of(theirs)),
                 NOW);
@@ -78,7 +78,7 @@ final class VaultMergerTest {
     }
 
     private static Vault vault(Account... accounts) {
-        ServerEntry server = new ServerEntry("id", "name", List.of("host:25565"), false, true, "auto",
+        ServerEntry server = new ServerEntry("id", "name", List.of("host:25565"), true, "auto",
                 List.of(accounts));
         return new Vault(Vault.VERSION, List.of(server));
     }

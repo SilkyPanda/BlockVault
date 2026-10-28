@@ -20,6 +20,7 @@ import java.util.regex.PatternSyntaxException;
 
 /** Compiled user-extensible prompt and result patterns loaded from JSON trees. */
 public final class PatternPack {
+    private static final long MAX_USER_FILE_BYTES = 256 * 1024;
     private final Map<PromptKind, List<Pattern>> prompts;
     private final Map<ResultKind, List<Pattern>> results;
     private final Map<String, Set<String>> commandNames;
@@ -44,7 +45,10 @@ public final class PatternPack {
         }
         JsonObject user = new JsonObject();
         if (userFileOrNull != null && Files.isRegularFile(userFileOrNull)) {
-            try { user = JsonParser.parseString(Files.readString(userFileOrNull)).getAsJsonObject(); }
+            try {
+                if (Files.size(userFileOrNull) > MAX_USER_FILE_BYTES) throw new IOException("Pattern file too large");
+                user = JsonParser.parseString(Files.readString(userFileOrNull)).getAsJsonObject();
+            }
             catch (RuntimeException | IOException malformedUserFile) { warning.accept("Invalid BlockVault pattern file ignored"); }
         }
         Map<PromptKind, List<Pattern>> prompts = new EnumMap<>(PromptKind.class);

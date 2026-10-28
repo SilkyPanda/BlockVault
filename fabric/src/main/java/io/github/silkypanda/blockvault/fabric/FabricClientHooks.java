@@ -25,8 +25,11 @@ final class FabricClientHooks {
                         .executes(context -> { VaultRuntime.openVaultScreen(); return 1; })
                         .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("lock")
                                 .executes(context -> { VaultRuntime.lock(); return 1; }))));
-        ClientPlayConnectionEvents.JOIN.register((listener, sender, minecraft) ->
-                Minecraft.getInstance().execute(Hooks::onJoin));
+        ClientPlayConnectionEvents.JOIN.register((listener, sender, minecraft) -> {
+            Minecraft client = Minecraft.getInstance();
+            if (client.isSameThread()) Hooks.onJoin();
+            else client.execute(Hooks::onJoin);
+        });
         ClientPlayConnectionEvents.DISCONNECT.register((listener, minecraft) -> Hooks.onDisconnect());
         KeyMappingHelper.registerKeyMapping(Keybinds.OPEN_VAULT);
         KeyMappingHelper.registerKeyMapping(Keybinds.LOCK_VAULT);

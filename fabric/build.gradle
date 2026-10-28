@@ -15,9 +15,9 @@ repositories {
         url = 'https://maven.isxander.dev/releases'
     }
     maven {
-        name = 'Modrinth'
-        url = 'https://api.modrinth.com/maven'
-        content { includeGroup 'maven.modrinth' }
+        name = 'Terraformers Maven'
+        url = 'https://maven.terraformersmc.com/releases'
+        content { includeGroup 'com.terraformersmc' }
     }
 }
 
@@ -46,7 +46,7 @@ dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    implementation 'maven.modrinth:mOgUt4GM:kyy7dbrZ'
+    modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
     implementation "dev.isxander:yet-another-config-lib:${project.yacl_version}"
 }
 

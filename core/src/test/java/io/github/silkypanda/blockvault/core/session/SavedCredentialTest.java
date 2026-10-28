@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 final class SavedCredentialTest {
     @Test
     void policyOnlyCredentialGetsDefaultTemplateAndSafeString() {
-        SavedCredential saved = new SavedCredential(null, false, true, null);
+        SavedCredential saved = new SavedCredential(null, false, null, false);
         assertEquals("authme", saved.template().id());
         assertTrue(saved.toString().contains("account=null"));
         assertTrue(!saved.toString().contains("secret"));

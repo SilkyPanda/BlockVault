@@ -41,10 +41,7 @@ final class McSessionEnv implements SessionEnv {
 
     @Override
     public void toast(String translationKey) {
-        Minecraft mc = Minecraft.getInstance();
-        net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),
-                net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                Component.translatable("blockvault.toast.title"), Component.translatable(translationKey));
+        VaultRuntime.showToast(translationKey);
     }
 
     @Override

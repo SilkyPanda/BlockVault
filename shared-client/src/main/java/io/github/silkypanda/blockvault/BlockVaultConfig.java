@@ -49,6 +49,14 @@ final class BlockVaultConfig {
         });
     }
 
+    /** Persists the trust choice made on the vault creation screen on the config worker. */
+    static void saveTrustDeviceChoice(boolean enabled) throws Exception {
+        if (!loaded) loadOnBackgroundThread();
+        Settings next = current.withTrustDevice(enabled);
+        write(DataDirs.resolve().resolve("config.json"), next);
+        current = next;
+    }
+
     /**
      * Reads {@code config.json}. An unreadable file is moved aside to {@code config.json.bad} and defaults are used
      * (with trusted-device unlock off for safety), so the problem is logged once and settings stay changeable.
@@ -137,13 +145,6 @@ final class BlockVaultConfig {
                     String cardPosition, boolean streamerMode, String generator, boolean scrubHistory,
                     boolean trustDevice) {
         static Settings defaults() { return new Settings(true, 400, 5, "top_right", false, "pickyServer", true, true); }
-        Settings withAutofill(boolean value) { return new Settings(value, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withDelay(int value) { return new Settings(autofill, value, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withDuration(int value) { return new Settings(autofill, autofillDelayMillis, value, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withPosition(String value) { return new Settings(autofill, autofillDelayMillis, cardDurationSeconds, value, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withStreamer(boolean value) { return new Settings(autofill, autofillDelayMillis, cardDurationSeconds, cardPosition, value, generator, scrubHistory, trustDevice); }
-        Settings withGenerator(String value) { return new Settings(autofill, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, value, scrubHistory, trustDevice); }
-        Settings withScrubHistory(boolean value) { return new Settings(autofill, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, value, trustDevice); }
         Settings withTrustDevice(boolean value) { return new Settings(autofill, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, value); }
     }
 }
