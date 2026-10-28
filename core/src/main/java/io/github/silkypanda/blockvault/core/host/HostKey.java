@@ -2,7 +2,7 @@ package io.github.silkypanda.blockvault.core.host;
 
 import java.util.Locale;
 import java.util.Optional;
-import java.net.IDN;
+import java.text.Normalizer;
 
 /** Canonical server address normalization that performs no DNS or network access. */
 public final class HostKey {
@@ -33,10 +33,10 @@ public final class HostKey {
                 host = value.substring(0, lastColon);
                 portText = value.substring(lastColon + 1);
             } else host = value;
-            host = host.toLowerCase(Locale.ROOT);
+            host = Normalizer.normalize(host.toLowerCase(Locale.ROOT), Normalizer.Form.NFC);
             if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
-            try { host = IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES).toLowerCase(Locale.ROOT); }
-            catch (IllegalArgumentException invalidIdn) { return Optional.empty(); }
+            host = toAsciiHostname(host);
+            if (host == null) return Optional.empty();
             if (!validHostname(host) || !validIpv4(host)) return Optional.empty();
         }
         int port = 25565;
@@ -47,6 +47,85 @@ public final class HostKey {
             if (port < 1 || port > 65535) return Optional.empty();
         }
         return Optional.of(host + ":" + port);
+    }
+
+    /** Converts Unicode labels to ASCII using the local RFC 3492 Punycode algorithm (no network APIs). */
+    private static String toAsciiHostname(String host) {
+        String[] labels = host.split("\\.", -1);
+        for (int i = 0; i < labels.length; i++) {
+            String label = labels[i];
+            boolean nonAscii = label.codePoints().anyMatch(cp -> cp > 0x7f);
+            if (!nonAscii) continue;
+            for (int cp : label.codePoints().toArray()) {
+                int type = Character.getType(cp);
+                if (Character.isWhitespace(cp) || Character.isISOControl(cp)
+                        || type == Character.FORMAT || type == Character.PRIVATE_USE
+                        || type == Character.SURROGATE || type == Character.UNASSIGNED) return null;
+            }
+            String encoded = punycode(label);
+            if (encoded == null) return null;
+            labels[i] = "xn--" + encoded;
+        }
+        return String.join(".", labels);
+    }
+
+    /** RFC 3492 encoder for one already-normalized label. */
+    private static String punycode(String label) {
+        int[] input = label.codePoints().toArray();
+        StringBuilder output = new StringBuilder();
+        int basic = 0;
+        for (int cp : input) {
+            if (cp < 0x80) {
+                output.append((char) cp);
+                basic++;
+            }
+        }
+        int handled = basic;
+        if (basic > 0 && handled < input.length) output.append('-');
+        long n = 128;
+        long delta = 0;
+        int bias = 72;
+        while (handled < input.length) {
+            long minimum = Long.MAX_VALUE;
+            for (int cp : input) if (cp >= n && cp < minimum) minimum = cp;
+            if (minimum == Long.MAX_VALUE || minimum - n > (Long.MAX_VALUE - delta) / (handled + 1L)) return null;
+            delta += (minimum - n) * (handled + 1L);
+            n = minimum;
+            for (int cp : input) {
+                if (cp < n && ++delta < 0) return null;
+                if (cp != n) continue;
+                long q = delta;
+                for (int k = 36; ; k += 36) {
+                    int threshold = k <= bias ? 1 : (k >= bias + 26 ? 26 : k - bias);
+                    if (q < threshold) break;
+                    int digit = threshold + (int) ((q - threshold) % (36 - threshold));
+                    output.append(punycodeDigit(digit));
+                    q = (q - threshold) / (36 - threshold);
+                }
+                output.append(punycodeDigit((int) q));
+                bias = adaptBias(delta, handled + 1, handled == basic);
+                delta = 0;
+                handled++;
+            }
+            delta++;
+            n++;
+        }
+        return output.toString();
+    }
+
+    private static int adaptBias(long delta, int points, boolean first) {
+        delta = first ? delta / 700 : delta / 2;
+        delta += delta / points;
+        int k = 0;
+        while (delta > 455) {
+            delta /= 35;
+            k += 36;
+        }
+        return k + (int) (36 * delta / (delta + 38));
+    }
+
+    private static char punycodeDigit(int digit) {
+        return (char) (digit < 26 ? 'a' + digit : '0' + digit - 26);
     }
 
     /** Letters, digits, hyphen and underscore in dot-separated labels of 1-63 characters, 253 in total. */

@@ -30,17 +30,14 @@ public record ServerEntry(String id, String name, List<String> hosts, boolean au
     public JsonObject extra() { return extra.deepCopy(); }
 
     public ServerEntry withAccounts(List<Account> newAccounts) {
-        return ;
+        return new ServerEntry(id, name, hosts, autofill, templateId, newAccounts, extra);
     }
 
     public ServerEntry withTemplate(String newTemplateId) {
-        return ;
+        return new ServerEntry(id, name, hosts, autofill, newTemplateId, accounts, extra);
     }
 
     public ServerEntry withAutofill(boolean newAutofill) {
-        return ;
-    }
-}
-;
+        return new ServerEntry(id, name, hosts, newAutofill, templateId, accounts, extra);
     }
 }
