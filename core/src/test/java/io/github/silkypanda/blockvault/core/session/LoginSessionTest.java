@@ -52,7 +52,7 @@ final class LoginSessionTest {
     }
 
     @Test
-    void serverPolicyCanDisableAutofillAndRegistrationSaving() throws Exception {
+    void serverPolicyCanDisableAutofillButSavingRemainsAllowed() throws Exception {
         FakeEnv env = new FakeEnv();
         env.credential("secret");
         env.credential = new SavedCredential(env.credential.account(), false, false, null);
@@ -67,7 +67,7 @@ final class LoginSessionTest {
         session.onDisconnect();
         session.onJoin("example.org:25565", "Alex");
         session.onSystemMessage("Please register using /register <password>");
-        assertEquals(null, env.card);
+        assertEquals(CardVariant.REGISTER, env.card.variant());
     }
 
     @Test
