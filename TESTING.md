@@ -4,7 +4,7 @@ The `core` library has 91 passing automated tests, and both loader builds compil
 
 ## 1. How to proceed
 
-1. **Compile.** Run the build for both loaders. On a Minecraft update, recheck the version-sensitive APIs below:
+1. **Check CI artifacts.** Use the GitHub Actions builds for both loaders. On a Minecraft update, recheck the version-sensitive APIs below:
    - `KeyEvent.modifiers()` (Caps Lock hint, `Keybinds.trackModifiers`)
    - the folder-opening helper (found by reflection; replace with a direct call once you know its name)
    - `Screen.removed()`, `Minecraft.getInstance().gui.screen()`, `Button.setMessage`, `EditBox.setResponder`, `GuiGraphicsExtractor.centeredText` and `text`
@@ -57,10 +57,11 @@ Use a throwaway vault. Delete the data folder between big sections if you want a
 6. With the unlock screen open, let a register card arrive: the card waits (see 3.5) and the unlock screen still works afterwards.
 
 ### 3.3 Vault list and editing
-1. Search, paging, reveal, copy (paste elsewhere to confirm), streamer mode hides server names everywhere including cards, import preview and trash.
+1. Search and paging work; Edit opens the selected login; Copy puts only its password on the clipboard. Streamer mode hides server names everywhere including cards, import preview and trash.
 2. Edit a password; change a server's template and autofill / never-save policy; verify they persist after restart.
-3. **Add** a login by hand: valid host and name saves and appears; bad host, name with spaces, empty password and a duplicate each show the right error; Generate and Show/Hide work; Caps Lock hint works.
-4. Join the server and confirm a manually added account autofills.
+3. Hover Auto, Capture, Template and Trash: their tooltips explain the setting/action. Auto toggles prompt-based login; Capture controls whether a successfully used manually typed password can be offered for saving, and does not control autofill. Trash moves only that account to Trash.
+4. **Add** a login by hand: valid host and name saves and appears; bad host, name with spaces, empty password and a duplicate each show the right error; Generate and Show/Hide work; Caps Lock hint works.
+5. Join the server and confirm a manually added account autofills.
 
 ### 3.4 Trash
 1. Delete one account: it disappears from the list and appears in Trash with its name and days left.
