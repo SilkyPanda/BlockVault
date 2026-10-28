@@ -127,7 +127,7 @@ public final class PatternPack {
         value.getAsJsonArray().forEach(alias -> {
             if (alias.isJsonPrimitive() && alias.getAsJsonPrimitive().isString()) {
                 String name = alias.getAsString().trim().toLowerCase(Locale.ROOT);
-                if (!name.isEmpty() && name.matches("[\\p{L}0-9_]+")) {
+                if (!name.isEmpty() && name.matches("[a-z0-9_]+")) {
                     names.computeIfAbsent(key, ignored -> new java.util.HashSet<>()).add(name);
                 }
             }

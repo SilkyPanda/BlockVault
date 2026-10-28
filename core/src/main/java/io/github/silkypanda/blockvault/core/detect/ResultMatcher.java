@@ -8,19 +8,19 @@ import java.util.regex.Pattern;
 /** Classifies plain server responses and extracts password constraints. */
 public final class ResultMatcher {
     private static final String LEN = "\\s*:?\\s*(\\d{1,3})";
-    private static final Pattern RANGE = Pattern.compile("(?iu)(?:between|from)\\s+(\\d{1,3})\\s*(?:and|to|-|\u2013)\\s*(\\d{1,3})"
+    private static final Pattern RANGE = Pattern.compile("(?i)(?:between|from)\\s+(\\d{1,3})\\s*(?:and|to|-|\u2013)\\s*(\\d{1,3})"
             + "|\\b(\\d{1,3})\\s*(?:-|\u2013|to)\\s*(\\d{1,3})\\s+(?:characters?|chars?|letters?)");
-    private static final Pattern MIN = Pattern.compile("(?iu)(?:at\\s+least|minimum(?:\\s+length)?(?:\\s+of)?"
+    private static final Pattern MIN = Pattern.compile("(?i)(?:at\\s+least|minimum(?:\\s+length)?(?:\\s+of)?"
             + "|min\\.?(?:\\s+length)?(?:\\s+of)?)" + LEN);
-    private static final Pattern MIN_EXCLUSIVE = Pattern.compile("(?iu)(?:longer|more)\\s+than" + LEN + "\\s+(?:characters?|chars?)");
-    private static final Pattern MAX = Pattern.compile("(?iu)(?:maximum(?:\\s+length)?(?:\\s+of)?|max\\.?(?:\\s+length)?(?:\\s+of)?"
+    private static final Pattern MIN_EXCLUSIVE = Pattern.compile("(?i)(?:longer|more)\\s+than" + LEN + "\\s+(?:characters?|chars?)");
+    private static final Pattern MAX = Pattern.compile("(?i)(?:maximum(?:\\s+length)?(?:\\s+of)?|max\\.?(?:\\s+length)?(?:\\s+of)?"
             + "|at\\s+most|no\\s+more\\s+than|not\\s+(?:be\\s+)?(?:longer|more)\\s+than|up\\s+to)" + LEN);
-    private static final Pattern MAX_EXCLUSIVE = Pattern.compile("(?iu)(?:shorter|less|fewer)\\s+than" + LEN);
+    private static final Pattern MAX_EXCLUSIVE = Pattern.compile("(?i)(?:shorter|less|fewer)\\s+than" + LEN);
     /** "non-alphanumeric" asks for a symbol, the opposite of "alphanumeric only", so it must not match. */
-    private static final Pattern ALNUM = Pattern.compile("(?iu)(?<!non-)(?<!non )(?<!non)(?:alphanumeric"
+    private static final Pattern ALNUM = Pattern.compile("(?i)(?<!non-)(?<!non )(?<!non)(?:alphanumeric"
             + "|letters\\s+and\\s+(?:numbers|digits)\\s+only|only\\s+(?:letters|alphanumeric))");
-    private static final Pattern NEGATED_SUCCESS = Pattern.compile("(?iu)\\b(?:un\\s*successful(?:ly)?|unsuccessful(?:ly)?|not\\s+successful(?:ly)?)\\b");
-    private static final Pattern PASSWORD_RULE_REJECTION = Pattern.compile("(?iu)(?:\\binvalid\\s+password\\s+(?:format|length)\\b|\\b(?:password|passphrase)\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|not\\s+secure|too\\s+common|too\\s+simple|invalid\\s+(?:format|length)|must\\s+contain|needs?\\s+(?:a|one))\\b|\\bchosen\\s+password\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|common)\\b|\\binvalid\\s+password\\b.{0,100}\\bmust\\s+contain\\b)");
+    private static final Pattern NEGATED_SUCCESS = Pattern.compile("(?i)\\b(?:un\\s*successful(?:ly)?|unsuccessful(?:ly)?|not\\s+successful(?:ly)?)\\b");
+    private static final Pattern PASSWORD_RULE_REJECTION = Pattern.compile("(?i)(?:\\binvalid\\s+password\\s+(?:format|length)\\b|\\b(?:password|passphrase)\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|not\\s+secure|too\\s+common|too\\s+simple|invalid\\s+(?:format|length)|must\\s+contain|needs?\\s+(?:a|one))\\b|\\bchosen\\s+password\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|common)\\b|\\binvalid\\s+password\\b.{0,100}\\bmust\\s+contain\\b)");
     private final PatternPack pack;
 
     public ResultMatcher(PatternPack pack) { this.pack = pack; }

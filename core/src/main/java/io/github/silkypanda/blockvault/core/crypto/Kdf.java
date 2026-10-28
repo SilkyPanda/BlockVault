@@ -1,5 +1,7 @@
 package io.github.silkypanda.blockvault.core.crypto;
 
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+
 import java.security.GeneralSecurityException;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -14,6 +16,7 @@ public final class Kdf {
         if (password == null || salt == null || iterations <= 0 || dkLenBytes <= 0 || dkLenBytes > 1024) {
             throw new IllegalArgumentException("Invalid PBKDF2 parameters");
         }
+        if (!AsciiInput.isPassword(password)) throw new IllegalArgumentException("Password must use printable non-space ASCII");
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, Math.multiplyExact(dkLenBytes, 8));
         try {
             return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512").generateSecret(spec).getEncoded();
@@ -29,7 +32,7 @@ public final class Kdf {
         if (targetMillis <= 0 || floor <= 0 || cap < floor) {
             throw new IllegalArgumentException("Invalid calibration bounds");
         }
-        char[] password = "BlockVault calibration".toCharArray();
+        char[] password = "BlockVaultCalibration".toCharArray();
         byte[] salt = SecureBytes.random(16);
         long[] samples = new long[3];
         try {

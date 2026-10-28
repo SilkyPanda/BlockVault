@@ -8,11 +8,11 @@ import java.util.regex.Pattern;
 
 /** Cheap-prefiltered matching for plain system-message text. */
 public final class PromptMatcher {
-    private static final String[] KEYWORDS = {"login", "register", "password", "authenticate", "log in", "connexion", "senha", "contraseña", "anmelden", "registrieren"};
+    private static final String[] KEYWORDS = {"login", "register", "password", "authenticate", "log in"};
     /** Legacy colour codes, including the 14-character "section-x" RGB form, compiled once. */
     private static final Pattern COLOR_CODES = Pattern.compile("(?i)\u00a7x(?:\u00a7[0-9a-f]){6}|\u00a7[0-9A-FK-OR]");
-    private static final Pattern PLAYER_CHAT = Pattern.compile("(?iu)^\\s*<[^<>\\r\\n]{1,32}>\\s*");
-    private static final Pattern DIRECTIVE = Pattern.compile("(?iu)\\b(?:please|must|need\\s+to|use|enter|type|authenticate|log\\s+in|login|register|debes|debe|inicia(?:r)?\\s+sesión|registra(?:r)?|anmelden|registrieren|bitte|musst|müssen|einloggen)\\b");
+    private static final Pattern PLAYER_CHAT = Pattern.compile("(?i)^\\s*<[A-Za-z0-9_]{1,16}>\\s*");
+    private static final Pattern DIRECTIVE = Pattern.compile("(?i)\\b(?:please|must|need\\s+to|use|enter|type|authenticate|log\\s+in|login|register)\\b");
     private static final Pattern PLACEHOLDER = Pattern.compile("\\s+<[^<>\\r\\n]{1,64}>");
     private final PatternPack pack;
 
@@ -45,7 +45,7 @@ public final class PromptMatcher {
     private boolean isDirectedPrompt(PromptKind kind, String text) {
         String group = kind == PromptKind.LOGIN ? "login" : "register";
         for (String alias : pack.commandNames(group)) {
-            Pattern command = Pattern.compile("(?iu)/(?:[\\p{L}0-9_]+:)?" + Pattern.quote(alias) + "\\b");
+            Pattern command = Pattern.compile("(?i)/(?:[a-z0-9_]+:)?" + Pattern.quote(alias) + "\\b");
             java.util.regex.Matcher found = command.matcher(text);
             while (found.find()) {
                 if (PLACEHOLDER.matcher(text.substring(found.end())).lookingAt()) return true;

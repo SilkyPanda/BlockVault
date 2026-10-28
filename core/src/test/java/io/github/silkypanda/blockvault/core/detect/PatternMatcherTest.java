@@ -113,7 +113,7 @@ final class PatternMatcherTest {
                 if (!actual.equals(label)) mismatches.add(label + " expected but got " + actual + ": " + text);
             }
         }
-        assertTrue(checked >= 40);
+        assertTrue(checked >= 30);
         assertEquals(java.util.List.of(), mismatches);
     }
 
@@ -172,19 +172,6 @@ final class PatternMatcherTest {
         ResultMatcher matcher = new ResultMatcher(pack());
         String coloured = "\u00a7x\u00a7f\u00a7f\u00a70\u00a70\u00a70\u00a70Successfully \u00a7x\u00a70\u00a70\u00a7f\u00a7f\u00a70\u00a70registered";
         assertEquals(ResultKind.SUCCESS, matcher.classify(coloured));
-    }
-
-    @Test
-    void recognizesAddedLanguageResults() throws Exception {
-        ResultMatcher matcher = new ResultMatcher(pack());
-        for (String success : java.util.List.of("Anmeldung erfolgreich", "Connexion réussie", "Başarıyla giriş yaptınız",
-                "Zalogowano pomyślnie", "登录成功")) {
-            assertEquals(ResultKind.SUCCESS, matcher.classify(success));
-        }
-        for (String failure : java.util.List.of("Falsches Passwort", "Mot de passe incorrect", "Yanlış şifre",
-                "Nieprawidłowe hasło", "密码错误")) {
-            assertEquals(ResultKind.FAILURE, matcher.classify(failure));
-        }
     }
 
     @Test

@@ -41,6 +41,8 @@ Override with the Java property `blockvault.dataDir`.
 
 ## Security notes
 
+- Text fields use ASCII-only allowlists. Server and master passwords accept printable characters `!` through `~` (no spaces); usernames use letters, digits, and underscores; server addresses use ASCII hostname/IP syntax; email uses ASCII email characters; paths, search, and names allow printable ASCII including spaces.
+
 - `Trust this device` is on by default. It stores the vault key in `vault.bv.trust`, never the master password, and does not use an OS keychain. Anyone or any malware with access to your OS account and data folder can open the vault without the master password. Choose `Ask for master password every launch` to remove the file. POSIX permissions are owner-only; Windows relies on the profile folder's ACL and BlockVault does not set one.
 - There is no inactivity auto-lock. `Lock now` wipes the key and waits for the next password entry.
 - Neither mode protects against malware running as your user, a compromised Minecraft process, screenshots, clipboard managers, or a server that receives your credentials. Java strings and text fields can keep temporary copies until garbage collection.

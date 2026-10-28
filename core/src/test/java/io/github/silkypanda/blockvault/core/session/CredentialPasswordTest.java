@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 final class CredentialPasswordTest {
     @Test
-    void rejectsEmptyWhitespaceAndControlCharacters() {
+    void acceptsOnlyPrintableNonSpaceAscii() {
         assertFalse(CredentialPassword.isValid(new char[0]));
         assertFalse(CredentialPassword.isValid("has space".toCharArray()));
         assertFalse(CredentialPassword.isValid("has\ttab".toCharArray()));

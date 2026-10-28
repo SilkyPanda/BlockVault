@@ -1,5 +1,7 @@
 package io.github.silkypanda.blockvault;
 
+import io.github.silkypanda.blockvault.core.session.CredentialPassword;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -14,7 +16,7 @@ import net.minecraft.util.FormattedCharSequence;
 final class VaultMasterPasswordScreen extends Screen {
     private final Screen parent;
     private EditBox current, next, confirm;
-    private boolean busy, failed, mismatch, tooShort, samePassword;
+    private boolean busy, failed, mismatch, tooShort, samePassword, invalidCharacters;
     private final java.util.List<CapsLockHint> capsHints = new java.util.ArrayList<>();
 
     VaultMasterPasswordScreen(Screen parent) {
@@ -41,6 +43,7 @@ final class VaultMasterPasswordScreen extends Screen {
         EditBox box = new EditBox(font, x, y, 240, 20, Component.translatable(key));
         box.setHint(Component.translatable(key));
         box.setMaxLength(256);
+        box.setFilter(AsciiInput::isPasswordText);
         CapsLockHint hint = new CapsLockHint();
         capsHints.add(hint);
         box.setResponder(hint::onValueChanged);
@@ -53,7 +56,13 @@ final class VaultMasterPasswordScreen extends Screen {
         mismatch = next.getValue().isEmpty() || !next.getValue().equals(confirm.getValue());
         tooShort = next.getValue().length() < 8;
         samePassword = current.getValue().equals(next.getValue());
-        if (mismatch || tooShort || samePassword || current.getValue().isEmpty()) { failed = true; return; }
+        invalidCharacters = !CredentialPassword.isValid(current.getValue().toCharArray())
+                || !CredentialPassword.isValid(next.getValue().toCharArray());
+        if (mismatch || tooShort || samePassword || current.getValue().isEmpty() || invalidCharacters) {
+            statusKey = null;
+            failed = true;
+            return;
+        }
         char[] oldPassword = current.getValue().toCharArray();
         char[] newPassword = next.getValue().toCharArray();
         clearFields();
@@ -90,6 +99,7 @@ final class VaultMasterPasswordScreen extends Screen {
 
     private String failureKey() {
         if (statusKey != null) return statusKey;
+        if (invalidCharacters) return "blockvault.password.invalid";
         if (mismatch) return "blockvault.master.mismatch";
         if (tooShort) return "blockvault.master.new.too_short";
         if (samePassword) return "blockvault.master.new.same";

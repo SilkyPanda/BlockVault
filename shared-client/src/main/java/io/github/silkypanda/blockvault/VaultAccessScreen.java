@@ -8,6 +8,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import io.github.silkypanda.blockvault.core.crypto.PasswordStrength;
+import io.github.silkypanda.blockvault.core.session.CredentialPassword;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 
 /** Minimal masked screen for creating or unlocking the encrypted local vault. */
 final class VaultAccessScreen extends Screen {
@@ -32,6 +34,7 @@ final class VaultAccessScreen extends Screen {
                 Component.translatable("blockvault.vault.password"));
         password.setHint(Component.translatable("blockvault.vault.password"));
         password.setMaxLength(256);
+        password.setFilter(AsciiInput::isPasswordText);
         password.addFormatter(VaultAccessScreen::mask);
         password.setResponder(capsLock::onValueChanged);
         addRenderableWidget(password);
@@ -40,6 +43,7 @@ final class VaultAccessScreen extends Screen {
                     Component.translatable("blockvault.vault.confirm"));
             confirmation.setHint(Component.translatable("blockvault.vault.confirm"));
             confirmation.setMaxLength(256);
+            confirmation.setFilter(AsciiInput::isPasswordText);
             confirmation.addFormatter(VaultAccessScreen::mask);
             confirmation.setResponder(capsLock::onValueChanged);
             addRenderableWidget(confirmation);
@@ -66,6 +70,13 @@ final class VaultAccessScreen extends Screen {
         String repeated = create ? confirmation.getValue() : entered;
         if (entered.isEmpty() || !entered.equals(repeated)) {
             failed = true;
+            password.setValue("");
+            if (confirmation != null) confirmation.setValue("");
+            return;
+        }
+        if (!CredentialPassword.isValid(entered.toCharArray())) {
+            failed = true;
+            failureKey = "blockvault.password.invalid";
             password.setValue("");
             if (confirmation != null) confirmation.setValue("");
             return;

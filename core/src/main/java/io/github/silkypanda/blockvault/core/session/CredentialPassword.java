@@ -1,17 +1,13 @@
 package io.github.silkypanda.blockvault.core.session;
 
-/** Validation shared by every path that saves or sends a server credential. */
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+
+/** Validation shared by every path that saves or sends passwords. */
 public final class CredentialPassword {
     private CredentialPassword() { }
 
-    /** Empty passwords, whitespace, and control characters cannot be represented safely as command arguments. */
+    /** Passwords use printable, non-space ASCII so one command argument represents the exact value. */
     public static boolean isValid(char[] password) {
-        if (password == null || password.length == 0) return false;
-        for (char value : password) {
-            if (Character.isWhitespace(value) || Character.isSpaceChar(value) || Character.isISOControl(value)) {
-                return false;
-            }
-        }
-        return true;
+        return AsciiInput.isPassword(password);
     }
 }

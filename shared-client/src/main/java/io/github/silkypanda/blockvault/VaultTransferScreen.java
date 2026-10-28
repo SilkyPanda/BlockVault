@@ -1,5 +1,6 @@
 package io.github.silkypanda.blockvault;
 
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 import java.nio.file.Path;
 import java.util.Arrays;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -34,12 +35,14 @@ final class VaultTransferScreen extends Screen {
         pathBox.setHint(Component.translatable(importing
                 ? "blockvault.transfer.import.path" : "blockvault.transfer.export.folder"));
         pathBox.setMaxLength(1024);
+        pathBox.setFilter(AsciiInput::isPrintable);
         addRenderableWidget(pathBox);
         if (importing) {
             passwordBox = new EditBox(font, left, height / 2 + 4, 300, 20,
                     Component.translatable("blockvault.vault.password"));
             passwordBox.setHint(Component.translatable("blockvault.vault.password"));
             passwordBox.setMaxLength(1024);
+            passwordBox.setFilter(AsciiInput::isPasswordText);
             passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
             addRenderableWidget(passwordBox);
         }
@@ -53,6 +56,7 @@ final class VaultTransferScreen extends Screen {
 
     private void transfer() {
         if (busy || (importing && pathBox.getValue().isBlank())) return;
+        if (!AsciiInput.isPrintable(pathBox.getValue())) { failed = true; return; }
         busy = true;
         failed = false;
         failureKey = null;

@@ -127,7 +127,7 @@ public final class Hooks {
         LoginSession active = session;
         if (active == null) return false;
         String normalized = command == null ? "" : command.strip();
-        if (normalized.matches("(?iu)/?(?:[\\p{L}0-9_]+:)?[\\p{L}0-9_]+\\s*")) {
+        if (normalized.matches("(?i)/?(?:[a-z0-9_]+:)?[a-z0-9_]+\\s*")) {
             String name = normalized.replaceFirst("^/", "").strip().toLowerCase(java.util.Locale.ROOT);
             int namespace = name.lastIndexOf(':');
             if (namespace >= 0) name = name.substring(namespace + 1);

@@ -7,6 +7,7 @@ import io.github.silkypanda.blockvault.core.detect.ResultKind;
 import io.github.silkypanda.blockvault.core.detect.ResultMatcher;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.vault.Account;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Locale;
@@ -22,7 +23,7 @@ public final class LoginSession {
     /** Used when a server rejects a password but its message gives no usable numbers. */
     private static final PasswordGenerator.Policy FALLBACK_POLICY =
             new PasswordGenerator.Policy(12, true, true, true, false, "", false);
-    private static final Pattern COMMAND = Pattern.compile("(?iu)^\\s*/?((?:[\\p{L}0-9_]+:)?[\\p{L}0-9_]+)(?:\\s+(.*))?$");
+    private static final Pattern COMMAND = Pattern.compile("(?i)^\\s*/?((?:[A-Za-z0-9_]+:)?[A-Za-z0-9_]+)(?:\\s+(.*))?$");
 
     private enum Action { NONE, AUTOFILL, PASSWORDLESS, REGISTER, MANUAL, UNREGISTER }
 
@@ -152,16 +153,20 @@ public final class LoginSession {
             return;
         }
         if (contains("login", command)) {
+            if (!AsciiInput.isPasswordText(words[0])) return;
             replacePending(words[0]);
             action = Action.MANUAL;
         } else if (contains("register", command)) {
+            if (!AsciiInput.isPasswordText(words[0])) return;
             replacePending(words[0]);
             action = Action.MANUAL;
         } else if (contains("changepassword", command)) {
             if (words.length < 2) return;
+            if (!AsciiInput.isPasswordText(words[1])) return;
             replacePending(words[1]);
             action = Action.MANUAL;
         } else if (contains("unregister", command)) {
+            if (!AsciiInput.isPasswordText(words[0])) return;
             replacePending(words[0]);
             action = Action.UNREGISTER;
         } else return;
@@ -184,6 +189,10 @@ public final class LoginSession {
     public void confirmRegistration(char[] password, String email) {
         if (host == null || state != SessionState.PROMPTED || lastPromptKind != PromptKind.REGISTER || action == Action.REGISTER) return;
         if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
+        if (email != null && !email.isEmpty() && !AsciiInput.isEmail(email)) {
+            env.toast("blockvault.toast.email_invalid");
+            return;
+        }
         replacePending(password);
         action = Action.REGISTER;
         // Close the prompt race while the pending credential is persisted. Repeated

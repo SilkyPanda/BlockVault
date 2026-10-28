@@ -1,5 +1,7 @@
 package io.github.silkypanda.blockvault;
 
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -50,6 +52,7 @@ final class VaultListScreen extends Screen {
         search.setValue(searchQuery);
         search.setHint(Component.translatable("blockvault.vault.search"));
         search.setMaxLength(128);
+        search.setFilter(AsciiInput::isPrintable);
         search.setResponder(value -> { searchQuery = value; page = 0; updateVisibleRows(); });
         addRenderableWidget(search);
 

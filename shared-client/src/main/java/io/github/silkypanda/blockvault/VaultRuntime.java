@@ -650,7 +650,7 @@ public final class VaultRuntime implements VaultAccess {
         String host = io.github.silkypanda.blockvault.core.host.HostKey.normalize(hostText.trim()).orElse(null);
         String name = username.trim();
         if (host == null) { Arrays.fill(password, '\0'); result.accept("blockvault.add.bad_host"); return; }
-        if (name.isEmpty() || name.length() > 64 || name.chars().anyMatch(c -> Character.isWhitespace(c) || Character.isISOControl(c))) {
+        if (!Usernames.isValid(name)) {
             Arrays.fill(password, '\0');
             result.accept("blockvault.add.bad_username");
             return;

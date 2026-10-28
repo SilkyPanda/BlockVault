@@ -7,43 +7,28 @@ LOGIN	Log in with /login <password>
 LOGIN	Authenticate using /login <password>
 LOGIN	Use /log <password>
 LOGIN	Please connect with /l <password>
-LOGIN	Debes iniciar sesión con /login <contraseña>
 REGISTER	Please, register to the server with the command: /register <password> <ConfirmPassword>
 REGISTER	Use /register <password> to create your account
 REGISTER	Please register with /register
 REGISTER	Create an account: /register <password>
 REGISTER	Register now using /reg <password>
 REGISTER	You need to register first: /register
-REGISTER	Registra tu cuenta con /register <contraseña>
-REGISTER	Bitte registriere dich mit /register <passwort>
 SUCCESS	Successful login!
 SUCCESS	Successfully logged in.
 SUCCESS	You are now logged in
 SUCCESS	Login successful
 SUCCESS	Registration successful
 SUCCESS	Successfully registered!
-SUCCESS	Sesión iniciada correctamente
-SUCCESS	Registrado com sucesso
-SUCCESS	Успешная авторизация
-SUCCESS	Erfolgreich angemeldet
-SUCCESS	Connexion réussie
 FAILURE	Wrong password!
 FAILURE	Incorrect password
 FAILURE	Password is wrong
 FAILURE	Invalid password, try again
-FAILURE	Contraseña incorrecta
-FAILURE	Senha incorreta
-FAILURE	Falsches Passwort
-FAILURE	Mot de passe incorrect
-FAILURE	Неверный пароль
 PASSWORD_RULE	Password too short
 PASSWORD_RULE	Password too long
 PASSWORD_RULE	Illegal characters in password
 PASSWORD_RULE	Password must be at least 8 characters
 PASSWORD_RULE	Maximum of 32 characters allowed
 PASSWORD_RULE	Only alphanumeric characters are allowed
-PASSWORD_RULE	Contraseña demasiado corta
-PASSWORD_RULE	Senha inválida
 NONE	Welcome to the server!
 NONE	The password plugin will be updated tomorrow
 NONE	A player joined the game

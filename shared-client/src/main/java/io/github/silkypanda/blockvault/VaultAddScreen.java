@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -35,6 +36,9 @@ final class VaultAddScreen extends Screen {
         hostBox = box(left, top, "blockvault.add.host", 255);
         userBox = box(left, top + 26, "blockvault.add.username", 64);
         passwordBox = box(left, top + 52, "blockvault.add.password", 1024);
+        hostBox.setFilter(AsciiInput::isPrintable);
+        userBox.setFilter(AsciiInput::isUsernameText);
+        passwordBox.setFilter(AsciiInput::isPasswordText);
         passwordBox.setResponder(capsLock::onValueChanged);
         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
                 showPassword ? value : "\u2022".repeat(value.length()), Style.EMPTY));

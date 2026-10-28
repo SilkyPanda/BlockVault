@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.vault.BackupSummary;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -36,6 +37,7 @@ final class VaultBackupRecoveryScreen extends Screen {
                 Component.translatable("blockvault.backup.recovery.password"));
         password.setHint(Component.translatable("blockvault.backup.recovery.password"));
         password.setMaxLength(256);
+        password.setFilter(AsciiInput::isPasswordText);
         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(password);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.restore"), button -> restore())

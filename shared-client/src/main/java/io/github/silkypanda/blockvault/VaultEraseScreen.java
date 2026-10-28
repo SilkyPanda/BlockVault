@@ -1,5 +1,7 @@
 package io.github.silkypanda.blockvault;
 
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -33,6 +35,7 @@ final class VaultEraseScreen extends Screen {
                 Component.translatable("blockvault.vault.password"));
         password.setHint(Component.translatable("blockvault.vault.password"));
         password.setMaxLength(256);
+        password.setFilter(AsciiInput::isPasswordText);
         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(password);
         eraseButton = Button.builder(Component.translatable(confirmUnverifiedErase

@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault.core.vault;
 
 import com.google.gson.JsonObject;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 
 /** Immutable account metadata with a defensively copied password. */
 public record Account(String username, char[] password, Status status, long createdAt, long modifiedAt,
@@ -9,8 +10,8 @@ public record Account(String username, char[] password, Status status, long crea
     public enum Status { VERIFIED, PENDING }
 
     public Account {
-        if (username == null || password == null || status == null) {
-            throw new IllegalArgumentException("Account fields must not be null");
+        if (!Usernames.isValid(username) || !AsciiInput.isPassword(password) || status == null) {
+            throw new IllegalArgumentException("Account fields are invalid");
         }
         password = password.clone();
         metadata = metadata == null ? new JsonObject() : metadata.deepCopy();

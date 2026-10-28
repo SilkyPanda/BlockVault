@@ -2,6 +2,7 @@ package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.session.CardVariant;
 import io.github.silkypanda.blockvault.core.session.CredentialPassword;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 import io.github.silkypanda.blockvault.core.session.LoginSession;
 import io.github.silkypanda.blockvault.core.session.PromptModel;
 import io.github.silkypanda.blockvault.core.session.Scheduler;
@@ -107,6 +108,7 @@ final class CredentialConfirmScreen extends Screen {
         passwordBox = new EditBox(font, cardX + pad, fieldY, cardWidth - pad * 2, scaled(20),
                 Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(256);
+        passwordBox.setFilter(AsciiInput::isPasswordText);
         passwordBox.setHint(Component.translatable("blockvault.card.password"));
         passwordBox.setValue(resizedPassword != null ? resizedPassword
                 : model.variant() == CardVariant.REJECTED ? "" : new String(password));
@@ -120,6 +122,7 @@ final class CredentialConfirmScreen extends Screen {
                     Component.translatable("blockvault.card.email"));
             emailBox.setHint(Component.translatable("blockvault.card.email"));
             emailBox.setMaxLength(254);
+            emailBox.setFilter(AsciiInput::isEmailText);
             if (resizedEmail != null) emailBox.setValue(resizedEmail);
             resizedEmail = null;
             addRenderableWidget(emailBox);
@@ -210,7 +213,7 @@ final class CredentialConfirmScreen extends Screen {
             return;
         }
         if (registration && emailBox != null
-                && !emailBox.getValue().matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) {
+                && !AsciiInput.isEmail(emailBox.getValue())) {
             VaultRuntime.showToast("blockvault.toast.email_invalid");
             return;
         }

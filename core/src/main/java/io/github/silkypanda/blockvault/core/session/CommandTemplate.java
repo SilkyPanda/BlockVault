@@ -5,9 +5,12 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.vault.Usernames;
+
 /** Validated command template with explicit credential placeholders. */
 public record CommandTemplate(String id, String login, String register) {
-    private static final Pattern REGISTER_COMMAND = Pattern.compile("(?iu)/(?<command>(?:[\\p{L}0-9_]+:)?[\\p{L}]+)\\b(?<args>[^\\r\\n]*?)(?=\\s+/(?:[\\p{L}0-9_]+:)?[\\p{L}]+\\b|$)");
+    private static final Pattern REGISTER_COMMAND = Pattern.compile("(?i)/(?<command>(?:[A-Za-z0-9_]+:)?[A-Za-z]+)\\b(?<args>[^\\r\\n]*?)(?=\\s+/(?:[A-Za-z0-9_]+:)?[A-Za-z]+\\b|$)");
     private static final Pattern PLACEHOLDER = Pattern.compile("<([^<>]+)>");
     private static final Pattern TOKEN = Pattern.compile("\\{(password|email|username)}");
     public CommandTemplate {
@@ -58,6 +61,11 @@ public record CommandTemplate(String id, String login, String register) {
 
     /** Renders one command while preserving the no-leading-slash contract. */
     public String render(boolean registration, char[] password, String email, String username) {
+        if (!CredentialPassword.isValid(password)) throw new IllegalArgumentException("Invalid password argument");
+        if (email != null && !email.isEmpty() && !AsciiInput.isEmail(email)) {
+            throw new IllegalArgumentException("Invalid email argument");
+        }
+        if (username != null && !Usernames.isValid(username)) throw new IllegalArgumentException("Invalid username argument");
         String source = registration ? register : login;
         String[] values = {safe(new String(password)), safe(email), safe(username)};
         Matcher tokens = TOKEN.matcher(source);
@@ -77,11 +85,11 @@ public record CommandTemplate(String id, String login, String register) {
         return result;
     }
 
-    /** Control characters could split or corrupt the command, so they are refused rather than silently removed. */
+    /** Non-ASCII or control characters could corrupt command arguments, so they are refused. */
     private static String safe(String value) {
         if (value == null) return "";
         for (int i = 0; i < value.length(); i++) {
-            if (Character.isISOControl(value.charAt(i))) {
+            if (value.charAt(i) < ' ' || value.charAt(i) > '~') {
                 throw new IllegalArgumentException("Command argument contains control characters");
             }
         }

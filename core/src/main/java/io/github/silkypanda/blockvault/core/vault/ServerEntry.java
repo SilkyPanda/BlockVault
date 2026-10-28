@@ -1,6 +1,8 @@
 package io.github.silkypanda.blockvault.core.vault;
 
 import com.google.gson.JsonObject;
+import io.github.silkypanda.blockvault.core.host.HostKey;
+import io.github.silkypanda.blockvault.core.validation.AsciiInput;
 import java.util.List;
 
 /**
@@ -12,8 +14,9 @@ import java.util.List;
 public record ServerEntry(String id, String name, List<String> hosts, boolean autofill,
                           String templateId, List<Account> accounts, JsonObject extra) {
     public ServerEntry {
-        if (id == null || name == null || templateId == null) {
-            throw new IllegalArgumentException("Server fields must not be null");
+        if (id == null || name == null || !AsciiInput.isPrintable(name) || templateId == null
+                || hosts == null || hosts.stream().anyMatch(host -> HostKey.normalize(host).isEmpty())) {
+            throw new IllegalArgumentException("Server fields are invalid");
         }
         hosts = List.copyOf(hosts);
         accounts = List.copyOf(accounts);
