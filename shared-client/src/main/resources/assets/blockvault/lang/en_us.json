@@ -82,7 +82,7 @@
   "blockvault.card.regenerate": "Another password",
   "blockvault.settings.description.autofill": "Master switch: automatically send a saved password after a detected login prompt.",
   "blockvault.settings.description.delay": "Wait this long after a login prompt before automatic password entry.",
-  "blockvault.settings.description.duration": "How long save and update cards stay open while idle. Registration cards stay open until you dismiss them.",
+  "blockvault.settings.description.duration": "How long save and update cards stay open while idle. The default is 5 seconds. Registration cards stay open until you dismiss them.",
   "blockvault.settings.description.position": "Choose which screen corner shows credential prompts.",
   "blockvault.settings.description.streamer": "Hide server addresses in BlockVault prompts for streams and screenshots.",
   "blockvault.settings.description.generator": "Choose the format used when BlockVault generates a password. Balanced: 20 characters with upper/lowercase, digits and symbols. Server-friendly: 16 alphanumeric characters without symbols. Maximum: 32 characters with all character classes. Memorable: four hyphenated words plus two digits.",

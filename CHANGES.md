@@ -15,3 +15,4 @@
 - **Added** passwordless `/login`: typing a bare login command sends the verified saved password through the server's configured login template, regardless of global or per-server autofill settings.
 - **Changed** credential capture to always be allowed, removed its per-server toggle and opt-out action, and kept autofill as a separate per-server setting.
 - **Fixed** YACL Reset bindings to use BlockVault's actual default values instead of the values loaded when the screen opens. Restored the vault-row Copy label.
+- **Changed** the default idle save/update card duration from 10 seconds to 5 seconds; the YACL setting remains configurable.

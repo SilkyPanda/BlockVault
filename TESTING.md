@@ -109,7 +109,7 @@ Use AuthMe settings or a test plugin to produce each message:
 5. Make one backup unreadable first: the change still succeeds and you are told which backup could not be re-encrypted.
 
 ### 3.10 Settings and data
-1. Every setting in each YACL category persists across restarts on Fabric and NeoForge. Change settings away from defaults, use YACL Reset, and confirm each setting returns to its documented default; save, reopen, and confirm those defaults persisted. Corrupt `config.json` by hand: BlockVault starts with defaults, moves the bad file to `config.json.bad`, and settings can be saved again.
+1. Every setting in each YACL category persists across restarts on Fabric and NeoForge. Confirm card duration defaults to 5 seconds. Change settings away from defaults, use YACL Reset, and confirm each setting returns to its documented default; save, reopen, and confirm those defaults persisted. Corrupt `config.json` by hand: BlockVault starts with defaults, moves the bad file to `config.json.bad`, and settings can be saved again.
 2. Default generator preset is server-friendly on a fresh install.
 3. Open data folder works on Windows, macOS and Linux. If nothing opens, the path is copied and a toast says so; note that as a bug, because it means the Minecraft helper was not found.
 4. Erase all data: needs the master password, removes BlockVault's vault/config files, leaves exports and any other files you put in the folder.
