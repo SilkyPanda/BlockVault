@@ -12,6 +12,7 @@ import net.minecraft.network.chat.Component;
 /** Searchable list of saved server accounts with per-server controls. */
 final class VaultListScreen extends Screen {
     private static final int PAGE_SIZE = 6;
+    private static final int ROW_TEXT_INSET = 8;
     private List<VaultRow> rows;
     private final List<Button> rowButtons = new ArrayList<>();
     private static final int ROW_ACTIONS = 5;
@@ -174,7 +175,8 @@ final class VaultListScreen extends Screen {
             int y = 72 + rowIndex * 34;
             String serverName = BlockVaultConfig.current().streamerMode()
                     ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
-            graphics.text(font, Component.literal(clip(serverName, rowLabelWidth)), contentLeft, y, 0xffffffff);
+            graphics.text(font, Component.literal(clip(serverName, rowLabelWidth - ROW_TEXT_INSET)),
+                    contentLeft + ROW_TEXT_INSET, y, 0xffffffff);
             String accountLine;
             if (row.serverOnly()) {
                 accountLine = Component.translatable("blockvault.vault.server.settings").getString();
@@ -185,8 +187,8 @@ final class VaultListScreen extends Screen {
                         row.status().name().toLowerCase(java.util.Locale.ROOT)).getString();
                 accountLine = row.username() + " · " + status;
             }
-            graphics.text(font, Component.literal(clip(accountLine, rowLabelWidth)),
-                    contentLeft, y + 12, 0xffb9b4c5);
+            graphics.text(font, Component.literal(clip(accountLine, rowLabelWidth - ROW_TEXT_INSET)),
+                    contentLeft + ROW_TEXT_INSET, y + 12, 0xffb9b4c5);
         }
         if (rows.isEmpty()) graphics.centeredText(font, Component.translatable("blockvault.vault.empty"), width / 2, 80, 0xffcccccc);
         else if (visible.isEmpty()) graphics.centeredText(font, Component.translatable("blockvault.vault.no_matches"),
