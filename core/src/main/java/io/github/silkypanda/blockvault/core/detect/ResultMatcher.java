@@ -20,7 +20,7 @@ public final class ResultMatcher {
     private static final Pattern ALNUM = Pattern.compile("(?iu)(?<!non-)(?<!non )(?<!non)(?:alphanumeric"
             + "|letters\\s+and\\s+(?:numbers|digits)\\s+only|only\\s+(?:letters|alphanumeric))");
     private static final Pattern NEGATED_SUCCESS = Pattern.compile("(?iu)\\b(?:un\\s*successful(?:ly)?|unsuccessful(?:ly)?|not\\s+successful(?:ly)?)\\b");
-    private static final Pattern PASSWORD_RULE_REJECTION = Pattern.compile("(?iu)(?:\\b(?:password|passphrase)\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|not\\s+secure|too\\s+common|too\\s+simple|invalid\\s+(?:format|length)|must\\s+contain|needs?\\s+(?:a|one))\\b|\\bchosen\\s+password\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|common)\\b|\\binvalid\\s+password\\b.{0,100}\\bmust\\s+contain\\b)");
+    private static final Pattern PASSWORD_RULE_REJECTION = Pattern.compile("(?iu)(?:\\binvalid\\s+password\\s+format\\b|\\b(?:password|passphrase)\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|not\\s+secure|too\\s+common|too\\s+simple|invalid\\s+(?:format|length)|must\\s+contain|needs?\\s+(?:a|one))\\b|\\bchosen\\s+password\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|common)\\b|\\binvalid\\s+password\\b.{0,100}\\bmust\\s+contain\\b)");
     private final PatternPack pack;
 
     public ResultMatcher(PatternPack pack) { this.pack = pack; }

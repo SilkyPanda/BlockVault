@@ -51,6 +51,7 @@
       "(?iu)(?:password|passphrase)\\s+contains?\\s+(?:illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+characters",
       "(?iu)(?:too\\s+(?:short|long)|illegal|invalid|forbidden|unallowed|disallowed|not allowed|not permitted)\\s+characters?",
       "(?iu)\\b(?:password|passphrase)\\b.{0,80}\\b(?:invalid\\s+(?:format|length)|must\\s+contain|weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|too\\s+common|too\\s+simple)\\b",
+      "(?iu)\\binvalid\\s+password\\s+format\\b",
       "(?iu)\\bchosen\\s+password\\b.{0,80}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|common)\\b",
       "(?iu)\\bpassword\\s+too\\s+(?:short|long)\\b",
       "(?iu)\\bpassword\\b.*\\b(?:unallowed|disallowed)\\s+characters?\\b",
