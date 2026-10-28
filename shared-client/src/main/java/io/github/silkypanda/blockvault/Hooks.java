@@ -98,12 +98,22 @@ public final class Hooks {
     }
 
     /** Captures an outgoing command without logging or retaining it outside the session. */
-    public static void onOutgoingCommand(String command) {
+    public static boolean onOutgoingCommand(String command) {
         commandHookSeen = true;
-        if (Boolean.TRUE.equals(SELF_SENT.get())) return;
+        if (Boolean.TRUE.equals(SELF_SENT.get())) return false;
         checkHistoryScrubbing(command);
         LoginSession active = session;
-        if (active != null) guard(active, () -> active.onOutgoingCommand(command));
+        if (active == null) return false;
+        String normalized = command == null ? "" : command.strip();
+        if (normalized.matches("(?iu)/?[\\p{L}0-9_]+\\s*")) {
+            String name = normalized.replaceFirst("^/", "").strip().toLowerCase(java.util.Locale.ROOT);
+            if (patterns != null && patterns.commandNames("login").contains(name)) {
+                guard(active, () -> active.onOutgoingCommand(command));
+                return true;
+            }
+        }
+        guard(active, () -> active.onOutgoingCommand(command));
+        return false;
     }
 
     /** Called by the command-history mixin each time it keeps a sensitive command out of the history. */

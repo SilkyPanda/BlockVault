@@ -23,7 +23,7 @@ public final class LoginSession {
             new PasswordGenerator.Policy(12, true, true, true, false, "", false);
     private static final Pattern COMMAND = Pattern.compile("(?iu)^\\s*/?([\\p{L}0-9_]+)(?:\\s+(.*))?$");
 
-    private enum Action { NONE, AUTOFILL, REGISTER, MANUAL, UNREGISTER }
+    private enum Action { NONE, AUTOFILL, PASSWORDLESS, REGISTER, MANUAL, UNREGISTER }
 
     private final SessionEnv env;
     private final Scheduler scheduler;
@@ -100,7 +100,42 @@ public final class LoginSession {
         if (!matcher.matches()) return;
         String command = matcher.group(1).toLowerCase(Locale.ROOT);
         String[] words = matcher.group(2) == null ? new String[0] : matcher.group(2).trim().split("\\s+");
-        if (words.length == 0 || words[0].isEmpty()) return;
+        if (words.length == 0 || words[0].isEmpty()) {
+            if (!contains("login", command)) return;
+            // A bare login is an explicit request, independent of the automatic-login switches.
+            if (state == SessionState.SENT) return;
+            cancelTimer();
+            wipePending();
+            attempted = false;
+            action = Action.PASSWORDLESS;
+            state = SessionState.PROMPTED;
+            int token = generation;
+            int revision = ++promptRevision;
+            String expectedHost = host;
+            String expectedUsername = username;
+            env.vault().find(expectedHost, expectedUsername, saved -> safely(() -> {
+                if (token != generation || revision != promptRevision || state != SessionState.PROMPTED
+                        || action != Action.PASSWORDLESS) return;
+                Account account = saved == null ? null : saved.account();
+                if (account == null || account.status() != Account.Status.VERIFIED) {
+                    action = Action.NONE;
+                    state = SessionState.UNKNOWN;
+                    env.toast("blockvault.toast.no_saved_login");
+                    return;
+                }
+                template = saved.template();
+                char[] storedPassword = account.password();
+                try { replacePending(storedPassword); }
+                finally { Arrays.fill(storedPassword, '\0'); }
+                send(false, null, token);
+            }), () -> safely(() -> {
+                if (token == generation && revision == promptRevision && action == Action.PASSWORDLESS) {
+                    action = Action.NONE;
+                    state = SessionState.UNKNOWN;
+                }
+            }));
+            return;
+        }
         if (contains("login", command)) {
             replacePending(words[0]);
             action = Action.MANUAL;
@@ -368,6 +403,7 @@ public final class LoginSession {
                     env.vault().markVerified(host, username);
                     if (completed == Action.REGISTER) env.toast("blockvault.toast.saved");
                     else if (completed == Action.AUTOFILL) env.chatMessage("blockvault.chat.autologin_success");
+                    else if (completed == Action.PASSWORDLESS) env.chatMessage("blockvault.chat.passwordless_login_success");
                 }
                 state = SessionState.CONFIRMED;
                 wipePending();

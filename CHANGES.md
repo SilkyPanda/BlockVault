@@ -12,3 +12,4 @@
 - **Redesigned** settings with YACL categories and controls shared by Fabric and NeoForge. Updated NeoForge mod-list icon/banner metadata.
 - **Removed** the edit-password Generate action and the vault screen's Config action; Back now closes the vault screen.
 - **Kept** the jar under the documented 256 KiB limit by bundling only the 1,024 words the generator already consumes and retaining source/line debug data without local-variable tables.
+- **Added** passwordless `/login`: typing a bare login command sends the verified saved password through the server's configured login template, regardless of global or per-server autofill settings.

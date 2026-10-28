@@ -83,6 +83,7 @@ Use a throwaway vault. Delete the data folder between big sections if you want a
 3. Type `/login <correct>` yourself with a stale saved password: Update card offered after success.
 4. Server using `/l <password>` or `/log <password>` in its prompt is recognised.
 5. A second prompt after the first autofill does not send the password again.
+6. Turn off global autofill and the server's Auto setting; type `/login` with a verified saved account. It should send the saved password once and report "Logged in using your saved password." Repeat with no verified account: no `/login` command should reach the server, and BlockVault should report that no verified saved login exists.
 
 ### 3.7 Server rules and password changes
 Use AuthMe settings or a test plugin to produce each message:

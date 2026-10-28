@@ -7,11 +7,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Intercepts outgoing commands for explicit manual credential capture. */
+/** Intercepts outgoing commands for manual credential capture and bare login. */
 @Mixin(ClientPacketListener.class)
 public abstract class ClientPacketListenerMixin {
-    @Inject(method = "sendCommand", at = @At("HEAD"), require = 0)
+    @Inject(method = "sendCommand", at = @At("HEAD"), cancellable = true, require = 0)
     private void blockvault$commandSent(String command, CallbackInfo callback) {
-        Hooks.onOutgoingCommand(command);
+        if (Hooks.onOutgoingCommand(command)) callback.cancel();
     }
 }
