@@ -65,7 +65,7 @@ public final class VaultRuntime implements VaultAccess {
             String templateId = server == null ? "auto" : server.templateId();
             CommandTemplate template = CommandTemplate.builtins().getOrDefault(templateId, CommandTemplate.builtins().get("authme"));
             SavedCredential saved = server == null ? null
-                    : new SavedCredential(callbackAccount, server.autofill(), server.neverSave(), template, templateExplicit);
+                    : new SavedCredential(callbackAccount, server.autofill(), template, templateExplicit);
             BackgroundExecutor.onGameThread(() -> {
                 try { result.accept(saved); }
                 finally { if (callbackAccount != null) callbackAccount.clearPassword(); }
@@ -647,15 +647,15 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Changes per-server autofill and save policy. */
-    static void updateServerPolicy(VaultRow row, boolean autofill, boolean neverSave) {
+    /** Changes whether login prompts automatically send the saved password for this server. */
+    static void updateServerAutofill(VaultRow row, boolean autofill) {
         withVault(() -> {
             Vault current = store.vault();
             List<ServerEntry> servers = new ArrayList<>(current.servers());
             for (int index = 0; index < servers.size(); index++) {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
-                    servers.set(index, server.withPolicy(neverSave, autofill));
+                    servers.set(index, server.withPolicy(false, autofill));
                     break;
                 }
             }
@@ -679,25 +679,6 @@ public final class VaultRuntime implements VaultAccess {
             }
             saveVault(current.withServers(servers));
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
-        });
-    }
-
-    static void setNeverSave(String host, boolean neverSave) {
-        withVault(() -> {
-            Vault current = store.vault();
-            List<ServerEntry> servers = new ArrayList<>(current.servers());
-            boolean found = false;
-            for (int index = 0; index < servers.size(); index++) {
-                ServerEntry server = servers.get(index);
-                if (server.hosts().contains(host)) {
-                    servers.set(index, server.withPolicy(neverSave, server.autofill()));
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) servers.add(new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), neverSave,
-                    true, "auto", List.of()));
-            saveVault(current.withServers(servers));
         });
     }
 
@@ -871,11 +852,10 @@ public final class VaultRuntime implements VaultAccess {
             String host = server.hosts().stream().findFirst().orElse(server.name());
             List<Account> active = server.accounts();
             if (active.isEmpty()) {
-                result.add(new VaultRow(server.name(), host, "", null, server.autofill(), server.neverSave(),
-                        server.templateId(), true));
+                result.add(new VaultRow(server.name(), host, "", null, server.autofill(), server.templateId(), true));
             } else {
                 for (Account account : active) result.add(new VaultRow(server.name(), host, account.username(),
-                        account.status(), server.autofill(), server.neverSave(), server.templateId()));
+                        account.status(), server.autofill(), server.templateId(), false));
             }
         }
         return List.copyOf(result);

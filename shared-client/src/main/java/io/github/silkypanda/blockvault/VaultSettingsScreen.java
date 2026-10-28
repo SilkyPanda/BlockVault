@@ -18,6 +18,7 @@ import net.minecraft.network.chat.Component;
 
 /** YACL settings screen for BlockVault's non-secret client preferences. */
 final class VaultSettingsScreen extends Screen {
+    private static final BlockVaultConfig.Settings DEFAULTS = BlockVaultConfig.Settings.defaults();
     private final Screen parent;
     private boolean loadRequested;
 
@@ -53,12 +54,12 @@ final class VaultSettingsScreen extends Screen {
         OptionGroup credentials = OptionGroup.createBuilder()
                 .name(Component.translatable("blockvault.config.group.login"))
                 .description(description("blockvault.config.group.login.description"))
-                .option(boolOption("blockvault.config.option.autofill", "autofill", () -> draft.autofill,
+                .option(boolOption("blockvault.config.option.autofill", "autofill", DEFAULTS.autofill(), () -> draft.autofill,
                         value -> draft.autofill = value))
                 .option(Option.<Integer>createBuilder()
                         .name(Component.translatable("blockvault.config.option.delay"))
                         .description(description("blockvault.settings.description.delay"))
-                        .binding(draft.delay, () -> draft.delay, value -> draft.delay = value)
+                        .binding(DEFAULTS.autofillDelayMillis(), () -> draft.delay, value -> draft.delay = value)
                         .controller(option -> IntegerSliderControllerBuilder.create(option)
                                 .range(200, 5000).step(100)
                                 .valueFormatter(value -> Component.translatable("blockvault.config.value.millis", value)))
@@ -66,7 +67,7 @@ final class VaultSettingsScreen extends Screen {
                 .option(Option.<GeneratorPreset>createBuilder()
                         .name(Component.translatable("blockvault.config.option.generator"))
                         .description(description("blockvault.settings.description.generator"))
-                        .binding(draft.generator, () -> draft.generator,
+                        .binding(GeneratorPreset.from(DEFAULTS.generator()), () -> draft.generator,
                                 value -> draft.generator = value)
                         .controller(option -> EnumControllerBuilder.create(option)
                                 .enumClass(GeneratorPreset.class)
@@ -88,7 +89,7 @@ final class VaultSettingsScreen extends Screen {
                 .option(Option.<Integer>createBuilder()
                         .name(Component.translatable("blockvault.config.option.duration"))
                         .description(description("blockvault.settings.description.duration"))
-                        .binding(draft.duration, () -> draft.duration, value -> draft.duration = value)
+                        .binding(DEFAULTS.cardDurationSeconds(), () -> draft.duration, value -> draft.duration = value)
                         .controller(option -> IntegerSliderControllerBuilder.create(option)
                                 .range(1, 60).step(1)
                                 .valueFormatter(value -> Component.translatable("blockvault.config.value.seconds", value)))
@@ -96,7 +97,7 @@ final class VaultSettingsScreen extends Screen {
                 .option(Option.<CardPosition>createBuilder()
                         .name(Component.translatable("blockvault.config.option.position"))
                         .description(description("blockvault.settings.description.position"))
-                        .binding(draft.position, () -> draft.position,
+                        .binding(CardPosition.from(DEFAULTS.cardPosition()), () -> draft.position,
                                 value -> draft.position = value)
                         .controller(option -> EnumControllerBuilder.create(option)
                                 .enumClass(CardPosition.class)
@@ -114,14 +115,15 @@ final class VaultSettingsScreen extends Screen {
         OptionGroup privacy = OptionGroup.createBuilder()
                 .name(Component.translatable("blockvault.config.group.privacy"))
                 .description(description("blockvault.config.group.privacy.description"))
-                .option(boolOption("blockvault.config.option.streamer", "streamer", () -> draft.streamer,
+                .option(boolOption("blockvault.config.option.streamer", "streamer", DEFAULTS.streamerMode(), () -> draft.streamer,
                         value -> draft.streamer = value))
-                .option(boolOption("blockvault.config.option.scrub_history", "scrub_history", () -> draft.scrubHistory,
+                .option(boolOption("blockvault.config.option.scrub_history", "scrub_history", DEFAULTS.scrubHistory(), () -> draft.scrubHistory,
                         value -> draft.scrubHistory = value))
                 .option(Option.<UnlockPolicy>createBuilder()
                         .name(Component.translatable("blockvault.config.option.unlock_policy"))
                         .description(description("blockvault.settings.description.unlock_policy"))
-                        .binding(draft.unlockPolicy, () -> draft.unlockPolicy,
+                        .binding(DEFAULTS.trustDevice() ? UnlockPolicy.TRUST : UnlockPolicy.ASK,
+                                () -> draft.unlockPolicy,
                                 value -> draft.unlockPolicy = value)
                         .controller(option -> EnumControllerBuilder.create(option)
                                 .enumClass(UnlockPolicy.class)
@@ -154,12 +156,13 @@ final class VaultSettingsScreen extends Screen {
                 .build();
     }
 
-    private static Option<Boolean> boolOption(String key, String descriptionKey, BooleanSupplier getter,
+    private static Option<Boolean> boolOption(String key, String descriptionKey, boolean defaultValue,
+                                               BooleanSupplier getter,
                                                Consumer<Boolean> setter) {
         return Option.<Boolean>createBuilder()
                 .name(Component.translatable(key))
                 .description(description("blockvault.settings.description." + descriptionKey))
-                .binding(getter.getAsBoolean(), getter::getAsBoolean, setter)
+                .binding(defaultValue, getter::getAsBoolean, setter)
                 .controller(TickBoxControllerBuilder::create)
                 .build();
     }

@@ -11,7 +11,7 @@ BlockVault reconciles them with one rule, implemented in `VaultMerger`.
    local copy (the vault you are using) wins. A `modifiedAt` in the future is treated as "now", so a foreign file
    cannot win forever by claiming a far-future time.
 4. **Everything else is kept.** An account or server present on only one side is kept. Merging never deletes anything.
-5. **Server settings** (name, autofill, never-save, template, host list) always come from the local copy; servers have
+5. **Server settings** (name, autofill, template, host list) always come from the local copy; servers have
    no timestamp, and an imported file must not be able to add host aliases to one of your servers.
 
 ## Trash

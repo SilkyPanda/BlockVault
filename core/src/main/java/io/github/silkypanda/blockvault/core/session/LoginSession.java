@@ -298,7 +298,6 @@ public final class LoginSession {
             }
             Account account = saved == null ? null : saved.account();
             if (kind == PromptKind.REGISTER) {
-                if (saved != null && saved.neverSave()) return;
                 if (account != null && account.status() == Account.Status.PENDING) {
                     char[] oldPassword = account.password();
                     try { env.showSavePrompt(new PromptModel(CardVariant.UPDATE, host, username, oldPassword)); }
@@ -312,7 +311,7 @@ public final class LoginSession {
                 return;
             }
             if (!globalAutofill || saved == null || account == null || account.status() != Account.Status.VERIFIED
-                    || !saved.autofill() || saved.neverSave()) return;
+                    || !saved.autofill()) return;
             char[] storedPassword = account.password();
             try { replacePending(storedPassword); }
             finally { Arrays.fill(storedPassword, '\0'); }
@@ -391,7 +390,7 @@ public final class LoginSession {
                             boolean pendingAccount = existing != null && existing.status() == Account.Status.PENDING;
                             if (oldPassword != null) Arrays.fill(oldPassword, '\0');
                             if (same && pendingAccount) env.vault().markVerified(host, username);
-                            else if (!same && (saved == null || !saved.neverSave())) env.showSavePrompt(new PromptModel(existing == null
+                            else if (!same) env.showSavePrompt(new PromptModel(existing == null
                                     ? CardVariant.SAVE : CardVariant.UPDATE, host, username, captured));
                             state = SessionState.CONFIRMED;
                         } finally { Arrays.fill(captured, '\0'); }

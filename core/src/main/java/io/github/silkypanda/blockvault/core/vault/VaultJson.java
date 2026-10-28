@@ -73,7 +73,8 @@ public final class VaultJson {
         JsonArray hosts = new JsonArray();
         server.hosts().forEach(hosts::add);
         item.add("hosts", hosts);
-        item.addProperty("neverSave", server.neverSave());
+        // Keep the legacy field for older vault readers; this version always allows saving credentials.
+        item.addProperty("neverSave", false);
         item.addProperty("autofill", server.autofill());
         item.addProperty("template", server.templateId());
         JsonArray accounts = new JsonArray();
@@ -115,7 +116,7 @@ public final class VaultJson {
             }
         }
         return new ServerEntry(item.get("id").getAsString(), item.get("name").getAsString(), hosts,
-                item.get("neverSave").getAsBoolean(), item.get("autofill").getAsBoolean(),
+                false, item.get("autofill").getAsBoolean(),
                 item.get("template").getAsString(), accounts, unknown(item, SERVER_KEYS));
     }
 

@@ -58,8 +58,8 @@ Use a throwaway vault. Delete the data folder between big sections if you want a
 
 ### 3.3 Vault list and editing
 1. Search and paging work; Edit opens the selected login; Copy puts only its password on the clipboard. Streamer mode hides server names everywhere including cards, import preview and trash.
-2. Edit a password; change a server's template and autofill / never-save policy; verify they persist after restart.
-3. Hover Auto, Capture, Template and Trash: their tooltips explain the setting/action. Auto toggles prompt-based login; Capture controls whether a successfully used manually typed password can be offered for saving, and does not control autofill. Trash moves only that account to Trash.
+2. Edit a password; change a server's template and autofill policy; verify they persist after restart. Credential capture is always allowed; it has no per-server toggle.
+3. Hover Auto, Template and Trash: their tooltips explain the setting/action. Auto toggles prompt-based login. Trash moves only that account to Trash.
 4. **Add** a login by hand: valid host and name saves and appears; bad host, name with spaces, empty password and a duplicate each show the right error; Generate and Show/Hide work; Caps Lock hint works.
 5. Join the server and confirm a manually added account autofills.
 
@@ -109,7 +109,7 @@ Use AuthMe settings or a test plugin to produce each message:
 5. Make one backup unreadable first: the change still succeeds and you are told which backup could not be re-encrypted.
 
 ### 3.10 Settings and data
-1. Every setting in each YACL category persists across restarts on Fabric and NeoForge. Corrupt `config.json` by hand: BlockVault starts with defaults, moves the bad file to `config.json.bad`, and settings can be saved again.
+1. Every setting in each YACL category persists across restarts on Fabric and NeoForge. Change settings away from defaults, use YACL Reset, and confirm each setting returns to its documented default; save, reopen, and confirm those defaults persisted. Corrupt `config.json` by hand: BlockVault starts with defaults, moves the bad file to `config.json.bad`, and settings can be saved again.
 2. Default generator preset is server-friendly on a fresh install.
 3. Open data folder works on Windows, macOS and Linux. If nothing opens, the path is copied and a toast says so; note that as a bug, because it means the Minecraft helper was not found.
 4. Erase all data: needs the master password, removes BlockVault's vault/config files, leaves exports and any other files you put in the folder.

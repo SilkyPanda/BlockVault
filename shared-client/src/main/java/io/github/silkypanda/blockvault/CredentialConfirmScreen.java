@@ -125,7 +125,7 @@ final class CredentialConfirmScreen extends Screen {
         addButton(cardX + pad, buttonY, buttonWidth, actionKey, button -> accept(registration));
         addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.cancel", button -> onClose());
         int utilityY = buttonY + scaled(24);
-        int utilityCount = registration ? 4 : 3;
+        int utilityCount = registration ? 3 : 2;
         int utilityWidth = (cardWidth - pad * 2 - gap * (utilityCount - 1)) / utilityCount;
         addButton(cardX + pad, utilityY, utilityWidth, "blockvault.card.reveal",
                 button -> { reveal = !reveal; });
@@ -134,17 +134,7 @@ final class CredentialConfirmScreen extends Screen {
         if (registration) {
             addButton(cardX + pad + (utilityWidth + gap) * 2, utilityY, utilityWidth,
                     "blockvault.card.regenerate", button -> regenerate());
-            addButton(cardX + pad + (utilityWidth + gap) * 3, utilityY, utilityWidth,
-                    "blockvault.card.never_server", button -> neverSaveHere());
-        } else {
-            addButton(cardX + pad + (utilityWidth + gap) * 2, utilityY, utilityWidth,
-                    "blockvault.card.never_server", button -> neverSaveHere());
         }
-    }
-
-    private void neverSaveHere() {
-        VaultRuntime.setNeverSave(model.host(), true);
-        onClose();
     }
 
     private void regenerate() {

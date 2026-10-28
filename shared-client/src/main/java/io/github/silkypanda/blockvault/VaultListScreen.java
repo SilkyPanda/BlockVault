@@ -14,7 +14,7 @@ final class VaultListScreen extends Screen {
     private static final int PAGE_SIZE = 6;
     private List<VaultRow> rows;
     private final List<Button> rowButtons = new ArrayList<>();
-    private static final int ROW_ACTIONS = 6;
+    private static final int ROW_ACTIONS = 5;
     private EditBox search;
     private Button previousButton;
     private Button nextButton;
@@ -39,7 +39,7 @@ final class VaultListScreen extends Screen {
         contentLeft = (width - contentWidth) / 2;
         pageSize = pageSizeForCurrentScreen();
         page = Math.min(page, totalPages() - 1);
-        rowButtonWidth = Math.max(1, Math.min(72, (contentWidth - 94) / ROW_ACTIONS));
+        rowButtonWidth = Math.max(1, Math.min(80, (contentWidth - 86) / ROW_ACTIONS));
         rowLabelWidth = Math.max(0, contentWidth - 14 - ROW_ACTIONS * rowButtonWidth);
         footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 42) / 8));
         int searchWidth = Math.max(1, Math.min(320, width - 24));
@@ -56,17 +56,14 @@ final class VaultListScreen extends Screen {
             int actionsX = contentLeft + rowLabelWidth + 4;
             addRowButton(index, actionsX, y, "blockvault.vault.reveal", null, row ->
                     MinecraftHolder.open(new VaultCredentialScreen(row)));
-            addRowButton(index, actionsX + rowButtonWidth + 2, y, "blockvault.vault.copy.short", null, VaultRuntime::copyPassword);
+            addRowButton(index, actionsX + rowButtonWidth + 2, y, "blockvault.vault.copy", null, VaultRuntime::copyPassword);
             addRowButton(index, actionsX + (rowButtonWidth + 2) * 2, y, "blockvault.vault.autofill.off",
                     "blockvault.vault.tooltip.autofill", row ->
-                    VaultRuntime.updateServerPolicy(row, !row.autofill(), row.neverSave()));
-            addRowButton(index, actionsX + (rowButtonWidth + 2) * 3, y, "blockvault.vault.capture.on",
-                    "blockvault.vault.tooltip.capture", row ->
-                    VaultRuntime.updateServerPolicy(row, row.autofill(), !row.neverSave()));
-            addRowButton(index, actionsX + (rowButtonWidth + 2) * 4, y, "blockvault.vault.template.short",
+                    VaultRuntime.updateServerAutofill(row, !row.autofill()));
+            addRowButton(index, actionsX + (rowButtonWidth + 2) * 3, y, "blockvault.vault.template.short",
                     "blockvault.vault.tooltip.template", row ->
                     MinecraftHolder.open(new VaultTemplateScreen(row, this)));
-            addRowButton(index, actionsX + (rowButtonWidth + 2) * 5, y, "blockvault.vault.delete.short",
+            addRowButton(index, actionsX + (rowButtonWidth + 2) * 4, y, "blockvault.vault.delete.short",
                     "blockvault.vault.tooltip.trash", row ->
                     MinecraftHolder.open(new VaultDeleteScreen(row, this)));
         }
@@ -134,18 +131,12 @@ final class VaultListScreen extends Screen {
             for (int column = 0; column < ROW_ACTIONS; column++) {
                 Button button = rowButtons.get(rowIndex * ROW_ACTIONS + column);
                 button.visible = hasRow;
-                button.active = hasRow && (!row.serverOnly() || column >= 2 && column <= 4);
+                button.active = hasRow && (!row.serverOnly() || column >= 2 && column <= 3);
                 if (hasRow && column == 2) {
                     button.setMessage(Component.translatable(row.autofill()
                             ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off"));
                     button.setTooltip(Tooltip.create(Component.translatable(row.autofill()
                             ? "blockvault.vault.tooltip.autofill.on" : "blockvault.vault.tooltip.autofill.off")));
-                }
-                if (hasRow && column == 3) {
-                    button.setMessage(Component.translatable(row.neverSave()
-                            ? "blockvault.vault.capture.off" : "blockvault.vault.capture.on"));
-                    button.setTooltip(Tooltip.create(Component.translatable(row.neverSave()
-                            ? "blockvault.vault.tooltip.capture.off" : "blockvault.vault.tooltip.capture.on")));
                 }
             }
         }
