@@ -8,7 +8,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Deleted accounts and servers. Entries can be restored, deleted for good, or expire after 60 days. */
+/** Deleted entries can be restored, deleted for good, or expire after 60 days. */
 final class VaultTrashScreen extends Screen {
     private static final int ROWS_PER_PAGE = 5;
     private final Screen parent;
@@ -19,6 +19,7 @@ final class VaultTrashScreen extends Screen {
     private Button nextButton;
     private Button emptyButton;
     private boolean confirmEmpty;
+    private String confirmDeleteId;
     private boolean purgeBackups;
     private Button purgeButton;
     private int page;
@@ -46,7 +47,7 @@ final class VaultTrashScreen extends Screen {
                     button -> withRow(rowIndex, row -> VaultRuntime.restoreFromTrash(row.id(), this::update)))
                     .bounds(actionsX, y, buttonWidth, 20).build();
             Button delete = Button.builder(Component.translatable("blockvault.trash.delete"),
-                    button -> withRow(rowIndex, row -> VaultRuntime.deleteFromTrash(row.id(), purgeBackups, this::update)))
+                    button -> withRow(rowIndex, row -> deleteRow(row)))
                     .bounds(actionsX + buttonWidth + 6, y, buttonWidth, 20).build();
             restoreButtons.add(restore);
             deleteButtons.add(delete);
@@ -54,14 +55,18 @@ final class VaultTrashScreen extends Screen {
             addRenderableWidget(delete);
         }
         int footer = Math.max(1, Math.min(88, (contentWidth - 18) / 4));
+        int footerTotal = footer * 4 + 6 * 3;
+        int footerLeft = contentLeft + (contentWidth - footerTotal) / 2;
         previousButton = Button.builder(Component.translatable("blockvault.vault.previous"), button -> {
             page = Math.max(0, page - 1);
+            confirmDeleteId = null;
             refreshButtons();
-        }).bounds(contentLeft, height - 34, footer, 20).build();
+        }).bounds(footerLeft, height - 34, footer, 20).build();
         nextButton = Button.builder(Component.translatable("blockvault.vault.next"), button -> {
             page = Math.min(totalPages() - 1, page + 1);
+            confirmDeleteId = null;
             refreshButtons();
-        }).bounds(contentLeft + footer + 6, height - 34, footer, 20).build();
+        }).bounds(footerLeft + footer + 6, height - 34, footer, 20).build();
         emptyButton = Button.builder(Component.translatable("blockvault.trash.empty_all"), button -> {
             if (!confirmEmpty) {
                 confirmEmpty = true;
@@ -70,7 +75,7 @@ final class VaultTrashScreen extends Screen {
             }
             confirmEmpty = false;
             VaultRuntime.emptyTrash(purgeBackups, this::update);
-        }).bounds(contentLeft + (footer + 6) * 2, height - 34, footer, 20).build();
+        }).bounds(footerLeft + (footer + 6) * 2, height - 34, footer, 20).build();
         purgeButton = Button.builder(Component.empty(), button -> {
             purgeBackups = !purgeBackups;
             refreshButtons();
@@ -80,8 +85,18 @@ final class VaultTrashScreen extends Screen {
         addRenderableWidget(nextButton);
         addRenderableWidget(emptyButton);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"),
-                button -> onClose()).bounds(contentLeft + (footer + 6) * 3, height - 34, footer, 20).build());
+                button -> onClose()).bounds(footerLeft + (footer + 6) * 3, height - 34, footer, 20).build());
         refreshButtons();
+    }
+
+    private void deleteRow(TrashRow row) {
+        if (!row.id().equals(confirmDeleteId)) {
+            confirmDeleteId = row.id();
+            refreshButtons();
+            return;
+        }
+        confirmDeleteId = null;
+        VaultRuntime.deleteFromTrash(row.id(), purgeBackups, this::update);
     }
 
     private void withRow(int rowIndex, java.util.function.Consumer<TrashRow> action) {
@@ -91,6 +106,7 @@ final class VaultTrashScreen extends Screen {
 
     private void update(List<TrashRow> updated) {
         rows = List.copyOf(updated);
+        confirmDeleteId = null;
         page = Math.min(page, totalPages() - 1);
         refreshButtons();
     }
@@ -102,6 +118,9 @@ final class VaultTrashScreen extends Screen {
             boolean visible = page * ROWS_PER_PAGE + index < rows.size();
             restoreButtons.get(index).visible = visible;
             deleteButtons.get(index).visible = visible;
+            deleteButtons.get(index).setMessage(Component.translatable(visible
+                    && rows.get(page * ROWS_PER_PAGE + index).id().equals(confirmDeleteId)
+                    ? "blockvault.trash.delete.confirm" : "blockvault.trash.delete"));
         }
         previousButton.active = page > 0;
         nextButton.active = page < totalPages() - 1;

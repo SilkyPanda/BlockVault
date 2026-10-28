@@ -34,17 +34,6 @@ public final class VaultTrash {
         return new Vault(vault.v(), servers, trash, vault.extra());
     }
 
-    /** Moves a whole server, with all its accounts, into the trash. */
-    public static Vault trashServer(Vault vault, String serverId, long nowMillis) {
-        ServerEntry removed = vault.servers().stream().filter(s -> s.id().equals(serverId)).findFirst().orElse(null);
-        if (removed == null) return vault;
-        List<ServerEntry> servers = new ArrayList<>(vault.servers());
-        servers.removeIf(s -> s.id().equals(serverId));
-        List<TrashEntry> trash = new ArrayList<>(vault.trash());
-        trash.add(new TrashEntry(UUID.randomUUID().toString(), nowMillis, true, removed));
-        return new Vault(vault.v(), servers, trash, vault.extra());
-    }
-
     /**
      * Puts a trash entry back. It is merged with whatever is live now using the normal rule: same server (shared
      * host) and same username, newer {@code modifiedAt} wins, live copy wins a tie.

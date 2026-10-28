@@ -26,12 +26,25 @@ final class VaultTrashTest {
     }
 
     @Test
-    void deletedServerKeepsAllAccountsAndRestoresThem() {
-        Vault trashed = VaultTrash.trashServer(vault(account("Alex", "a", 1), account("Sam", "b", 1)), "id", 1000);
-        assertEquals(0, trashed.servers().size());
+    void deletingTheLastAccountLeavesItsServerSettingsLive() {
+        ServerEntry server = vault(account("Alex", "a", 1)).servers().getFirst();
+        Vault trashed = VaultTrash.trashAccount(vault(account("Alex", "a", 1)), "id", "Alex", 1000);
+        assertEquals(0, trashed.servers().getFirst().accounts().size());
+        assertEquals(server.id(), trashed.servers().getFirst().id());
+        assertEquals(server.name(), trashed.servers().getFirst().name());
+        assertEquals(server.hosts(), trashed.servers().getFirst().hosts());
+        assertEquals(server.autofill(), trashed.servers().getFirst().autofill());
+        assertEquals(server.neverSave(), trashed.servers().getFirst().neverSave());
+        assertEquals(1, trashed.trash().getFirst().server().accounts().size());
+    }
+
+    @Test
+    void legacyWholeServerTrashEntriesCanStillBeRestored() {
+        ServerEntry oldServer = vault(account("Alex", "a", 1), account("Sam", "b", 1)).servers().getFirst();
+        Vault trashed = new Vault(Vault.VERSION, List.of(), List.of(new TrashEntry("legacy", 1000, true, oldServer)));
         assertTrue(trashed.trash().getFirst().wholeServer());
         assertEquals(2, trashed.trash().getFirst().server().accounts().size());
-        Vault restored = VaultTrash.restore(trashed, trashed.trash().getFirst().id(), 2000);
+        Vault restored = VaultTrash.restore(trashed, "legacy", 2000);
         assertEquals(1, restored.servers().size());
         assertEquals(2, restored.servers().getFirst().accounts().size());
     }
@@ -64,10 +77,9 @@ final class VaultTrashTest {
     }
 
     @Test
-    void unknownAccountOrServerLeavesTheVaultUnchanged() {
+    void unknownAccountLeavesTheVaultUnchanged() {
         Vault vault = vault(account("Alex", "a", 1));
         assertSame(vault, VaultTrash.trashAccount(vault, "id", "Nobody", 1));
-        assertSame(vault, VaultTrash.trashServer(vault, "missing", 1));
     }
 
     private static Account account(String user, String password, long modified) {

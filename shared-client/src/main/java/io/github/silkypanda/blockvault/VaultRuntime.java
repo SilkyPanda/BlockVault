@@ -485,11 +485,6 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Opens settings while retaining the calling screen as its back destination. */
-    public static void openSettingsScreen(net.minecraft.client.gui.screens.Screen parent) {
-        Minecraft.getInstance().setScreenAndShow(new VaultSettingsScreen(parent));
-    }
-
     /** Creates the settings screen for loader-provided config-screen entrypoints. */
     public static net.minecraft.client.gui.screens.Screen createSettingsScreen(
             net.minecraft.client.gui.screens.Screen parent) {
@@ -529,10 +524,23 @@ public final class VaultRuntime implements VaultAccess {
         toast("blockvault.toast.copied");
     }
 
-    static void exportVault(java.nio.file.Path destination, Consumer<Boolean> result) {
+    /** Exports the encrypted vault to {@code folder}, or the BlockVault exports folder when omitted. */
+    static void exportVault(java.nio.file.Path folder, Consumer<Boolean> result) {
         withVault(() -> {
             boolean success = false;
-            try { store.exportEncrypted(destination); success = true; }
+            try {
+                java.nio.file.Path directory = folder == null
+                        ? DataDirs.resolve().resolve("exports") : folder.toAbsolutePath().normalize();
+                java.nio.file.Files.createDirectories(directory);
+                String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+                        .withZone(java.time.ZoneOffset.UTC).format(java.time.Instant.now());
+                java.nio.file.Path destination = directory.resolve("blockvault-export-" + timestamp + ".bv");
+                for (int suffix = 2; java.nio.file.Files.exists(destination); suffix++) {
+                    destination = directory.resolve("blockvault-export-" + timestamp + "-" + suffix + ".bv");
+                }
+                store.exportEncrypted(destination);
+                success = true;
+            }
             catch (IOException failure) { LOGGER.warn("BlockVault could not export the encrypted vault"); }
             boolean exported = success;
             BackgroundExecutor.onGameThread(() -> result.accept(exported));
@@ -693,28 +701,14 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Moves an account (or an empty server entry) to the trash after the caller has confirmed the action. */
+    /** Moves one complete account entry to the trash after the caller has confirmed the action. */
     static void deleteAccount(VaultRow row) {
+        if (row.serverOnly()) return;
         withVault(() -> {
             Vault current = store.vault();
             ServerEntry server = findServer(current, row.host());
             if (server != null) {
-                long now = System.currentTimeMillis();
-                Vault next = row.serverOnly() ? VaultTrash.trashServer(current, server.id(), now)
-                        : VaultTrash.trashAccount(current, server.id(), row.username(), now);
-                if (next != current) saveVault(next);
-            }
-            BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);
-        });
-    }
-
-    /** Moves a whole server, with every account on it, to the trash. */
-    static void deleteServer(VaultRow row) {
-        withVault(() -> {
-            Vault current = store.vault();
-            ServerEntry server = findServer(current, row.host());
-            if (server != null) {
-                Vault next = VaultTrash.trashServer(current, server.id(), System.currentTimeMillis());
+                Vault next = VaultTrash.trashAccount(current, server.id(), row.username(), System.currentTimeMillis());
                 if (next != current) saveVault(next);
             }
             BackgroundExecutor.onGameThread(VaultRuntime::refreshVaultRows);

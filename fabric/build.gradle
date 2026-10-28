@@ -11,6 +11,10 @@ base {
 
 repositories {
     maven {
+        name = 'Xander Maven'
+        url = 'https://maven.isxander.dev/releases'
+    }
+    maven {
         name = 'Modrinth'
         url = 'https://api.modrinth.com/maven'
         content { includeGroup 'maven.modrinth' }
@@ -43,6 +47,7 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     implementation 'maven.modrinth:mOgUt4GM:kyy7dbrZ'
+    implementation "dev.isxander:yet-another-config-lib:${project.yacl_version}"
 }
 
 processResources {
@@ -56,6 +61,7 @@ processResources {
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
+    options.debugOptions.debugLevel = 'source,lines'
 }
 
 java {

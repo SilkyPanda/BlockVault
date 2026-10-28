@@ -83,18 +83,18 @@ final class VaultListScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("blockvault.transfer.export.short"),
                         button -> { MinecraftHolder.open(new VaultTransferScreen(this, false)); })
                 .bounds(contentLeft + (footerButtonWidth + 6) * 3, height - 34, footerButtonWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.settings.short"),
-                        button -> { VaultRuntime.openSettingsScreen(this); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.add.short"),
+                        button -> MinecraftHolder.open(new VaultAddScreen(this)))
                 .bounds(contentLeft + (footerButtonWidth + 6) * 4, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.lock.short"),
                         button -> VaultRuntime.lock())
                 .bounds(contentLeft + (footerButtonWidth + 6) * 6, height - 34, footerButtonWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.add.short"),
-                        button -> MinecraftHolder.open(new VaultAddScreen(this)))
-                .bounds(contentLeft + (footerButtonWidth + 6) * 7, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.trash.short"),
                         button -> VaultRuntime.openTrashScreen(this))
                 .bounds(contentLeft + (footerButtonWidth + 6) * 5, height - 34, footerButtonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"),
+                        button -> onClose())
+                .bounds(contentLeft + (footerButtonWidth + 6) * 7, height - 34, footerButtonWidth, 20).build());
         updateVisibleRows();
     }
 
@@ -127,7 +127,7 @@ final class VaultListScreen extends Screen {
             for (int column = 0; column < ROW_ACTIONS; column++) {
                 Button button = rowButtons.get(rowIndex * ROW_ACTIONS + column);
                 button.visible = hasRow;
-                button.active = hasRow && (column != 0 && column != 1 || !row.serverOnly());
+                button.active = hasRow && (!row.serverOnly() || column >= 2 && column <= 4);
                 if (hasRow && column == 2) button.setMessage(Component.translatable(row.autofill()
                         ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off"));
                 if (hasRow && column == 3) button.setMessage(Component.translatable(row.neverSave()

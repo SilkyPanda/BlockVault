@@ -10,6 +10,13 @@ base {
     archivesName = 'blockvault-neoforge'
 }
 
+repositories {
+    maven {
+        name = 'Xander Maven'
+        url = 'https://maven.isxander.dev/releases'
+    }
+}
+
 java {
     withSourcesJar()
     toolchain.languageVersion = JavaLanguageVersion.of(25)
@@ -42,9 +49,14 @@ neoForge {
     }
 }
 
+dependencies {
+    implementation "dev.isxander:yet-another-config-lib:${project.yacl_version}"
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
+    options.debugOptions.debugLevel = 'source,lines'
 }
 
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {

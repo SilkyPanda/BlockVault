@@ -1,7 +1,6 @@
 package io.github.silkypanda.blockvault;
 
 import java.util.Arrays;
-import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -36,10 +35,8 @@ final class VaultCredentialScreen extends Screen {
         addRenderableWidget(passwordBox);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.save"), button -> { save(); })
                 .bounds(x, top + 52, 94, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.generate"), button -> { generate(); })
-                .bounds(x + 103, top + 52, 94, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.card.reveal"), button -> { showPassword = !showPassword; })
-                .bounds(x + 206, top + 52, 94, 20).build());
+                .bounds(x + 103, top + 52, 197, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.copyPassword(row); })
                 .bounds(x, top + 78, 94, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete"), button ->
@@ -65,13 +62,6 @@ final class VaultCredentialScreen extends Screen {
         Arrays.fill(password, '\0');
         VaultRuntime.openVaultScreen();
     }
-
-    private void generate() {
-        char[] generated = PasswordGenerator.generate(BlockVaultConfig.generatorPolicy(BlockVaultConfig.current().generator()));
-        try { passwordBox.setValue(new String(generated)); }
-        finally { Arrays.fill(generated, '\0'); }
-    }
-
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {

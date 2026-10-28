@@ -10,7 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
-/** Imports or exports an encrypted vault using an explicit local file path. */
+/** Imports an encrypted file or exports an encrypted copy to a chosen folder. */
 final class VaultTransferScreen extends Screen {
     private final Screen parent;
     private final boolean importing;
@@ -29,8 +29,9 @@ final class VaultTransferScreen extends Screen {
     protected void init() {
         int left = width / 2 - 150;
         pathBox = new EditBox(font, left, height / 2 - 22, 300, 20,
-                Component.translatable("blockvault.transfer.path"));
-        pathBox.setHint(Component.translatable("blockvault.transfer.path"));
+                Component.translatable(importing ? "blockvault.transfer.import.path" : "blockvault.transfer.export.folder"));
+        pathBox.setHint(Component.translatable(importing
+                ? "blockvault.transfer.import.path" : "blockvault.transfer.export.folder"));
         pathBox.setMaxLength(1024);
         addRenderableWidget(pathBox);
         if (importing) {
@@ -50,13 +51,16 @@ final class VaultTransferScreen extends Screen {
     }
 
     private void transfer() {
-        if (busy || pathBox.getValue().isBlank()) return;
+        if (busy || (importing && pathBox.getValue().isBlank())) return;
         busy = true;
         failed = false;
         failureKey = null;
-        Path path;
-        try { path = Path.of(pathBox.getValue().trim()); }
-        catch (RuntimeException invalidPath) { busy = false; failed = true; return; }
+        Path selectedPath = null;
+        if (!pathBox.getValue().isBlank()) {
+            try { selectedPath = Path.of(pathBox.getValue().trim()); }
+            catch (RuntimeException invalidPath) { busy = false; failed = true; return; }
+        }
+        final Path path = selectedPath;
         if (!importing) {
             VaultRuntime.exportVault(path, success -> finish(success));
             return;

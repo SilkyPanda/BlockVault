@@ -1,10 +1,10 @@
 # Testing guide and how to proceed
 
-The `core` library is covered by automated tests. Everything that touches Minecraft (`shared-client`, `fabric`, `neoforge`) has never been compiled or run, so work through this file in order.
+The `core` library has 91 passing automated tests, and both loader builds compile successfully. Minecraft-facing behavior has not been run in a game client; work through this file to verify it on Fabric and NeoForge.
 
 ## 1. How to proceed
 
-1. **Compile.** Push the branch and read the GitHub Actions run. Expect compile errors in the Minecraft-facing code and fix them first; nothing else can be tested until both jars build. The most likely trouble spots, because they depend on Minecraft 26.3 and loader APIs that could not be checked offline:
+1. **Compile.** Run the build for both loaders. On a Minecraft update, recheck the version-sensitive APIs below:
    - `KeyEvent.modifiers()` (Caps Lock hint, `Keybinds.trackModifiers`)
    - the folder-opening helper (found by reflection; replace with a direct call once you know its name)
    - `Screen.removed()`, `Minecraft.getInstance().gui.screen()`, `Button.setMessage`, `EditBox.setResponder`, `GuiGraphicsExtractor.centeredText` and `text`
@@ -24,12 +24,12 @@ Report each failure with: step number, loader, OS, what you expected, what happe
 
 | # | Check | Expected |
 |---|---|---|
-| 2.1 | `./gradlew --no-daemon test` in `core/` | 90 tests pass |
-| 2.2 | `./gradlew --no-daemon build` in `fabric/` and `neoforge/` | Both build; jar under 256 KiB |
+| 2.1 | `./gradlew --no-daemon test` in `core/` | 91 tests pass |
+| 2.2 | `./gradlew --no-daemon build` in `fabric/` and `neoforge/` | Both build; each jar is under 256 KiB |
 | 2.3 | `bash scripts/check-rules.sh` | Exits 0 |
 | 2.4 | Open each jar as a zip | Contains `blockvault.mixins.json`, `assets/blockvault/lang/en_us.json`, `icon.png`, patterns and the word list; no stray files |
-| 2.5 | Load each jar in a launcher | Mod list shows name, description and icon on both loaders (NeoForge uses `logoFile`) |
-| 2.6 | Install the EFF word list (see "Memorable word list" in the README) and rerun 2.1 | Still 90 pass; memorable passwords look like `word-word-word-word-NN` with real words |
+| 2.5 | Load each jar in a launcher with YACL installed | Mod list shows name, description and icon on both loaders (NeoForge uses `iconFile` and `bannerFile`) |
+| 2.6 | Install the EFF word list (see "Memorable word list" in the README) and rerun 2.1 | All 91 tests pass; memorable passwords look like `word-word-word-word-NN` with real words |
 | 2.7 | After creating a vault, list the data folder | Only the files named in the README table; nothing BlockVault-related in the game folder |
 | 2.8 | POSIX: `ls -l` the data folder | Folder `700`, vault/backup/trust files `600` |
 | 2.9 | `grep` the vault file and backups for a saved password | Not found in plaintext |
@@ -64,9 +64,9 @@ Use a throwaway vault. Delete the data folder between big sections if you want a
 
 ### 3.4 Trash
 1. Delete one account: it disappears from the list and appears in Trash with its name and days left.
-2. Delete a whole server (delete screen > "Move the whole server to trash"): all its accounts are in one Trash entry.
-3. Restore each: it returns with the same password. Restore an account when a newer login with the same server and name already exists: the newer one is kept.
-4. Delete forever with the backup-purge toggle OFF, then inspect a backup: the password is still there (the screen warned you). Repeat with the toggle ON: it is gone from every backup.
+2. Delete the final account on a server: the account appears in Trash, and a settings-only server row remains. There is no whole-server trash action.
+3. Restore an account: it returns with the same password. Restore an account when a newer login with the same server and name already exists: the newer one is kept. Older whole-server trash records can still be restored.
+4. Select Delete on a trash row: it changes to Delete forever?; confirm it with a second click. With the backup-purge toggle OFF, the password remains in a backup. Repeat with the toggle ON: it is removed from every backup.
 5. Empty trash (two-step button).
 6. Expiry: delete something, set the system clock 61 days ahead, reopen the vault: the entry is gone. Restore the clock.
 
@@ -93,7 +93,7 @@ Use AuthMe settings or a test plugin to produce each message:
 5. `/unregister` success: the account moves to the trash.
 
 ### 3.8 Import and export
-1. Export to a new file; try exporting over an existing file (refused).
+1. Export with the folder blank: the file appears under the BlockVault data folder's `exports/` directory with a generated filename. Export to a chosen folder; existing files are never overwritten. Export twice in one second and confirm the second name gets a collision suffix.
 2. Import into a second profile: the preview lists new servers, new accounts, newer passwords and kept local passwords; Cancel changes nothing; Import applies and a restore point exists.
 3. Wrong password, wrong file and a corrupted file each show their own message.
 4. Importing the same file twice is a no-op ("nothing new").
@@ -107,10 +107,10 @@ Use AuthMe settings or a test plugin to produce each message:
 5. Make one backup unreadable first: the change still succeeds and you are told which backup could not be re-encrypted.
 
 ### 3.10 Settings and data
-1. Every setting persists across restarts. Corrupt `config.json` by hand: BlockVault starts with defaults, moves the bad file to `config.json.bad`, and settings can be saved again.
+1. Every setting in each YACL category persists across restarts on Fabric and NeoForge. Corrupt `config.json` by hand: BlockVault starts with defaults, moves the bad file to `config.json.bad`, and settings can be saved again.
 2. Default generator preset is server-friendly on a fresh install.
 3. Open data folder works on Windows, macOS and Linux. If nothing opens, the path is copied and a toast says so; note that as a bug, because it means the Minecraft helper was not found.
-4. Erase all data: needs the master password, removes BlockVault's files, leaves any other file you put in the folder.
+4. Erase all data: needs the master password, removes BlockVault's vault/config files, leaves exports and any other files you put in the folder.
 
 ### 3.11 Multiple instances
 1. Two instances on the same data folder: add an account in one, then use the other; it picks up the change.
@@ -129,7 +129,7 @@ Use AuthMe settings or a test plugin to produce each message:
 4. Action-bar login prompts (a plugin that sends the prompt as an action bar) are handled on both loaders.
 
 ### 3.14 Loader parity
-Repeat 3.1, 3.5, 3.6 and 3.9 on NeoForge. Also: `/blockvault` and `/blockvault lock` on both; keybinds appear under Controls; NeoForge Config button opens settings; Fabric works with and without Mod Menu.
+Repeat 3.1, 3.5, 3.6 and 3.9 on NeoForge. Also: `/blockvault` and `/blockvault lock` on both; keybinds appear under Controls; NeoForge Config button opens the YACL settings; Fabric works with and without Mod Menu and both loaders show the BlockVault icon in their mod lists.
 
 ### 3.15 No interference
 Joining a vanilla server, singleplayer and LAN does nothing and logs nothing. Frame rate is unchanged with the mod installed.

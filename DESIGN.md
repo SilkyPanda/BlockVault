@@ -15,7 +15,7 @@ These rules apply to every change.
 - The jar stays under 256 KiB.
 
 **Style**
-- Java 25, no external dependencies beyond what the game and loaders provide.
+- Java 25. YACL is the explicitly approved external dependency for the client settings screen; do not add other runtime dependencies without approval. Do not bundle YACL into BlockVault's jar.
 - Small, single-purpose classes; comments say why, not what.
 
 **Out of scope**

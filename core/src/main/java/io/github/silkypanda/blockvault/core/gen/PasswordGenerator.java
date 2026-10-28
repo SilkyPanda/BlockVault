@@ -50,15 +50,37 @@ public final class PasswordGenerator {
                 int min = hint.minLength() == null ? 8 : hint.minLength();
                 int max = hint.maxLength() == null ? 64 : hint.maxLength();
                 if (min > max) throw new IllegalArgumentException("Server password length rules conflict");
-                // Word lengths vary, so pick the word count whose *expected* length fits, then make generation
-                // retry until the real length is inside the server's range.
-                double average = WordList.averageLength();
+                if (min > 64 || max < 8) {
+                    throw new IllegalArgumentException("Server password length is outside the supported range");
+                }
+                int supportedMin = Math.max(8, min);
+                int supportedMax = Math.min(64, max);
+                // Prefer the word count whose nominal preset length fits. If none does, use a count whose real word
+                // lengths can fit; the generator then retries until it samples a password inside the rule.
                 int selected = -1;
                 for (int words = 2; words <= 12; words++) {
-                    double expected = words * average + words + 2;
-                    if (expected >= min && expected <= max
+                    double expected = words * 5.0 + 2;
+                    if (expected >= supportedMin && expected <= supportedMax
                             && (selected < 0 || Math.abs(words - memorableWordCount) < Math.abs(selected - memorableWordCount))) {
                         selected = words;
+                    }
+                }
+                if (selected < 0) {
+                    double closest = Double.POSITIVE_INFINITY;
+                    double closestToPreset = Double.POSITIVE_INFINITY;
+                    for (int words = 2; words <= 12; words++) {
+                        int shortest = words * (WordList.minimumLength() + 1) + 2;
+                        int longest = words * (WordList.maximumLength() + 1) + 2;
+                        if (shortest > supportedMax || longest < supportedMin) continue;
+                        double expected = words * 5.0 + 2;
+                        double distance = expected < supportedMin ? supportedMin - expected
+                                : expected > supportedMax ? expected - supportedMax : 0;
+                        double presetDistance = Math.abs(words - memorableWordCount);
+                        if (distance < closest || distance == closest && presetDistance < closestToPreset) {
+                            selected = words;
+                            closest = distance;
+                            closestToPreset = presetDistance;
+                        }
                     }
                 }
                 if (selected < 0) throw new IllegalArgumentException("Server length rule cannot fit the memorable preset");
@@ -192,8 +214,8 @@ public final class PasswordGenerator {
     private static final class WordList {
         private static final List<String> VALUE = loadWordList();
 
-        static double averageLength() {
-            return VALUE.stream().mapToInt(String::length).average().orElse(4);
-        }
+        static int minimumLength() { return VALUE.stream().mapToInt(String::length).min().orElse(3); }
+
+        static int maximumLength() { return VALUE.stream().mapToInt(String::length).max().orElse(8); }
     }
 }

@@ -9,7 +9,9 @@ config = "blockvault.mixins.json"
 modId = "${mod_id}"
 version = "${mod_version}"
 displayName = "${mod_name}"
-logoFile = "assets/blockvault/icon.png"
+iconFile = "assets/blockvault/icon.png"
+bannerFile = "assets/blockvault/icon.png"
+iconBlur = false
 authors = "${mod_authors}"
 description = '''${mod_description}'''
 
@@ -24,5 +26,12 @@ side = "CLIENT"
 modId = "minecraft"
 type = "required"
 versionRange = "${minecraft_version_range}"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "yet_another_config_lib_v3"
+type = "required"
+versionRange = "[3.9.7,)"
 ordering = "NONE"
 side = "CLIENT"
