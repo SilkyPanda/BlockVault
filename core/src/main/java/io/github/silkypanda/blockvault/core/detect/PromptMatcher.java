@@ -51,6 +51,8 @@ public final class PromptMatcher {
                 if (PLACEHOLDER.matcher(text.substring(found.end())).lookingAt()) return true;
                 String before = text.substring(Math.max(0, found.start() - 120), found.start());
                 if (DIRECTIVE.matcher(before).find()) return true;
+                String after = text.substring(found.end()).stripLeading();
+                if (DIRECTIVE.matcher(after).lookingAt()) return true;
             }
         }
         return false;

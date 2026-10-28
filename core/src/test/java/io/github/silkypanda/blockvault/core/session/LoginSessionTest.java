@@ -296,7 +296,10 @@ final class LoginSessionTest {
     }
 
     private static LoginSession session(FakeEnv env, FakeScheduler scheduler) throws Exception {
-        return new LoginSession(env, scheduler, PatternPackFixture.load(), PasswordGenerator.Policy.defaults());
+        LoginSession session = new LoginSession(env, scheduler, PatternPackFixture.load(), PasswordGenerator.Policy.defaults());
+        // Production applies the loaded preferences after constructing a session; the fixture uses defaults.
+        session.configure(true, 400, PasswordGenerator.Policy.defaults());
+        return session;
     }
 
     private static final class FakeScheduler implements Scheduler {

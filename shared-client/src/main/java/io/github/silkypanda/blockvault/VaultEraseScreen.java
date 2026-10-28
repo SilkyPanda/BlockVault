@@ -37,7 +37,10 @@ final class VaultEraseScreen extends Screen {
         addRenderableWidget(password);
         eraseButton = Button.builder(Component.translatable(confirmUnverifiedErase
                         ? "blockvault.data.erase.confirm_without_password" : "blockvault.data.erase.confirm"),
-                        button -> confirmUnverifiedErase ? eraseWithoutPassword() : erase())
+                        button -> {
+                            if (confirmUnverifiedErase) eraseWithoutPassword();
+                            else erase();
+                        })
                 .bounds(center - 120, top + 112, 140, 20).build();
         eraseButton.active = !busy;
         addRenderableWidget(eraseButton);

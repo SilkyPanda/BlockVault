@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 /** Pure-Java login prompt state machine. Vault callbacks must return on the session thread. */
 public final class LoginSession {
     private static final long DEBOUNCE_MILLIS = 1500;
-    private static final long RESULT_TIMEOUT_MILLIS = 15_000;
+    private static final long RESULT_TIMEOUT_MILLIS = 5_000;
     /** Server text is untrusted and unbounded; only this many characters are ever matched. */
     private static final int MAX_MESSAGE_CHARS = 2048;
     /** Used when a server rejects a password but its message gives no usable numbers. */

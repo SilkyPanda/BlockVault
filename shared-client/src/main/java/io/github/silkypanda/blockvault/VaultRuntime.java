@@ -761,7 +761,7 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Puts a trash entry back into the vault (newer copy wins if the same server and user already exist). */
     static void restoreFromTrash(String trashId, Consumer<List<TrashRow>> result) {
-        changeTrash(result, vault -> VaultTrash.restore(vault, trashId, System.currentTimeMillis()), false);
+        changeTrash(result, vault -> VaultTrash.restore(vault, trashId, System.currentTimeMillis()));
     }
 
     /** Permanently deletes one trash entry. */
