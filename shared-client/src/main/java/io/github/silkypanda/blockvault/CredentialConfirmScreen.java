@@ -108,7 +108,7 @@ final class CredentialConfirmScreen extends Screen {
         passwordBox = new EditBox(font, cardX + pad, fieldY, cardWidth - pad * 2, scaled(20),
                 Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(256);
-        passwordBox.setFilter(AsciiInput::isPasswordText);
+        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, null);
         passwordBox.setHint(Component.translatable("blockvault.card.password"));
         passwordBox.setValue(resizedPassword != null ? resizedPassword
                 : model.variant() == CardVariant.REJECTED ? "" : new String(password));
@@ -122,7 +122,7 @@ final class CredentialConfirmScreen extends Screen {
                     Component.translatable("blockvault.card.email"));
             emailBox.setHint(Component.translatable("blockvault.card.email"));
             emailBox.setMaxLength(254);
-            emailBox.setFilter(AsciiInput::isEmailText);
+            AsciiInputFilter.bind(emailBox, AsciiInput::isEmailText, null);
             if (resizedEmail != null) emailBox.setValue(resizedEmail);
             resizedEmail = null;
             addRenderableWidget(emailBox);

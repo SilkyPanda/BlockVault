@@ -32,7 +32,7 @@ final class VaultCredentialScreen extends Screen {
         passwordBox = new EditBox(font, x, top, 300, 20,
                 Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(256);
-        passwordBox.setFilter(AsciiInput::isPasswordText);
+        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, null);
         passwordBox.addFormatter((value, cursor) -> showPassword
                 ? FormattedCharSequence.forward(value, Style.EMPTY)
                 : FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));

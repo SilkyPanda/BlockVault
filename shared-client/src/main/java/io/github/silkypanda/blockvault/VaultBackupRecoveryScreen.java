@@ -37,7 +37,7 @@ final class VaultBackupRecoveryScreen extends Screen {
                 Component.translatable("blockvault.backup.recovery.password"));
         password.setHint(Component.translatable("blockvault.backup.recovery.password"));
         password.setMaxLength(256);
-        password.setFilter(AsciiInput::isPasswordText);
+        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, null);
         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(password);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.restore"), button -> restore())

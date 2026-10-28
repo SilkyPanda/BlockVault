@@ -35,7 +35,7 @@ final class VaultEraseScreen extends Screen {
                 Component.translatable("blockvault.vault.password"));
         password.setHint(Component.translatable("blockvault.vault.password"));
         password.setMaxLength(256);
-        password.setFilter(AsciiInput::isPasswordText);
+        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, null);
         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(password);
         eraseButton = Button.builder(Component.translatable(confirmUnverifiedErase

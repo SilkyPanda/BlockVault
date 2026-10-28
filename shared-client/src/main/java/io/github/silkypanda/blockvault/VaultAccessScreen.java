@@ -34,18 +34,16 @@ final class VaultAccessScreen extends Screen {
                 Component.translatable("blockvault.vault.password"));
         password.setHint(Component.translatable("blockvault.vault.password"));
         password.setMaxLength(256);
-        password.setFilter(AsciiInput::isPasswordText);
         password.addFormatter(VaultAccessScreen::mask);
-        password.setResponder(capsLock::onValueChanged);
+        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, capsLock::onValueChanged);
         addRenderableWidget(password);
         if (create) {
             confirmation = new EditBox(font, center - 100, height / 2 - 20, 200, 20,
                     Component.translatable("blockvault.vault.confirm"));
             confirmation.setHint(Component.translatable("blockvault.vault.confirm"));
             confirmation.setMaxLength(256);
-            confirmation.setFilter(AsciiInput::isPasswordText);
             confirmation.addFormatter(VaultAccessScreen::mask);
-            confirmation.setResponder(capsLock::onValueChanged);
+            AsciiInputFilter.bind(confirmation, AsciiInput::isPasswordText, capsLock::onValueChanged);
             addRenderableWidget(confirmation);
             trustThisDevice = BlockVaultConfig.current().trustDevice();
             addRenderableWidget(Button.builder(trustMessage(), button -> {

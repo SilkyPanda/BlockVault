@@ -36,10 +36,9 @@ final class VaultAddScreen extends Screen {
         hostBox = box(left, top, "blockvault.add.host", 255);
         userBox = box(left, top + 26, "blockvault.add.username", 64);
         passwordBox = box(left, top + 52, "blockvault.add.password", 1024);
-        hostBox.setFilter(AsciiInput::isPrintable);
-        userBox.setFilter(AsciiInput::isUsernameText);
-        passwordBox.setFilter(AsciiInput::isPasswordText);
-        passwordBox.setResponder(capsLock::onValueChanged);
+        AsciiInputFilter.bind(hostBox, AsciiInput::isPrintable, null);
+        AsciiInputFilter.bind(userBox, AsciiInput::isUsernameText, null);
+        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, capsLock::onValueChanged);
         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
                 showPassword ? value : "\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(hostBox);

@@ -52,8 +52,8 @@ final class VaultListScreen extends Screen {
         search.setValue(searchQuery);
         search.setHint(Component.translatable("blockvault.vault.search"));
         search.setMaxLength(128);
-        search.setFilter(AsciiInput::isPrintable);
-        search.setResponder(value -> { searchQuery = value; page = 0; updateVisibleRows(); });
+        AsciiInputFilter.bind(search, AsciiInput::isPrintable,
+                value -> { searchQuery = value; page = 0; updateVisibleRows(); });
         addRenderableWidget(search);
 
         for (int index = 0; index < pageSize; index++) {

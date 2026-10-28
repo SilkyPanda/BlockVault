@@ -43,10 +43,9 @@ final class VaultMasterPasswordScreen extends Screen {
         EditBox box = new EditBox(font, x, y, 240, 20, Component.translatable(key));
         box.setHint(Component.translatable(key));
         box.setMaxLength(256);
-        box.setFilter(AsciiInput::isPasswordText);
         CapsLockHint hint = new CapsLockHint();
         capsHints.add(hint);
-        box.setResponder(hint::onValueChanged);
+        AsciiInputFilter.bind(box, AsciiInput::isPasswordText, hint::onValueChanged);
         box.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         return box;
     }
