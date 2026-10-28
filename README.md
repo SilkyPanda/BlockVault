@@ -6,7 +6,7 @@ BlockVault is a client-side password manager for Minecraft servers that use logi
 
 - Open the vault with `/blockvault` (both loaders), a keybind (unbound by default; Controls > Multiplayer), the NeoForge mod-list Config button, or Mod Menu on Fabric. `/blockvault lock` wipes the key from memory.
 - On a register prompt a card shows a generated password; confirm to register. On a login prompt a verified account is filled in once per connection. Cards wait until no other screen is open. Registration cards remain until dismissed; the configurable card-duration setting defaults to 5 seconds for idle save/update cards.
-- The vault list lets you search, reveal, copy, edit, change a server's template or autofill policy, add a login by hand, import or export, and open Settings, backups and the trash. The Fabric Mod Menu and NeoForge mod-list settings entries use YACL, which must be installed alongside BlockVault.
+- The vault list lets you search, reveal, copy, edit, change a server's template or autofill policy, and add a login by hand. Import and export are in Settings > Vault and files, alongside backups, master-password changes, and data-folder actions. The Fabric Mod Menu and NeoForge mod-list settings entries use YACL, which must be installed alongside BlockVault.
 - Deleting an account moves only that account to the **trash**. Server settings remain after its last account is deleted. Restore the account or delete it for good; anything left is removed after 60 days. Deleting for good can optionally also remove the password from backups. Older whole-server trash entries remain restorable.
 
 ## Statuses

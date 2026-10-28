@@ -42,7 +42,6 @@ final class VaultSettingsScreen extends Screen {
         return YetAnotherConfigLib.createBuilder()
                 .title(Component.translatable("blockvault.settings.title"))
                 .category(loginCategory(draft))
-                .category(cardsCategory(draft))
                 .category(privacyCategory(draft))
                 .category(dataCategory(parent))
                 .save(() -> save(draft))
@@ -75,14 +74,6 @@ final class VaultSettingsScreen extends Screen {
                                         "blockvault.settings.generator.preset." + value.id)))
                         .build())
                 .build();
-        return ConfigCategory.createBuilder()
-                .name(Component.translatable("blockvault.config.category.login"))
-                .tooltip(Component.translatable("blockvault.config.category.login.description"))
-                .group(credentials)
-                .build();
-    }
-
-    private static ConfigCategory cardsCategory(Draft draft) {
         OptionGroup prompts = OptionGroup.createBuilder()
                 .name(Component.translatable("blockvault.config.group.cards"))
                 .description(description("blockvault.config.group.cards.description"))
@@ -105,8 +96,9 @@ final class VaultSettingsScreen extends Screen {
                         .build())
                 .build();
         return ConfigCategory.createBuilder()
-                .name(Component.translatable("blockvault.config.category.cards"))
-                .tooltip(Component.translatable("blockvault.config.category.cards.description"))
+                .name(Component.translatable("blockvault.config.category.login"))
+                .tooltip(Component.translatable("blockvault.config.category.login.description"))
+                .group(credentials)
                 .group(prompts)
                 .build();
     }
@@ -149,6 +141,8 @@ final class VaultSettingsScreen extends Screen {
                         () -> VaultRuntime.openBackupScreen(parent)))
                 .option(action("blockvault.config.action.master", "blockvault.config.action.master.description",
                         () -> VaultRuntime.openMasterPasswordScreen(parent)))
+                .option(transferAction("blockvault.transfer.import.short", "blockvault.transfer.import.help", true))
+                .option(transferAction("blockvault.transfer.export.short", "blockvault.transfer.export.help", false))
                 .option(action("blockvault.config.action.open_data", "blockvault.settings.description.data.open",
                         VaultRuntime::openDataDirectory))
                 .option(action("blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
@@ -172,6 +166,15 @@ final class VaultSettingsScreen extends Screen {
                 .name(Component.translatable(name))
                 .description(description(description))
                 .action((screen, option) -> action.run())
+                .build();
+    }
+
+    private static ButtonOption transferAction(String name, String description, boolean importing) {
+        return ButtonOption.createBuilder()
+                .name(Component.translatable(name))
+                .description(description(description))
+                .action((screen, option) -> Minecraft.getInstance().setScreenAndShow(
+                        new VaultTransferScreen(screen, importing)))
                 .build();
     }
 

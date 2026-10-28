@@ -95,7 +95,7 @@ Use AuthMe settings or a test plugin to produce each message:
 5. `/unregister` success: the account moves to the trash.
 
 ### 3.8 Import and export
-1. Export with the folder blank: the file appears under the BlockVault data folder's `exports/` directory with a generated filename. Export to a chosen folder; existing files are never overwritten. Export twice in one second and confirm the second name gets a collision suffix.
+1. Open Settings > Vault and files. Export with the folder blank: the file appears under the BlockVault data folder's `exports/` directory with a generated filename. Export to a chosen folder; existing files are never overwritten. Export twice in one second and confirm the second name gets a collision suffix.
 2. Import into a second profile: the preview lists new servers, new accounts, newer passwords and kept local passwords; Cancel changes nothing; Import applies and a restore point exists.
 3. Wrong password, wrong file and a corrupted file each show their own message.
 4. Importing the same file twice is a no-op ("nothing new").

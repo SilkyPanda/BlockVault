@@ -39,9 +39,10 @@ final class VaultListScreen extends Screen {
         contentLeft = (width - contentWidth) / 2;
         pageSize = pageSizeForCurrentScreen();
         page = Math.min(page, totalPages() - 1);
-        rowButtonWidth = Math.max(1, Math.min(80, (contentWidth - 86) / ROW_ACTIONS));
+        rowButtonWidth = Math.max(1, Math.min(60, (contentWidth - 86) / ROW_ACTIONS));
         rowLabelWidth = Math.max(0, contentWidth - 14 - ROW_ACTIONS * rowButtonWidth);
-        footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 42) / 8));
+        footerButtonWidth = Math.max(1, Math.min(88, (contentWidth - 30) / 6));
+        int footerLeft = contentLeft + (contentWidth - (footerButtonWidth * 6 + 30)) / 2;
         int searchWidth = Math.max(1, Math.min(320, width - 24));
         search = new EditBox(font, (width - searchWidth) / 2, 32, searchWidth, 20,
                 Component.translatable("blockvault.vault.search"));
@@ -70,33 +71,27 @@ final class VaultListScreen extends Screen {
         previousButton = Button.builder(Component.translatable("blockvault.vault.previous"), button -> {
             page = Math.max(0, page - 1);
             updateVisibleRows();
-        }).bounds(contentLeft, height - 34, footerButtonWidth, 20).build();
+        }).bounds(footerLeft, height - 34, footerButtonWidth, 20).build();
         nextButton = Button.builder(Component.translatable("blockvault.vault.next"), button -> {
             page = Math.min(totalPages() - 1, page + 1);
             updateVisibleRows();
-        }).bounds(contentLeft + footerButtonWidth + 6, height - 34, footerButtonWidth, 20).build();
+        }).bounds(footerLeft + footerButtonWidth + 6, height - 34, footerButtonWidth, 20).build();
         previousButton.active = page > 0;
         nextButton.active = page < totalPages() - 1;
         addRenderableWidget(previousButton);
         addRenderableWidget(nextButton);
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.transfer.import.short"),
-                        button -> { MinecraftHolder.open(new VaultTransferScreen(this, true)); })
-                .bounds(contentLeft + (footerButtonWidth + 6) * 2, height - 34, footerButtonWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.transfer.export.short"),
-                        button -> { MinecraftHolder.open(new VaultTransferScreen(this, false)); })
-                .bounds(contentLeft + (footerButtonWidth + 6) * 3, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.add.short"),
                         button -> MinecraftHolder.open(new VaultAddScreen(this)))
-                .bounds(contentLeft + (footerButtonWidth + 6) * 4, height - 34, footerButtonWidth, 20).build());
+                .bounds(footerLeft + (footerButtonWidth + 6) * 2, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.lock.short"),
                         button -> VaultRuntime.lock())
-                .bounds(contentLeft + (footerButtonWidth + 6) * 6, height - 34, footerButtonWidth, 20).build());
+                .bounds(footerLeft + (footerButtonWidth + 6) * 4, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.trash.short"),
                         button -> VaultRuntime.openTrashScreen(this))
-                .bounds(contentLeft + (footerButtonWidth + 6) * 5, height - 34, footerButtonWidth, 20).build());
+                .bounds(footerLeft + (footerButtonWidth + 6) * 3, height - 34, footerButtonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"),
                         button -> onClose())
-                .bounds(contentLeft + (footerButtonWidth + 6) * 7, height - 34, footerButtonWidth, 20).build());
+                .bounds(footerLeft + (footerButtonWidth + 6) * 5, height - 34, footerButtonWidth, 20).build());
         updateVisibleRows();
     }
 

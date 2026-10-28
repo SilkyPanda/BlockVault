@@ -16,3 +16,4 @@
 - **Changed** credential capture to always be allowed, removed its per-server toggle and opt-out action, and kept autofill as a separate per-server setting.
 - **Fixed** YACL Reset bindings to use BlockVault's actual default values instead of the values loaded when the screen opens. Restored the vault-row Copy label.
 - **Changed** the default idle save/update card duration from 10 seconds to 5 seconds; the YACL setting remains configurable.
+- **Moved** import/export from the vault list into YACL's Vault and files tab, and placed credential prompt settings under Login. Widened vault-row labels to reduce clipped server names.
