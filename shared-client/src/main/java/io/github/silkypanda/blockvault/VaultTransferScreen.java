@@ -99,8 +99,7 @@ final class VaultTransferScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
-        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
-                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { transfer(); return true; }
+        if (ScreenText.isEnter(event)) { transfer(); return true; }
         return super.keyPressed(event);
     }
 

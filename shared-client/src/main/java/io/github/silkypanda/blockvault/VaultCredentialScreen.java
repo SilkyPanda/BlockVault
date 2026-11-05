@@ -75,8 +75,7 @@ final class VaultCredentialScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
-        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
-                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { save(); return true; }
+        if (ScreenText.isEnter(event)) { save(); return true; }
         return super.keyPressed(event);
     }
 

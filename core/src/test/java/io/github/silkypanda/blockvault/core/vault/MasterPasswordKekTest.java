@@ -10,7 +10,7 @@ final class MasterPasswordKekTest {
     void wrapsAndUnwrapsVaultKey() throws Exception {
         byte[] salt = new byte[16];
         byte[] key = SecureBytes.random(32);
-        MasterPasswordKek provider = new MasterPasswordKek("master".toCharArray(), salt, 3, new byte[] {1, 2});
+        MasterPasswordKek provider = new MasterPasswordKek("masterpass".toCharArray(), salt, 3, new byte[] {1, 2});
         byte[] wrapped = provider.wrap(key);
         assertArrayEquals(key, provider.unwrap(wrapped));
         provider.clear();

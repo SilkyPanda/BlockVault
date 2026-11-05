@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 final class InputRulesTest {
     @Test
     void passwordsAcceptLettersOfAnyLanguageDigitsPunctuationAndSymbols() {
-        for (String ok : new String[] {"hunter2", "P@ss-w0rd!", "p\u00e4ssword", "\u043f\u0430\u0440\u043e\u043b\u044c1",
-                "\u5bc6\u7801123", "caf\u00e9_\u2603", "a\"b'c\\d/e", "e\u0301\u0301x"}) {
+        for (String ok : new String[] {"hunter22", "P@ss-w0rd!", "p\u00e4ssword", "\u043f\u0430\u0440\u043e\u043b\u044c12",
+                "\u5bc6\u7801123456", "caf\u00e9_\u2603abc", "a\"b'c\\d/e", "e\u0301\u0301xabcdef"}) {
             assertTrue(InputRules.isPassword(ok.toCharArray()), ok);
             assertTrue(InputRules.isMasterPassword(ok.toCharArray()), ok);
         }

@@ -4,11 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Pixel-measured text layout helpers for narrow game windows. */
 final class ScreenText {
+    private static final int ENTER_KEY = 257;
+    private static final int KEYPAD_ENTER_KEY = 335;
+
     private ScreenText() { }
+
+    static boolean isEnter(KeyEvent event) {
+        return event.key() == ENTER_KEY || event.key() == KEYPAD_ENTER_KEY;
+    }
 
     static int drawCenteredWrapped(GuiGraphicsExtractor graphics, Font font, Component text,
                                    int centerX, int topY, int maxWidth, int color, int lineHeight) {

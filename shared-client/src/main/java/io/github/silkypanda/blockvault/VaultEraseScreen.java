@@ -118,8 +118,7 @@ final class VaultEraseScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
-        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
-                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+        if (ScreenText.isEnter(event)) {
             if (confirmUnverifiedErase) eraseWithoutPassword(); else erase();
             return true;
         }
