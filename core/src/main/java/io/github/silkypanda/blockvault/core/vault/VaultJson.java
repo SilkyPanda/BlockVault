@@ -23,6 +23,7 @@ public final class VaultJson {
     private static final Set<String> TRASH_KEYS = Set.of("id", "deletedAt", "whole", "server");
     private static final Set<String> ACCOUNT_KEYS = Set.of("user", "pass", "status", "created", "modified", "used",
             "blockvaultPrevious");
+    private static final String INVALID_RAW = "blockvault.invalidRawAccount";
 
     private VaultJson() { }
 
@@ -81,6 +82,11 @@ public final class VaultJson {
         item.addProperty("template", server.templateId());
         JsonArray accounts = new JsonArray();
         for (Account account : server.accounts()) {
+            JsonElement original = account.metadata().get(INVALID_RAW);
+            if (original != null && original.isJsonPrimitive() && original.getAsJsonPrimitive().isString()) {
+                accounts.add(JsonParser.parseString(original.getAsString()));
+                continue;
+            }
             JsonObject value = new JsonObject();
             JsonObject metadata = account.metadata();
             copyUnknown(metadata, value, ACCOUNT_KEYS);
@@ -103,15 +109,18 @@ public final class VaultJson {
         item.getAsJsonArray("hosts").forEach(host -> hosts.add(host.getAsString()));
         List<Account> accounts = new ArrayList<>();
         for (JsonElement accountElement : item.getAsJsonArray("accounts")) {
-            JsonObject value = accountElement.getAsJsonObject();
-            char[] password = value.get("pass").getAsString().toCharArray();
             try {
-                accounts.add(new Account(value.get("user").getAsString(), password,
+                JsonObject value = accountElement.getAsJsonObject();
+                char[] password = value.get("pass").getAsString().toCharArray();
+                try { accounts.add(new Account(value.get("user").getAsString(), password,
                         Account.Status.valueOf(value.get("status").getAsString()),
                         value.get("created").getAsLong(), value.get("modified").getAsLong(),
-                        value.get("used").getAsLong(), readMetadata(value)));
-            } finally {
-                java.util.Arrays.fill(password, '\0');
+                        value.get("used").getAsLong(), readMetadata(value))); }
+                finally { java.util.Arrays.fill(password, '\0'); }
+            } catch (RuntimeException invalidAccount) {
+                JsonObject metadata = new JsonObject();
+                metadata.addProperty(INVALID_RAW, accountElement.toString());
+                accounts.add(new Account("", new char[0], Account.Status.PENDING, 0, 0, 0, metadata));
             }
         }
         return new ServerEntry(item.get("id").getAsString(), item.get("name").getAsString(), hosts,

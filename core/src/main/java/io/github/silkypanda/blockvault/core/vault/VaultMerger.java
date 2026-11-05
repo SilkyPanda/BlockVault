@@ -57,8 +57,16 @@ public final class VaultMerger {
     private static ServerEntry mergeServer(ServerEntry current, ServerEntry other, long nowMillis,
                                             boolean adoptDiskSettings) {
         Map<String, Account> accounts = new LinkedHashMap<>();
-        for (Account account : other.accounts()) accounts.put(Usernames.key(account.username()), account);
+        List<Account> invalidAccounts = new ArrayList<>();
+        for (Account account : other.accounts()) {
+            if (!account.isValidForUse()) addInvalid(invalidAccounts, account);
+            else accounts.put(Usernames.key(account.username()), account);
+        }
         for (Account account : current.accounts()) {
+            if (!account.isValidForUse()) {
+                addInvalid(invalidAccounts, account);
+                continue;
+            }
             String key = Usernames.key(account.username());
             Account old = accounts.get(key);
             Account winner = old == null || effective(account, nowMillis) >= effective(old, nowMillis)
@@ -68,7 +76,22 @@ public final class VaultMerger {
         // Server settings have no per-field timestamps. When a stale live instance detects a changed disk digest,
         // the disk copy is the newer write and wins; otherwise deliberate local settings edits remain authoritative.
         ServerEntry settings = adoptDiskSettings ? other : current;
-        return settings.withAccounts(new ArrayList<>(accounts.values()));
+        List<Account> combined = new ArrayList<>(accounts.values());
+        combined.addAll(invalidAccounts);
+        return settings.withAccounts(combined);
+    }
+
+    private static void addInvalid(List<Account> accounts, Account candidate) {
+        for (Account existing : accounts) {
+            if (!existing.username().equals(candidate.username()) || existing.status() != candidate.status()
+                    || existing.createdAt() != candidate.createdAt() || existing.modifiedAt() != candidate.modifiedAt()
+                    || existing.lastUsedAt() != candidate.lastUsedAt() || !existing.metadata().equals(candidate.metadata())) continue;
+            char[] left = existing.password();
+            char[] right = candidate.password();
+            try { if (java.util.Arrays.equals(left, right)) return; }
+            finally { java.util.Arrays.fill(left, '\0'); java.util.Arrays.fill(right, '\0'); }
+        }
+        accounts.add(candidate);
     }
 
     private static long effective(Account account, long nowMillis) {

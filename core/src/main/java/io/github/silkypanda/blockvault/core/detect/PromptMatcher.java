@@ -41,6 +41,22 @@ public final class PromptMatcher {
         return Set.copyOf(result);
     }
 
+    /** Short aliases become capturable only when a directed server message spells out that command. */
+    public Set<String> promptedShortCommands(String plain) {
+        String text = clean(plain);
+        if (text.length() > 2048 || PLAYER_CHAT.matcher(text).find()) return Set.of();
+        java.util.HashSet<String> prompted = new java.util.HashSet<>();
+        for (String group : java.util.List.of("login", "register", "changepassword", "unregister")) {
+            for (String alias : pack.commandNames(group)) {
+                if (alias.length() > 3) continue;
+                Pattern command = Pattern.compile("(?i)/(?:[a-z0-9_]+:)?" + Pattern.quote(alias)
+                        + "\\b(?=\\s+<)");
+                if (command.matcher(text).find()) prompted.add(alias);
+            }
+        }
+        return Set.copyOf(prompted);
+    }
+
     /** Prompt patterns must identify a configured command and an instruction or argument placeholder. */
     private boolean isDirectedPrompt(PromptKind kind, String text) {
         String group = kind == PromptKind.LOGIN ? "login" : "register";

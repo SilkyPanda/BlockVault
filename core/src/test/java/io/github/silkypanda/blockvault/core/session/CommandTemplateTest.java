@@ -51,4 +51,25 @@ final class CommandTemplateTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> CommandTemplate.builtins().get("authme").render(false, "pa\nss".toCharArray(), "", "Alex"));
     }
+
+    @Test
+    void sendsInternationalPasswordsButNeverWhitespaceOrSectionSigns() {
+        assertEquals("login p\u00e4ss\u5bc6", CommandTemplate.builtins().get("authme")
+                .render(false, "p\u00e4ss\u5bc6".toCharArray(), null, "Alex"));
+        for (String bad : new String[] {"a b", "a\u00a0b", "a\u00a7b", "a\u200bb"}) {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                    CommandTemplate.builtins().get("authme").render(false, bad.toCharArray(), null, "Alex"), bad);
+        }
+    }
+
+    @Test
+    void refusesCommandsLongerThanMinecraftAllows() {
+        CommandTemplate template = CommandTemplate.builtins().get("authme");
+        assertEquals("register " + "a".repeat(100) + " " + "a".repeat(100),
+                template.render(true, "a".repeat(100).toCharArray(), null, "Alex"));
+        String longEmail = "e".repeat(60) + "@" + "d".repeat(50) + ".com";
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                CommandTemplate.fromRegistrationPrompt("Use /register <password> <password> <email> <email> <email>",
+                        java.util.Set.of("register")).render(true, "a".repeat(100).toCharArray(), longEmail, "Alex"));
+    }
 }

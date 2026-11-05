@@ -1,6 +1,6 @@
 package io.github.silkypanda.blockvault.core.crypto;
 
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 
 import java.security.GeneralSecurityException;
 import javax.crypto.SecretKeyFactory;
@@ -16,7 +16,7 @@ public final class Kdf {
         if (password == null || salt == null || iterations <= 0 || dkLenBytes <= 0 || dkLenBytes > 1024) {
             throw new IllegalArgumentException("Invalid PBKDF2 parameters");
         }
-        if (!AsciiInput.isPassword(password)) throw new IllegalArgumentException("Password must use printable non-space ASCII");
+        if (!InputRules.isMasterPassword(password)) throw new IllegalArgumentException("Password contains characters BlockVault does not accept");
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, Math.multiplyExact(dkLenBytes, 8));
         try {
             return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512").generateSecret(spec).getEncoded();

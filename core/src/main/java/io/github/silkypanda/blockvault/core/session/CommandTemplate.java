@@ -5,7 +5,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import io.github.silkypanda.blockvault.core.vault.Usernames;
 
 /** Validated command template with explicit credential placeholders. */
@@ -62,7 +62,7 @@ public record CommandTemplate(String id, String login, String register) {
     /** Renders one command while preserving the no-leading-slash contract. */
     public String render(boolean registration, char[] password, String email, String username) {
         if (!CredentialPassword.isValid(password)) throw new IllegalArgumentException("Invalid password argument");
-        if (email != null && !email.isEmpty() && !AsciiInput.isEmail(email)) {
+        if (email != null && !email.isEmpty() && !InputRules.isEmail(email)) {
             throw new IllegalArgumentException("Invalid email argument");
         }
         if (username != null && !Usernames.isValid(username)) throw new IllegalArgumentException("Invalid username argument");
@@ -82,16 +82,17 @@ public record CommandTemplate(String id, String login, String register) {
         tokens.appendTail(resultBuffer);
         String result = resultBuffer.toString();
         if (result.startsWith("/") || result.isBlank()) throw new IllegalStateException("Template produced an invalid command");
+        if (result.length() > InputRules.COMMAND_MAX) {
+            throw new IllegalArgumentException("Command is longer than Minecraft allows");
+        }
         return result;
     }
 
-    /** Non-ASCII or control characters could corrupt command arguments, so they are refused. */
+    /** Whitespace, control or invisible characters could corrupt command arguments, so they are refused. */
     private static String safe(String value) {
         if (value == null) return "";
-        for (int i = 0; i < value.length(); i++) {
-            if (value.charAt(i) < ' ' || value.charAt(i) > '~') {
-                throw new IllegalArgumentException("Command argument contains control characters");
-            }
+        if (!InputRules.isPasswordText(value)) {
+            throw new IllegalArgumentException("Command argument contains characters Minecraft cannot send safely");
         }
         return value;
     }

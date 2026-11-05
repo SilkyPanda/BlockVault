@@ -1,13 +1,14 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.session.CredentialPassword;
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
@@ -16,7 +17,7 @@ import net.minecraft.util.FormattedCharSequence;
 final class VaultMasterPasswordScreen extends Screen {
     private final Screen parent;
     private EditBox current, next, confirm;
-    private boolean busy, failed, mismatch, tooShort, samePassword, invalidCharacters;
+    private boolean busy, failed, mismatch, tooShort, tooLong, samePassword, invalidCharacters;
     private final java.util.List<CapsLockHint> capsHints = new java.util.ArrayList<>();
 
     VaultMasterPasswordScreen(Screen parent) {
@@ -42,10 +43,10 @@ final class VaultMasterPasswordScreen extends Screen {
     private EditBox field(int x, int y, String key) {
         EditBox box = new EditBox(font, x, y, 240, 20, Component.translatable(key));
         box.setHint(Component.translatable(key));
-        box.setMaxLength(256);
+        box.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
         CapsLockHint hint = new CapsLockHint();
         capsHints.add(hint);
-        AsciiInputFilter.bind(box, AsciiInput::isPasswordText, hint::onValueChanged);
+        InputFilter.bind(box, InputRules::isMasterPasswordInput, hint::onValueChanged);
         box.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         return box;
     }
@@ -53,11 +54,13 @@ final class VaultMasterPasswordScreen extends Screen {
     private void submit() {
         if (busy) return;
         mismatch = next.getValue().isEmpty() || !next.getValue().equals(confirm.getValue());
-        tooShort = next.getValue().length() < 8;
+        tooShort = next.getValue().codePointCount(0, next.getValue().length()) < InputRules.MASTER_PASSWORD_MIN;
+        tooLong = next.getValue().codePointCount(0, next.getValue().length()) > InputRules.MASTER_PASSWORD_MAX;
         samePassword = current.getValue().equals(next.getValue());
-        invalidCharacters = !CredentialPassword.isValid(current.getValue().toCharArray())
-                || !CredentialPassword.isValid(next.getValue().toCharArray());
-        if (mismatch || tooShort || samePassword || current.getValue().isEmpty() || invalidCharacters) {
+        invalidCharacters = !InputRules.isPasswordText(current.getValue())
+                || !InputRules.isPasswordText(next.getValue());
+        if (mismatch || tooShort || tooLong || samePassword || current.getValue().isEmpty() || invalidCharacters) {
+            if (mismatch) confirm.setValue("");
             statusKey = null;
             failed = true;
             return;
@@ -101,8 +104,15 @@ final class VaultMasterPasswordScreen extends Screen {
         if (invalidCharacters) return "blockvault.password.invalid";
         if (mismatch) return "blockvault.master.mismatch";
         if (tooShort) return "blockvault.master.new.too_short";
+        if (tooLong) return "blockvault.master.new.too_long";
         if (samePassword) return "blockvault.master.new.same";
         return "blockvault.master.failed";
+    }
+
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { submit(); return true; }
+        return super.keyPressed(event);
     }
 
     @Override public boolean isPauseScreen() { return false; }

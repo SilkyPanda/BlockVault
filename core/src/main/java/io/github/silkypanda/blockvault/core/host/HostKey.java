@@ -7,15 +7,18 @@ import java.util.Optional;
 public final class HostKey {
     private HostKey() { }
 
-    /** Normalizes ASCII hostnames and IPv6 literals, returning empty for malformed input. */
+    /**
+     * Normalizes hostnames (internationalized names become their ASCII/punycode form, as Minecraft itself
+     * connects) and IPv6 literals, returning empty for malformed input.
+     */
     public static Optional<String> normalize(String address) {
-        if (address == null || address.isBlank() || !isAscii(address)) return Optional.empty();
+        if (address == null || address.isBlank()) return Optional.empty();
         String value = address.trim();
         String host;
         String portText = null;
         if (value.startsWith("[")) {
             int close = value.indexOf(']');
-            if (close < 0) return Optional.empty();
+            if (close < 0 || !isAscii(value)) return Optional.empty();
             host = value.substring(1, close);
             String rest = value.substring(close + 1);
             if (!rest.isEmpty()) {
@@ -32,6 +35,10 @@ public final class HostKey {
                 host = value.substring(0, lastColon);
                 portText = value.substring(lastColon + 1);
             } else host = value;
+            if (!isAscii(host)) {
+                try { host = java.net.IDN.toASCII(host); }
+                catch (IllegalArgumentException invalid) { return Optional.empty(); }
+            }
             host = host.toLowerCase(Locale.ROOT);
             if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
             if (!validHostname(host) || !validIpv4(host)) return Optional.empty();

@@ -1,12 +1,13 @@
 package io.github.silkypanda.blockvault;
 
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import java.nio.file.Path;
 import java.util.Arrays;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
@@ -35,14 +36,14 @@ final class VaultTransferScreen extends Screen {
         pathBox.setHint(Component.translatable(importing
                 ? "blockvault.transfer.import.path" : "blockvault.transfer.export.folder"));
         pathBox.setMaxLength(1024);
-        AsciiInputFilter.bind(pathBox, AsciiInput::isPrintable, null);
+        InputFilter.bind(pathBox, InputRules::isText, null);
         addRenderableWidget(pathBox);
         if (importing) {
             passwordBox = new EditBox(font, left, height / 2 + 4, 300, 20,
                     Component.translatable("blockvault.vault.password"));
             passwordBox.setHint(Component.translatable("blockvault.vault.password"));
-            passwordBox.setMaxLength(1024);
-            AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, null);
+            passwordBox.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
+            InputFilter.bind(passwordBox, InputRules::isMasterPasswordInput, null);
             passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
             addRenderableWidget(passwordBox);
         }
@@ -56,7 +57,7 @@ final class VaultTransferScreen extends Screen {
 
     private void transfer() {
         if (busy || (importing && pathBox.getValue().isBlank())) return;
-        if (!AsciiInput.isPrintable(pathBox.getValue())) { failed = true; return; }
+        if (!InputRules.isText(pathBox.getValue())) { failed = true; return; }
         busy = true;
         failed = false;
         failureKey = null;
@@ -70,7 +71,7 @@ final class VaultTransferScreen extends Screen {
             VaultRuntime.exportVault(path, exported -> {
                 busy = false;
                 failed = exported == null;
-                exportedPath = exported == null ? null : exported.toString();
+                exportedPath = exported == null ? null : exported.getFileName().toString();
             });
             return;
         }
@@ -97,13 +98,19 @@ final class VaultTransferScreen extends Screen {
         if (success) VaultRuntime.openVaultScreen();
     }
 
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { transfer(); return true; }
+        return super.keyPressed(event);
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, height / 2 - 60, 0xffffffff);
-        graphics.centeredText(font, Component.translatable(importing
+        ScreenText.drawCenteredWrapped(graphics, font, Component.translatable(importing
                 ? "blockvault.transfer.import.help" : "blockvault.transfer.export.help"), width / 2,
-                height / 2 - 43, 0xffc5c0cf);
+                height / 2 - 58, width - 32, 0xffc5c0cf, 11);
         if (exportedPath != null) graphics.centeredText(font,
                 Component.translatable("blockvault.transfer.exported", exportedPath),
                 width / 2, height / 2 + 65, 0xff77dd88);

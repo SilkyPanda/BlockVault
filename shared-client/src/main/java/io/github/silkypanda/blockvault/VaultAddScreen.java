@@ -1,13 +1,14 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
@@ -35,10 +36,10 @@ final class VaultAddScreen extends Screen {
         int top = Math.max(40, height / 2 - 56);
         hostBox = box(left, top, "blockvault.add.host", 255);
         userBox = box(left, top + 26, "blockvault.add.username", 64);
-        passwordBox = box(left, top + 52, "blockvault.add.password", 1024);
-        AsciiInputFilter.bind(hostBox, AsciiInput::isPrintable, null);
-        AsciiInputFilter.bind(userBox, AsciiInput::isUsernameText, null);
-        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, capsLock::onValueChanged);
+        passwordBox = box(left, top + 52, "blockvault.add.password", InputRules.SERVER_PASSWORD_MAX * 2);
+        InputFilter.bind(hostBox, InputRules::isHostText, null);
+        InputFilter.bind(userBox, InputRules::isUsernameText, null);
+        InputFilter.bind(passwordBox, InputRules::isServerPasswordInput, capsLock::onValueChanged);
         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
                 showPassword ? value : "\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(hostBox);
@@ -84,6 +85,12 @@ final class VaultAddScreen extends Screen {
                 VaultRuntime.openVaultScreen();
             }
         });
+    }
+
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { save(); return true; }
+        return super.keyPressed(event);
     }
 
     private void clearFields() {

@@ -1,0 +1,1055 @@
+diff -ruN new/BlockVault-main/README.md patched/BlockVault-main/README.md
+--- new/BlockVault-main/README.md	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/README.md	2026-10-29 04:01:55.448661053 +0000
+@@ -41,7 +41,7 @@
+ 
+ ## Security notes
+ 
+-- Text fields use ASCII-only allowlists. Server and master passwords accept printable characters `!` through `~` (no spaces); usernames use letters, digits, and underscores; server addresses use ASCII hostname/IP syntax; email uses ASCII email characters; paths, search, and names allow printable ASCII including spaces.
++- Text fields only accept characters that are safe to send through Minecraft. Passwords (server and master) may use letters of any language, digits, punctuation and symbols, but never spaces or other whitespace, control or invisible characters, or the section sign `§`. Server passwords are limited to 100 characters so a register command fits Minecraft's 256-character chat limit; master passwords may be up to 256 characters and need at least 8. Usernames use letters, digits and underscores (what Minecraft accounts allow). Server addresses may be internationalized and are stored in their ASCII (punycode) form. Email addresses, names, search text and file paths accept any readable text, with ordinary spaces allowed only in names, search text and paths.
+ 
+ - `Trust this device` is on by default. It stores the vault key in `vault.bv.trust`, never the master password, and does not use an OS keychain. Anyone or any malware with access to your OS account and data folder can open the vault without the master password. Choose `Ask for master password every launch` to remove the file. POSIX permissions are owner-only; Windows relies on the profile folder's ACL and BlockVault does not set one.
+ - There is no inactivity auto-lock. `Lock now` wipes the key and waits for the next password entry.
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/Kdf.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/Kdf.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/Kdf.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/Kdf.java	2026-10-29 04:01:26.237985359 +0000
+@@ -1,6 +1,6 @@
+ package io.github.silkypanda.blockvault.core.crypto;
+ 
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ 
+ import java.security.GeneralSecurityException;
+ import javax.crypto.SecretKeyFactory;
+@@ -16,7 +16,7 @@
+         if (password == null || salt == null || iterations <= 0 || dkLenBytes <= 0 || dkLenBytes > 1024) {
+             throw new IllegalArgumentException("Invalid PBKDF2 parameters");
+         }
+-        if (!AsciiInput.isPassword(password)) throw new IllegalArgumentException("Password must use printable non-space ASCII");
++        if (!InputRules.isMasterPassword(password)) throw new IllegalArgumentException("Password contains characters BlockVault does not accept");
+         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, Math.multiplyExact(dkLenBytes, 8));
+         try {
+             return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512").generateSecret(spec).getEncoded();
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/PasswordStrength.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/PasswordStrength.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/PasswordStrength.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/crypto/PasswordStrength.java	2026-10-29 04:01:55.412163648 +0000
+@@ -11,9 +11,9 @@
+         boolean varied = false;
+         char first = password[0];
+         for (char value : password) {
+-            lower |= value >= 'a' && value <= 'z';
+-            upper |= value >= 'A' && value <= 'Z';
+-            digit |= value >= '0' && value <= '9';
++            lower |= Character.isLowerCase(value) || Character.isLetter(value) && !Character.isUpperCase(value);
++            upper |= Character.isUpperCase(value);
++            digit |= Character.isDigit(value);
+             symbol |= !Character.isLetterOrDigit(value);
+             varied |= value != first;
+         }
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/host/HostKey.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/host/HostKey.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/host/HostKey.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/host/HostKey.java	2026-10-29 04:01:55.411603563 +0000
+@@ -7,15 +7,18 @@
+ public final class HostKey {
+     private HostKey() { }
+ 
+-    /** Normalizes ASCII hostnames and IPv6 literals, returning empty for malformed input. */
++    /**
++     * Normalizes hostnames (internationalized names become their ASCII/punycode form, as Minecraft itself
++     * connects) and IPv6 literals, returning empty for malformed input.
++     */
+     public static Optional<String> normalize(String address) {
+-        if (address == null || address.isBlank() || !isAscii(address)) return Optional.empty();
++        if (address == null || address.isBlank()) return Optional.empty();
+         String value = address.trim();
+         String host;
+         String portText = null;
+         if (value.startsWith("[")) {
+             int close = value.indexOf(']');
+-            if (close < 0) return Optional.empty();
++            if (close < 0 || !isAscii(value)) return Optional.empty();
+             host = value.substring(1, close);
+             String rest = value.substring(close + 1);
+             if (!rest.isEmpty()) {
+@@ -32,6 +35,10 @@
+                 host = value.substring(0, lastColon);
+                 portText = value.substring(lastColon + 1);
+             } else host = value;
++            if (!isAscii(host)) {
++                try { host = java.net.IDN.toASCII(host); }
++                catch (IllegalArgumentException invalid) { return Optional.empty(); }
++            }
+             host = host.toLowerCase(Locale.ROOT);
+             if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
+             if (!validHostname(host) || !validIpv4(host)) return Optional.empty();
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CommandTemplate.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CommandTemplate.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CommandTemplate.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CommandTemplate.java	2026-10-29 04:01:26.307380815 +0000
+@@ -5,7 +5,7 @@
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import io.github.silkypanda.blockvault.core.vault.Usernames;
+ 
+ /** Validated command template with explicit credential placeholders. */
+@@ -62,7 +62,7 @@
+     /** Renders one command while preserving the no-leading-slash contract. */
+     public String render(boolean registration, char[] password, String email, String username) {
+         if (!CredentialPassword.isValid(password)) throw new IllegalArgumentException("Invalid password argument");
+-        if (email != null && !email.isEmpty() && !AsciiInput.isEmail(email)) {
++        if (email != null && !email.isEmpty() && !InputRules.isEmail(email)) {
+             throw new IllegalArgumentException("Invalid email argument");
+         }
+         if (username != null && !Usernames.isValid(username)) throw new IllegalArgumentException("Invalid username argument");
+@@ -82,16 +82,17 @@
+         tokens.appendTail(resultBuffer);
+         String result = resultBuffer.toString();
+         if (result.startsWith("/") || result.isBlank()) throw new IllegalStateException("Template produced an invalid command");
++        if (result.length() > InputRules.COMMAND_MAX) {
++            throw new IllegalArgumentException("Command is longer than Minecraft allows");
++        }
+         return result;
+     }
+ 
+-    /** Non-ASCII or control characters could corrupt command arguments, so they are refused. */
++    /** Whitespace, control or invisible characters could corrupt command arguments, so they are refused. */
+     private static String safe(String value) {
+         if (value == null) return "";
+-        for (int i = 0; i < value.length(); i++) {
+-            if (value.charAt(i) < ' ' || value.charAt(i) > '~') {
+-                throw new IllegalArgumentException("Command argument contains control characters");
+-            }
++        if (!InputRules.isPasswordText(value)) {
++            throw new IllegalArgumentException("Command argument contains characters Minecraft cannot send safely");
+         }
+         return value;
+     }
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CredentialPassword.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CredentialPassword.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CredentialPassword.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/CredentialPassword.java	2026-10-29 04:01:26.241510710 +0000
+@@ -1,13 +1,21 @@
+ package io.github.silkypanda.blockvault.core.session;
+ 
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ 
+ /** Validation shared by every path that saves or sends passwords. */
+ public final class CredentialPassword {
+     private CredentialPassword() { }
+ 
+-    /** Passwords use printable, non-space ASCII so one command argument represents the exact value. */
++    /**
++     * A server password becomes one command argument, so it may not contain whitespace, control or invisible
++     * characters or the section sign, and it must stay short enough for a Minecraft chat command.
++     */
+     public static boolean isValid(char[] password) {
+-        return AsciiInput.isPassword(password);
++        return InputRules.isPassword(password);
++    }
++
++    /** A master password follows the same character rules but may be longer; it is never sent to a server. */
++    public static boolean isValidMaster(char[] password) {
++        return InputRules.isMasterPassword(password);
+     }
+ }
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/LoginSession.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/LoginSession.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/LoginSession.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/session/LoginSession.java	2026-10-29 04:01:26.243251631 +0000
+@@ -7,7 +7,7 @@
+ import io.github.silkypanda.blockvault.core.detect.ResultMatcher;
+ import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
+ import io.github.silkypanda.blockvault.core.vault.Account;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import java.util.Arrays;
+ import java.util.EnumSet;
+ import java.util.Locale;
+@@ -153,20 +153,20 @@
+             return;
+         }
+         if (contains("login", command)) {
+-            if (!AsciiInput.isPasswordText(words[0])) return;
++            if (!InputRules.isPasswordArgument(words[0])) return;
+             replacePending(words[0]);
+             action = Action.MANUAL;
+         } else if (contains("register", command)) {
+-            if (!AsciiInput.isPasswordText(words[0])) return;
++            if (!InputRules.isPasswordArgument(words[0])) return;
+             replacePending(words[0]);
+             action = Action.MANUAL;
+         } else if (contains("changepassword", command)) {
+             if (words.length < 2) return;
+-            if (!AsciiInput.isPasswordText(words[1])) return;
++            if (!InputRules.isPasswordArgument(words[1])) return;
+             replacePending(words[1]);
+             action = Action.MANUAL;
+         } else if (contains("unregister", command)) {
+-            if (!AsciiInput.isPasswordText(words[0])) return;
++            if (!InputRules.isPasswordArgument(words[0])) return;
+             replacePending(words[0]);
+             action = Action.UNREGISTER;
+         } else return;
+@@ -189,7 +189,7 @@
+     public void confirmRegistration(char[] password, String email) {
+         if (host == null || state != SessionState.PROMPTED || lastPromptKind != PromptKind.REGISTER || action == Action.REGISTER) return;
+         if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
+-        if (email != null && !email.isEmpty() && !AsciiInput.isEmail(email)) {
++        if (email != null && !email.isEmpty() && !InputRules.isEmail(email)) {
+             env.toast("blockvault.toast.email_invalid");
+             return;
+         }
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/AsciiInput.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/AsciiInput.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/AsciiInput.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/AsciiInput.java	1970-01-01 00:00:00.000000000 +0000
+@@ -1,46 +0,0 @@
+-package io.github.silkypanda.blockvault.core.validation;
+-
+-import java.util.regex.Pattern;
+-
+-/** Explicit ASCII allowlists for values BlockVault accepts from text fields. */
+-public final class AsciiInput {
+-    private static final Pattern EMAIL = Pattern.compile(
+-            "[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+");
+-
+-    private AsciiInput() { }
+-
+-    /** Printable ASCII including spaces, for local folder paths and search/name text. */
+-    public static boolean isPrintable(String value) {
+-        if (value == null) return false;
+-        for (int i = 0; i < value.length(); i++) {
+-            char character = value.charAt(i);
+-            if (character < ' ' || character > '~') return false;
+-        }
+-        return true;
+-    }
+-
+-    /** Printable, non-space ASCII used for passwords transmitted as a single command argument. */
+-    public static boolean isPassword(char[] value) {
+-        if (value == null || value.length == 0) return false;
+-        for (char character : value) if (character < '!' || character > '~') return false;
+-        return true;
+-    }
+-
+-    public static boolean isPasswordText(String value) {
+-        if (value == null) return false;
+-        for (int i = 0; i < value.length(); i++) if (value.charAt(i) < '!' || value.charAt(i) > '~') return false;
+-        return true;
+-    }
+-
+-    public static boolean isUsernameText(String value) {
+-        return value != null && value.length() <= 64 && value.matches("[A-Za-z0-9_]*");
+-    }
+-
+-    public static boolean isEmailText(String value) {
+-        return value != null && value.length() <= 254 && value.matches("[A-Za-z0-9.!#$%&'*+/=?^_`{|}~@-]*");
+-    }
+-
+-    public static boolean isEmail(String value) {
+-        return value != null && value.length() <= 254 && EMAIL.matcher(value).matches();
+-    }
+-}
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/InputRules.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/InputRules.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/InputRules.java	1970-01-01 00:00:00.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/validation/InputRules.java	2026-10-29 04:01:17.002186055 +0000
+@@ -0,0 +1,144 @@
++package io.github.silkypanda.blockvault.core.validation;
++
++import java.util.regex.Pattern;
++
++/**
++ * What BlockVault accepts from text fields.
++ *
++ * <p>Passwords and other command arguments are sent to a server as one chat command, so they must survive
++ * Minecraft's chat rules and the server's whitespace-separated argument parsing. They therefore allow letters
++ * (any language), marks, digits, punctuation and symbols, and refuse everything else: whitespace of any kind,
++ * control characters, invisible or formatting characters, private-use or unassigned code points, unpaired
++ * surrogates and the section sign that Minecraft uses for formatting codes.
++ */
++public final class InputRules {
++    /** Longest server password; leaves room for a register command that repeats it inside the chat limit. */
++    public static final int SERVER_PASSWORD_MAX = 100;
++    /** Longest master password. It never leaves the machine, so it is limited only by the field size. */
++    public static final int MASTER_PASSWORD_MAX = 256;
++    /** Minecraft refuses chat and command text longer than this. */
++    public static final int COMMAND_MAX = 256;
++    /** Minimum master password length, counted in characters (code points). */
++    public static final int MASTER_PASSWORD_MIN = 8;
++
++    private static final Pattern EMAIL = Pattern.compile(
++            "[\\p{L}\\p{M}\\p{N}.!#$%&'*+/=?^_`{|}~-]+@[\\p{L}\\p{N}](?:[\\p{L}\\p{M}\\p{N}-]{0,61}[\\p{L}\\p{M}\\p{N}])?"
++                    + "(?:\\.[\\p{L}\\p{N}](?:[\\p{L}\\p{M}\\p{N}-]{0,61}[\\p{L}\\p{M}\\p{N}])?)+");
++
++    private InputRules() { }
++
++    // ---- single characters -------------------------------------------------------------------------------
++
++    /** A visible character that can appear inside one command argument. */
++    public static boolean isPasswordChar(int codePoint) {
++        if (codePoint == 0xA7) return false; // the section sign starts Minecraft formatting codes
++        switch (codePoint) {
++            // Letters or symbols that render as blank space.
++            case 0x115F, 0x1160, 0x3164, 0xFFA0, 0x2800 -> { return false; }
++            default -> { }
++        }
++        return switch (Character.getType(codePoint)) {
++            case Character.UPPERCASE_LETTER, Character.LOWERCASE_LETTER, Character.TITLECASE_LETTER,
++                 Character.MODIFIER_LETTER, Character.OTHER_LETTER,
++                 Character.NON_SPACING_MARK, Character.ENCLOSING_MARK, Character.COMBINING_SPACING_MARK,
++                 Character.DECIMAL_DIGIT_NUMBER, Character.LETTER_NUMBER, Character.OTHER_NUMBER,
++                 Character.CONNECTOR_PUNCTUATION, Character.DASH_PUNCTUATION, Character.START_PUNCTUATION,
++                 Character.END_PUNCTUATION, Character.INITIAL_QUOTE_PUNCTUATION, Character.FINAL_QUOTE_PUNCTUATION,
++                 Character.OTHER_PUNCTUATION, Character.MATH_SYMBOL, Character.CURRENCY_SYMBOL,
++                 Character.MODIFIER_SYMBOL, Character.OTHER_SYMBOL -> true;
++            default -> false;
++        };
++    }
++
++    // ---- passwords ---------------------------------------------------------------------------------------
++
++    /** True when every character of {@code value} may appear in a password (no length check). */
++    public static boolean isPasswordText(String value) {
++        if (value == null) return false;
++        for (int i = 0; i < value.length(); ) {
++            int codePoint = value.codePointAt(i);
++            if (!isPasswordChar(codePoint)) return false;
++            i += Character.charCount(codePoint);
++        }
++        return true;
++    }
++
++    /** A password for a server login: 1 to {@link #SERVER_PASSWORD_MAX} acceptable characters. */
++    public static boolean isPassword(char[] value) {
++        return validPassword(value, SERVER_PASSWORD_MAX);
++    }
++
++    /** A master password: 1 to {@link #MASTER_PASSWORD_MAX} acceptable characters. */
++    public static boolean isMasterPassword(char[] value) {
++        return validPassword(value, MASTER_PASSWORD_MAX);
++    }
++
++    /** A password typed into a command: acceptable characters and within the server password length. */
++    public static boolean isPasswordArgument(String value) {
++        return value != null && !value.isEmpty() && value.length() <= SERVER_PASSWORD_MAX && isPasswordText(value);
++    }
++
++    /** Number of characters (code points) in a password, so one emoji or accented letter counts once. */
++    public static int characterCount(char[] value) {
++        return value == null ? 0 : Character.codePointCount(value, 0, value.length);
++    }
++
++    private static boolean validPassword(char[] value, int maxLength) {
++        if (value == null || value.length == 0 || value.length > maxLength) return false;
++        for (int i = 0; i < value.length; ) {
++            int codePoint = Character.codePointAt(value, i);
++            if (!isPasswordChar(codePoint)) return false;
++            i += Character.charCount(codePoint);
++        }
++        return true;
++    }
++
++    // ---- other fields ------------------------------------------------------------------------------------
++
++    /** Display, search and path text: acceptable characters plus ordinary spaces. */
++    public static boolean isText(String value) {
++        if (value == null) return false;
++        for (int i = 0; i < value.length(); ) {
++            int codePoint = value.codePointAt(i);
++            if (codePoint != ' ' && !isPasswordChar(codePoint)) return false;
++            i += Character.charCount(codePoint);
++        }
++        return true;
++    }
++
++    /** A server address as typed: letters and digits of any language plus {@code . - _ : [ ]}. */
++    public static boolean isHostText(String value) {
++        if (value == null) return false;
++        for (int i = 0; i < value.length(); ) {
++            int codePoint = value.codePointAt(i);
++            boolean allowed = Character.isLetterOrDigit(codePoint)
++                    || codePoint == '.' || codePoint == '-' || codePoint == '_'
++                    || codePoint == ':' || codePoint == '[' || codePoint == ']'
++                    || codePoint == 0x3002 || codePoint == 0xFF0E || codePoint == 0xFF61 // dots used in IDN input
++                    || isPasswordChar(codePoint) && Character.getType(codePoint) == Character.NON_SPACING_MARK;
++            if (!allowed) return false;
++            i += Character.charCount(codePoint);
++        }
++        return true;
++    }
++
++    /** Minecraft account names: letters, digits and underscores only. */
++    public static boolean isUsernameText(String value) {
++        return value != null && value.length() <= 64 && value.matches("[A-Za-z0-9_]*");
++    }
++
++    public static boolean isEmailText(String value) {
++        if (value == null || value.length() > 254) return false;
++        for (int i = 0; i < value.length(); ) {
++            int codePoint = value.codePointAt(i);
++            boolean allowed = isPasswordChar(codePoint) && "\"(),:;<>[\\]".indexOf(codePoint) < 0;
++            if (!allowed) return false;
++            i += Character.charCount(codePoint);
++        }
++        return true;
++    }
++
++    public static boolean isEmail(String value) {
++        return value != null && value.length() <= 254 && isEmailText(value) && EMAIL.matcher(value).matches();
++    }
++}
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/Account.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/Account.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/Account.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/Account.java	2026-10-29 04:01:17.017525663 +0000
+@@ -1,7 +1,7 @@
+ package io.github.silkypanda.blockvault.core.vault;
+ 
+ import com.google.gson.JsonObject;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ 
+ /** Immutable account metadata with a defensively copied password. */
+ public record Account(String username, char[] password, Status status, long createdAt, long modifiedAt,
+@@ -10,7 +10,7 @@
+     public enum Status { VERIFIED, PENDING }
+ 
+     public Account {
+-        if (!Usernames.isValid(username) || !AsciiInput.isPassword(password) || status == null) {
++        if (!Usernames.isValid(username) || !InputRules.isPassword(password) || status == null) {
+             throw new IllegalArgumentException("Account fields are invalid");
+         }
+         password = password.clone();
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/ServerEntry.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/ServerEntry.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/ServerEntry.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/ServerEntry.java	2026-10-29 04:01:26.226687117 +0000
+@@ -2,7 +2,7 @@
+ 
+ import com.google.gson.JsonObject;
+ import io.github.silkypanda.blockvault.core.host.HostKey;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import java.util.List;
+ 
+ /**
+@@ -14,7 +14,7 @@
+ public record ServerEntry(String id, String name, List<String> hosts, boolean autofill,
+                           String templateId, List<Account> accounts, JsonObject extra) {
+     public ServerEntry {
+-        if (id == null || name == null || !AsciiInput.isPrintable(name) || templateId == null
++        if (id == null || name == null || !InputRules.isText(name) || templateId == null
+                 || hosts == null || hosts.stream().anyMatch(host -> HostKey.normalize(host).isEmpty())) {
+             throw new IllegalArgumentException("Server fields are invalid");
+         }
+diff -ruN new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/VaultStore.java patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/VaultStore.java
+--- new/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/VaultStore.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/main/java/io/github/silkypanda/blockvault/core/vault/VaultStore.java	2026-10-29 04:01:39.442089486 +0000
+@@ -2,6 +2,7 @@
+ 
+ import io.github.silkypanda.blockvault.core.crypto.AesGcm;
+ import io.github.silkypanda.blockvault.core.crypto.Kdf;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import io.github.silkypanda.blockvault.core.crypto.SecureBytes;
+ import io.github.silkypanda.blockvault.core.crypto.VaultAuthException;
+ import java.io.IOException;
+@@ -72,7 +73,7 @@
+     /** Creates and unlocks a new vault. Master-password work runs on the caller's background thread. */
+     public void create(char[] masterPassword) throws IOException {
+         if (exists()) throw new IllegalStateException("Vault already exists");
+-        if (masterPassword == null || masterPassword.length < 8) {
++        if (masterPassword == null || InputRules.characterCount(masterPassword) < InputRules.MASTER_PASSWORD_MIN) {
+             throw new IllegalArgumentException("Master password must contain at least 8 characters");
+         }
+         byte[] salt = SecureBytes.random(16);
+@@ -578,7 +579,7 @@
+      */
+     public void changeMasterPassword(char[] oldPassword, char[] newPassword) throws Exception {
+         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+-        if (newPassword == null || newPassword.length < 8) throw new IllegalArgumentException("Master password must contain at least 8 characters");
++        if (newPassword == null || InputRules.characterCount(newPassword) < InputRules.MASTER_PASSWORD_MIN) throw new IllegalArgumentException("Master password must contain at least 8 characters");
+         if (oldPassword == null) throw new IllegalArgumentException("The current master password is required");
+         if (java.util.Arrays.equals(oldPassword, newPassword)) {
+             throw new IllegalArgumentException("New master password must differ from the current password");
+diff -ruN new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/host/HostKeyTest.java patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/host/HostKeyTest.java
+--- new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/host/HostKeyTest.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/host/HostKeyTest.java	2026-10-29 04:02:40.923720143 +0000
+@@ -22,4 +22,18 @@
+         org.junit.jupiter.api.Assertions.assertEquals("play_1.example.com:25565",
+                 HostKey.normalize("Play_1.Example.com").orElseThrow());
+     }
++
++    @Test
++    void convertsInternationalizedHostnamesToTheirAsciiForm() {
++        assertEquals(java.util.Optional.of("xn--bcher-kva.de:25565"), HostKey.normalize("b\u00fccher.de"));
++        assertEquals(java.util.Optional.of("xn--bcher-kva.de:25566"), HostKey.normalize("B\u00dcCHER.de:25566"));
++        assertEquals(HostKey.normalize("xn--bcher-kva.de"), HostKey.normalize("b\u00fccher.de"));
++    }
++
++    @Test
++    void stillRejectsNonAsciiInIpv6LiteralsAndBadInternationalNames() {
++        assertTrue(HostKey.normalize("[\u0436::1]:25565").isEmpty());
++        assertTrue(HostKey.normalize("play \u00fc.de").isEmpty());
++        assertTrue(HostKey.normalize("b\u00fccher..de").isEmpty());
++    }
+ }
+diff -ruN new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CommandTemplateTest.java patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CommandTemplateTest.java
+--- new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CommandTemplateTest.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CommandTemplateTest.java	2026-10-29 04:02:40.924306126 +0000
+@@ -51,4 +51,25 @@
+         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                 () -> CommandTemplate.builtins().get("authme").render(false, "pa\nss".toCharArray(), "", "Alex"));
+     }
++
++    @Test
++    void sendsInternationalPasswordsButNeverWhitespaceOrSectionSigns() {
++        assertEquals("login p\u00e4ss\u5bc6", CommandTemplate.builtins().get("authme")
++                .render(false, "p\u00e4ss\u5bc6".toCharArray(), null, "Alex"));
++        for (String bad : new String[] {"a b", "a\u00a0b", "a\u00a7b", "a\u200bb"}) {
++            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
++                    CommandTemplate.builtins().get("authme").render(false, bad.toCharArray(), null, "Alex"), bad);
++        }
++    }
++
++    @Test
++    void refusesCommandsLongerThanMinecraftAllows() {
++        CommandTemplate template = CommandTemplate.builtins().get("authme");
++        assertEquals("register " + "a".repeat(100) + " " + "a".repeat(100),
++                template.render(true, "a".repeat(100).toCharArray(), null, "Alex"));
++        String longEmail = "e".repeat(60) + "@" + "d".repeat(50) + ".com";
++        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
++                CommandTemplate.fromRegistrationPrompt("Use /register <password> <password> <email> <email> <email>",
++                        java.util.Set.of("register")).render(true, "a".repeat(100).toCharArray(), longEmail, "Alex"));
++    }
+ }
+diff -ruN new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CredentialPasswordTest.java patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CredentialPasswordTest.java
+--- new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CredentialPasswordTest.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/session/CredentialPasswordTest.java	2026-10-29 04:02:31.829233368 +0000
+@@ -7,11 +7,27 @@
+ 
+ final class CredentialPasswordTest {
+     @Test
+-    void acceptsOnlyPrintableNonSpaceAscii() {
++    void refusesEmptyWhitespaceAndControlCharacters() {
+         assertFalse(CredentialPassword.isValid(new char[0]));
+         assertFalse(CredentialPassword.isValid("has space".toCharArray()));
+         assertFalse(CredentialPassword.isValid("has\ttab".toCharArray()));
+         assertFalse(CredentialPassword.isValid("has\nlinebreak".toCharArray()));
++        assertFalse(CredentialPassword.isValid("non\u00a0breaking".toCharArray()));
++        assertFalse(CredentialPassword.isValid("section\u00a7sign".toCharArray()));
++    }
++
++    @Test
++    void acceptsVisibleCharactersFromAnyLanguage() {
+         assertTrue(CredentialPassword.isValid("nospaces123".toCharArray()));
++        assertTrue(CredentialPassword.isValid("p\u00e4ssw\u00f6rd".toCharArray()));
++        assertTrue(CredentialPassword.isValid("\u5bc6\u7801-123".toCharArray()));
++    }
++
++    @Test
++    void masterPasswordsFollowTheSameCharacterRulesWithALongerLimit() {
++        assertTrue(CredentialPassword.isValidMaster("correct-horse-battery-staple".toCharArray()));
++        assertFalse(CredentialPassword.isValidMaster("correct horse".toCharArray()));
++        assertTrue(CredentialPassword.isValidMaster("a".repeat(200).toCharArray()));
++        assertFalse(CredentialPassword.isValid("a".repeat(200).toCharArray()));
+     }
+ }
+diff -ruN new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/validation/InputRulesTest.java patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/validation/InputRulesTest.java
+--- new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/validation/InputRulesTest.java	1970-01-01 00:00:00.000000000 +0000
++++ patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/validation/InputRulesTest.java	2026-10-29 04:02:31.813807612 +0000
+@@ -0,0 +1,94 @@
++package io.github.silkypanda.blockvault.core.validation;
++
++import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++import org.junit.jupiter.api.Test;
++
++final class InputRulesTest {
++    @Test
++    void passwordsAcceptLettersOfAnyLanguageDigitsPunctuationAndSymbols() {
++        for (String ok : new String[] {"hunter2", "P@ss-w0rd!", "p\u00e4ssword", "\u043f\u0430\u0440\u043e\u043b\u044c1",
++                "\u5bc6\u7801123", "caf\u00e9_\u2603", "a\"b'c\\d/e", "e\u0301\u0301x"}) {
++            assertTrue(InputRules.isPassword(ok.toCharArray()), ok);
++            assertTrue(InputRules.isMasterPassword(ok.toCharArray()), ok);
++        }
++    }
++
++    @Test
++    void passwordsRefuseWhitespaceOfEveryKind() {
++        for (String bad : new String[] {"a b", "a\tb", "a\nb", "a\rb", "a\u00a0b", "a\u2003b", "a\u3000b",
++                "a\u2028b", "a\u2029b", " ", "ab "}) {
++            assertFalse(InputRules.isPassword(bad.toCharArray()), bad);
++            assertFalse(InputRules.isMasterPassword(bad.toCharArray()), bad);
++        }
++    }
++
++    @Test
++    void passwordsRefuseCharactersMinecraftOrAServerWouldMangle() {
++        for (String bad : new String[] {"a\u00a7b", "a\u0000b", "a\u007fb", "a\u001bb", "a\u200bb", "a\u200eb",
++                "a\ufeffb", "a\u3164b", "a\u2800b", "a\ue000b", "a\ud800b", "\udc00a", "a\u0378b"}) {
++            assertFalse(InputRules.isPassword(bad.toCharArray()), "U+" + Integer.toHexString(bad.codePointAt(1)));
++        }
++    }
++
++    @Test
++    void passwordLengthLimitsDifferForServerAndMaster() {
++        assertTrue(InputRules.isPassword("a".repeat(100).toCharArray()));
++        assertFalse(InputRules.isPassword("a".repeat(101).toCharArray()));
++        assertTrue(InputRules.isMasterPassword("a".repeat(256).toCharArray()));
++        assertFalse(InputRules.isMasterPassword("a".repeat(257).toCharArray()));
++        assertFalse(InputRules.isPassword(new char[0]));
++        assertFalse(InputRules.isPassword(null));
++    }
++
++    @Test
++    void charactersAreCountedAsCodePoints() {
++        assertTrue(InputRules.characterCount("\ud83d\ude00\ud83d\ude00".toCharArray()) == 2);
++        assertTrue(InputRules.isPasswordText("\ud83d\ude00"));
++    }
++
++    @Test
++    void passwordArgumentsMustAlsoFitTheLengthLimit() {
++        assertTrue(InputRules.isPasswordArgument("p\u00e4ss"));
++        assertFalse(InputRules.isPasswordArgument("a".repeat(101)));
++        assertFalse(InputRules.isPasswordArgument(""));
++    }
++
++    @Test
++    void textAllowsOrdinarySpacesButNoControlOrInvisibleCharacters() {
++        assertTrue(InputRules.isText("C:\\Users\\Jos\u00e9\\My Folder"));
++        assertTrue(InputRules.isText("play.example.com"));
++        assertFalse(InputRules.isText("a\tb"));
++        assertFalse(InputRules.isText("a\u00a0b"));
++        assertFalse(InputRules.isText("a\u200bb"));
++        assertFalse(InputRules.isText("a\u00a7b"));
++    }
++
++    @Test
++    void hostTextAllowsInternationalNamesButNoSpacesOrSymbols() {
++        assertTrue(InputRules.isHostText("b\u00fccher.de:25565"));
++        assertTrue(InputRules.isHostText("[::1]:25565"));
++        assertFalse(InputRules.isHostText("play example.com"));
++        assertFalse(InputRules.isHostText("play/example.com"));
++        assertFalse(InputRules.isHostText("play@example.com"));
++    }
++
++    @Test
++    void usernamesStayLettersDigitsAndUnderscores() {
++        assertTrue(InputRules.isUsernameText("Steve_1"));
++        assertFalse(InputRules.isUsernameText("Ste ve"));
++        assertFalse(InputRules.isUsernameText("St\u00e9ve"));
++    }
++
++    @Test
++    void emailsMayUseInternationalLettersButNoSpacesOrQuotedForms() {
++        assertTrue(InputRules.isEmail("steve@example.com"));
++        assertTrue(InputRules.isEmail("st.eve+mc@sub.example.org"));
++        assertTrue(InputRules.isEmail("j\u00fcrgen@b\u00fccher.de"));
++        assertFalse(InputRules.isEmail("steve @example.com"));
++        assertFalse(InputRules.isEmail("\"steve\"@example.com"));
++        assertFalse(InputRules.isEmail("steve@example"));
++        assertFalse(InputRules.isEmail("steve@exa\u00a7mple.com"));
++    }
++}
+diff -ruN new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/vault/VaultStoreTest.java patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/vault/VaultStoreTest.java
+--- new/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/vault/VaultStoreTest.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/core/src/test/java/io/github/silkypanda/blockvault/core/vault/VaultStoreTest.java	2026-10-29 04:02:47.558132104 +0000
+@@ -382,4 +382,25 @@
+         second.unlock("secondpassword".toCharArray());
+         assertEquals(0, second.vault().servers().size());
+     }
++
++    @Test
++    void masterPasswordsMayUseLettersOfAnyLanguageAndSurviveUnicodeNormalization() throws Exception {
++        VaultStore store = VaultStore.open(directory);
++        store.create("p\u00e4ssw\u00f6rd-\u5bc6\u7801".toCharArray());
++        store.lock();
++        // The same text typed with decomposed accents must unlock the same vault.
++        VaultStore reopened = VaultStore.open(directory);
++        reopened.unlock("pa\u0308ssw\u00f6rd-\u5bc6\u7801".toCharArray());
++        reopened.lock();
++    }
++
++    @Test
++    void masterPasswordsStillRefuseSpacesControlCharactersAndTooFewCharacters() throws Exception {
++        VaultStore store = VaultStore.open(directory);
++        assertThrows(IllegalArgumentException.class, () -> store.create("has a space".toCharArray()));
++        assertThrows(IllegalArgumentException.class, () -> store.create("tab\tchar-123".toCharArray()));
++        assertThrows(IllegalArgumentException.class, () -> store.create("short".toCharArray()));
++        // Eight characters is enough even when some are outside the Basic Multilingual Plane.
++        store.create("\ud83d\ude00\ud83d\ude01\ud83d\ude02\ud83d\ude03\ud83d\ude04\ud83d\ude05\ud83d\ude06\ud83d\ude07".toCharArray());
++    }
+ }
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/AsciiInputFilter.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/AsciiInputFilter.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/AsciiInputFilter.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/AsciiInputFilter.java	1970-01-01 00:00:00.000000000 +0000
+@@ -1,34 +0,0 @@
+-package io.github.silkypanda.blockvault;
+-
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+-import java.util.function.Consumer;
+-import java.util.function.Predicate;
+-import net.minecraft.client.gui.components.EditBox;
+-
+-/** Applies core ASCII allowlists to the EditBox API available in this Minecraft version. */
+-final class AsciiInputFilter {
+-    private AsciiInputFilter() { }
+-
+-    static void bind(EditBox box, Predicate<String> allowed, Consumer<String> responder) {
+-        box.setResponder(value -> {
+-            StringBuilder filtered = new StringBuilder(value.length());
+-            for (int i = 0; i < value.length(); i++) {
+-                String character = value.substring(i, i + 1);
+-                if (allowed.test(character)) filtered.append(character);
+-            }
+-            String accepted = filtered.toString();
+-            if (!accepted.equals(value)) {
+-                box.setValue(accepted);
+-            } else if (responder != null) {
+-                responder.accept(value);
+-            }
+-        });
+-        String value = box.getValue();
+-        StringBuilder filtered = new StringBuilder(value.length());
+-        for (int i = 0; i < value.length(); i++) {
+-            String character = value.substring(i, i + 1);
+-            if (allowed.test(character)) filtered.append(character);
+-        }
+-        if (!filtered.toString().equals(value)) box.setValue(filtered.toString());
+-    }
+-}
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/CredentialConfirmScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/CredentialConfirmScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/CredentialConfirmScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/CredentialConfirmScreen.java	2026-10-29 04:01:39.432111191 +0000
+@@ -2,7 +2,7 @@
+ 
+ import io.github.silkypanda.blockvault.core.session.CardVariant;
+ import io.github.silkypanda.blockvault.core.session.CredentialPassword;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import io.github.silkypanda.blockvault.core.session.LoginSession;
+ import io.github.silkypanda.blockvault.core.session.PromptModel;
+ import io.github.silkypanda.blockvault.core.session.Scheduler;
+@@ -107,8 +107,8 @@
+         int fieldY = cardY + scaled(52);
+         passwordBox = new EditBox(font, cardX + pad, fieldY, cardWidth - pad * 2, scaled(20),
+                 Component.translatable("blockvault.card.password"));
+-        passwordBox.setMaxLength(256);
+-        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, null);
++        passwordBox.setMaxLength(InputRules.SERVER_PASSWORD_MAX);
++        InputFilter.bind(passwordBox, InputRules::isPasswordText, null);
+         passwordBox.setHint(Component.translatable("blockvault.card.password"));
+         passwordBox.setValue(resizedPassword != null ? resizedPassword
+                 : model.variant() == CardVariant.REJECTED ? "" : new String(password));
+@@ -122,7 +122,7 @@
+                     Component.translatable("blockvault.card.email"));
+             emailBox.setHint(Component.translatable("blockvault.card.email"));
+             emailBox.setMaxLength(254);
+-            AsciiInputFilter.bind(emailBox, AsciiInput::isEmailText, null);
++            InputFilter.bind(emailBox, InputRules::isEmailText, null);
+             if (resizedEmail != null) emailBox.setValue(resizedEmail);
+             resizedEmail = null;
+             addRenderableWidget(emailBox);
+@@ -213,7 +213,7 @@
+             return;
+         }
+         if (registration && emailBox != null
+-                && !AsciiInput.isEmail(emailBox.getValue())) {
++                && !InputRules.isEmail(emailBox.getValue())) {
+             VaultRuntime.showToast("blockvault.toast.email_invalid");
+             return;
+         }
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/InputFilter.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/InputFilter.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/InputFilter.java	1970-01-01 00:00:00.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/InputFilter.java	2026-10-29 04:01:55.422042872 +0000
+@@ -0,0 +1,48 @@
++package io.github.silkypanda.blockvault;
++
++import java.util.function.Consumer;
++import java.util.function.Predicate;
++import net.minecraft.client.gui.components.EditBox;
++
++/**
++ * Keeps a text field to the characters BlockVault accepts, using the rules in {@code InputRules}.
++ *
++ * <p>Typing one disallowed character simply does nothing. A paste that contains a disallowed character is
++ * rejected as a whole, so a password is never silently changed into a different one.
++ */
++final class InputFilter {
++    private InputFilter() { }
++
++    static void bind(EditBox box, Predicate<String> allowed, Consumer<String> responder) {
++        String[] accepted = { strip(box.getValue(), allowed) };
++        boolean[] adjusting = { false };
++        if (!accepted[0].equals(box.getValue())) {
++            adjusting[0] = true;
++            try { box.setValue(accepted[0]); }
++            finally { adjusting[0] = false; }
++        }
++        box.setResponder(value -> {
++            if (adjusting[0]) return;
++            String next = value;
++            if (!allowed.test(value)) {
++                next = value.length() <= accepted[0].length() + 1 ? strip(value, allowed) : accepted[0];
++                adjusting[0] = true;
++                try { box.setValue(next); }
++                finally { adjusting[0] = false; }
++            }
++            accepted[0] = next;
++            if (responder != null) responder.accept(next);
++        });
++    }
++
++    private static String strip(String value, Predicate<String> allowed) {
++        StringBuilder kept = new StringBuilder(value.length());
++        for (int i = 0; i < value.length(); ) {
++            int codePoint = value.codePointAt(i);
++            String character = new String(Character.toChars(codePoint));
++            if (allowed.test(character)) kept.append(character);
++            i += Character.charCount(codePoint);
++        }
++        return kept.toString();
++    }
++}
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAccessScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAccessScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAccessScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAccessScreen.java	2026-10-29 04:01:39.444683572 +0000
+@@ -9,7 +9,7 @@
+ import net.minecraft.util.FormattedCharSequence;
+ import io.github.silkypanda.blockvault.core.crypto.PasswordStrength;
+ import io.github.silkypanda.blockvault.core.session.CredentialPassword;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ 
+ /** Minimal masked screen for creating or unlocking the encrypted local vault. */
+ final class VaultAccessScreen extends Screen {
+@@ -35,7 +35,7 @@
+         password.setHint(Component.translatable("blockvault.vault.password"));
+         password.setMaxLength(256);
+         password.addFormatter(VaultAccessScreen::mask);
+-        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, capsLock::onValueChanged);
++        InputFilter.bind(password, InputRules::isPasswordText, capsLock::onValueChanged);
+         addRenderableWidget(password);
+         if (create) {
+             confirmation = new EditBox(font, center - 100, height / 2 - 20, 200, 20,
+@@ -43,7 +43,7 @@
+             confirmation.setHint(Component.translatable("blockvault.vault.confirm"));
+             confirmation.setMaxLength(256);
+             confirmation.addFormatter(VaultAccessScreen::mask);
+-            AsciiInputFilter.bind(confirmation, AsciiInput::isPasswordText, capsLock::onValueChanged);
++            InputFilter.bind(confirmation, InputRules::isPasswordText, capsLock::onValueChanged);
+             addRenderableWidget(confirmation);
+             trustThisDevice = BlockVaultConfig.current().trustDevice();
+             addRenderableWidget(Button.builder(trustMessage(), button -> {
+@@ -72,14 +72,14 @@
+             if (confirmation != null) confirmation.setValue("");
+             return;
+         }
+-        if (!CredentialPassword.isValid(entered.toCharArray())) {
++        if (!CredentialPassword.isValidMaster(entered.toCharArray())) {
+             failed = true;
+             failureKey = "blockvault.password.invalid";
+             password.setValue("");
+             if (confirmation != null) confirmation.setValue("");
+             return;
+         }
+-        if (create && entered.length() < 8) {
++        if (create && entered.codePointCount(0, entered.length()) < InputRules.MASTER_PASSWORD_MIN) {
+             failed = true;
+             failureKey = "blockvault.vault.password.too_short";
+             password.setValue("");
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAddScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAddScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAddScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultAddScreen.java	2026-10-29 04:01:39.429775815 +0000
+@@ -1,7 +1,7 @@
+ package io.github.silkypanda.blockvault;
+ 
+ import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import java.util.Arrays;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.gui.GuiGraphicsExtractor;
+@@ -35,10 +35,10 @@
+         int top = Math.max(40, height / 2 - 56);
+         hostBox = box(left, top, "blockvault.add.host", 255);
+         userBox = box(left, top + 26, "blockvault.add.username", 64);
+-        passwordBox = box(left, top + 52, "blockvault.add.password", 1024);
+-        AsciiInputFilter.bind(hostBox, AsciiInput::isPrintable, null);
+-        AsciiInputFilter.bind(userBox, AsciiInput::isUsernameText, null);
+-        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, capsLock::onValueChanged);
++        passwordBox = box(left, top + 52, "blockvault.add.password", InputRules.SERVER_PASSWORD_MAX);
++        InputFilter.bind(hostBox, InputRules::isHostText, null);
++        InputFilter.bind(userBox, InputRules::isUsernameText, null);
++        InputFilter.bind(passwordBox, InputRules::isPasswordText, capsLock::onValueChanged);
+         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
+                 showPassword ? value : "\u2022".repeat(value.length()), Style.EMPTY));
+         addRenderableWidget(hostBox);
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultBackupRecoveryScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultBackupRecoveryScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultBackupRecoveryScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultBackupRecoveryScreen.java	2026-10-29 04:01:17.015452743 +0000
+@@ -1,7 +1,7 @@
+ package io.github.silkypanda.blockvault;
+ 
+ import io.github.silkypanda.blockvault.core.vault.BackupSummary;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import java.time.Instant;
+ import java.time.ZoneId;
+ import java.time.format.DateTimeFormatter;
+@@ -37,7 +37,7 @@
+                 Component.translatable("blockvault.backup.recovery.password"));
+         password.setHint(Component.translatable("blockvault.backup.recovery.password"));
+         password.setMaxLength(256);
+-        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, null);
++        InputFilter.bind(password, InputRules::isPasswordText, null);
+         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
+         addRenderableWidget(password);
+         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.restore"), button -> restore())
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultCredentialScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultCredentialScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultCredentialScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultCredentialScreen.java	2026-10-29 04:01:39.432728159 +0000
+@@ -2,7 +2,7 @@
+ 
+ import java.util.Arrays;
+ import io.github.silkypanda.blockvault.core.session.CredentialPassword;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.gui.GuiGraphicsExtractor;
+ import net.minecraft.client.gui.components.Button;
+@@ -31,8 +31,8 @@
+         int top = Math.max(42, height / 2 - 54);
+         passwordBox = new EditBox(font, x, top, 300, 20,
+                 Component.translatable("blockvault.card.password"));
+-        passwordBox.setMaxLength(256);
+-        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, null);
++        passwordBox.setMaxLength(InputRules.SERVER_PASSWORD_MAX);
++        InputFilter.bind(passwordBox, InputRules::isPasswordText, null);
+         passwordBox.addFormatter((value, cursor) -> showPassword
+                 ? FormattedCharSequence.forward(value, Style.EMPTY)
+                 : FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultEraseScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultEraseScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultEraseScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultEraseScreen.java	2026-10-29 04:01:17.013166268 +0000
+@@ -1,6 +1,6 @@
+ package io.github.silkypanda.blockvault;
+ 
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ 
+ import java.util.Arrays;
+ import net.minecraft.client.Minecraft;
+@@ -35,7 +35,7 @@
+                 Component.translatable("blockvault.vault.password"));
+         password.setHint(Component.translatable("blockvault.vault.password"));
+         password.setMaxLength(256);
+-        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, null);
++        InputFilter.bind(password, InputRules::isPasswordText, null);
+         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
+         addRenderableWidget(password);
+         eraseButton = Button.builder(Component.translatable(confirmUnverifiedErase
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultListScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultListScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultListScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultListScreen.java	2026-10-29 04:01:26.226050261 +0000
+@@ -1,6 +1,6 @@
+ package io.github.silkypanda.blockvault;
+ 
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ 
+ import java.util.ArrayList;
+ import java.util.List;
+@@ -52,7 +52,7 @@
+         search.setValue(searchQuery);
+         search.setHint(Component.translatable("blockvault.vault.search"));
+         search.setMaxLength(128);
+-        AsciiInputFilter.bind(search, AsciiInput::isPrintable,
++        InputFilter.bind(search, InputRules::isText,
+                 value -> { searchQuery = value; page = 0; updateVisibleRows(); });
+         addRenderableWidget(search);
+ 
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultMasterPasswordScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultMasterPasswordScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultMasterPasswordScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultMasterPasswordScreen.java	2026-10-29 04:01:39.447452474 +0000
+@@ -1,7 +1,7 @@
+ package io.github.silkypanda.blockvault;
+ 
+ import io.github.silkypanda.blockvault.core.session.CredentialPassword;
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import java.util.Arrays;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.gui.GuiGraphicsExtractor;
+@@ -45,7 +45,7 @@
+         box.setMaxLength(256);
+         CapsLockHint hint = new CapsLockHint();
+         capsHints.add(hint);
+-        AsciiInputFilter.bind(box, AsciiInput::isPasswordText, hint::onValueChanged);
++        InputFilter.bind(box, InputRules::isPasswordText, hint::onValueChanged);
+         box.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
+         return box;
+     }
+@@ -53,10 +53,10 @@
+     private void submit() {
+         if (busy) return;
+         mismatch = next.getValue().isEmpty() || !next.getValue().equals(confirm.getValue());
+-        tooShort = next.getValue().length() < 8;
++        tooShort = next.getValue().codePointCount(0, next.getValue().length()) < InputRules.MASTER_PASSWORD_MIN;
+         samePassword = current.getValue().equals(next.getValue());
+-        invalidCharacters = !CredentialPassword.isValid(current.getValue().toCharArray())
+-                || !CredentialPassword.isValid(next.getValue().toCharArray());
++        invalidCharacters = !CredentialPassword.isValidMaster(current.getValue().toCharArray())
++                || !CredentialPassword.isValidMaster(next.getValue().toCharArray());
+         if (mismatch || tooShort || samePassword || current.getValue().isEmpty() || invalidCharacters) {
+             statusKey = null;
+             failed = true;
+diff -ruN new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultTransferScreen.java patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultTransferScreen.java
+--- new/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultTransferScreen.java	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/java/io/github/silkypanda/blockvault/VaultTransferScreen.java	2026-10-29 04:01:39.435019221 +0000
+@@ -1,6 +1,6 @@
+ package io.github.silkypanda.blockvault;
+ 
+-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
++import io.github.silkypanda.blockvault.core.validation.InputRules;
+ import java.nio.file.Path;
+ import java.util.Arrays;
+ import net.minecraft.client.gui.GuiGraphicsExtractor;
+@@ -35,14 +35,14 @@
+         pathBox.setHint(Component.translatable(importing
+                 ? "blockvault.transfer.import.path" : "blockvault.transfer.export.folder"));
+         pathBox.setMaxLength(1024);
+-        AsciiInputFilter.bind(pathBox, AsciiInput::isPrintable, null);
++        InputFilter.bind(pathBox, InputRules::isText, null);
+         addRenderableWidget(pathBox);
+         if (importing) {
+             passwordBox = new EditBox(font, left, height / 2 + 4, 300, 20,
+                     Component.translatable("blockvault.vault.password"));
+             passwordBox.setHint(Component.translatable("blockvault.vault.password"));
+-            passwordBox.setMaxLength(1024);
+-            AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, null);
++            passwordBox.setMaxLength(InputRules.MASTER_PASSWORD_MAX);
++            InputFilter.bind(passwordBox, InputRules::isPasswordText, null);
+             passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
+             addRenderableWidget(passwordBox);
+         }
+@@ -56,7 +56,7 @@
+ 
+     private void transfer() {
+         if (busy || (importing && pathBox.getValue().isBlank())) return;
+-        if (!AsciiInput.isPrintable(pathBox.getValue())) { failed = true; return; }
++        if (!InputRules.isText(pathBox.getValue())) { failed = true; return; }
+         busy = true;
+         failed = false;
+         failureKey = null;
+diff -ruN new/BlockVault-main/shared-client/src/main/resources/assets/blockvault/lang/en_us.json patched/BlockVault-main/shared-client/src/main/resources/assets/blockvault/lang/en_us.json
+--- new/BlockVault-main/shared-client/src/main/resources/assets/blockvault/lang/en_us.json	2026-10-28 18:27:47.000000000 +0000
++++ patched/BlockVault-main/shared-client/src/main/resources/assets/blockvault/lang/en_us.json	2026-10-29 04:01:55.447541662 +0000
+@@ -20,7 +20,7 @@
+   "blockvault.vault.password.mismatch": "Passwords do not match",
+   "blockvault.vault.unlock.failed": "Could not unlock vault",
+   "blockvault.vault.error": "Could not access the encrypted vault",
+-  "blockvault.password.invalid": "Use printable ASCII characters without spaces.",
++  "blockvault.password.invalid": "No spaces, control characters or § in passwords.",
+   "blockvault.toast.title": "BlockVault",
+   "blockvault.toast.unlocked": "Vault unlocked",
+   "blockvault.toast.locked": "Vault locked",

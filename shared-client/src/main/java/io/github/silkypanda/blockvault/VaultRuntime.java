@@ -43,6 +43,7 @@ public final class VaultRuntime implements VaultAccess {
     private static volatile boolean openVaultAfterAccess;
     private static volatile boolean trustedUnlockAttempted;
     private static volatile boolean pendingTrustNotice;
+    private static volatile boolean vaultUnreadable;
 
     /** Returns the shared vault facade. */
     public static VaultRuntime access() { return Holder.INSTANCE; }
@@ -60,7 +61,8 @@ public final class VaultRuntime implements VaultAccess {
             Vault vault = store.vault();
             ServerEntry server = findServer(vault, host);
             Account account = server == null ? null : server.accounts().stream()
-                    .filter(value -> Usernames.same(value.username(), username)).findFirst().orElse(null);
+                    .filter(value -> value.isValidForUse() && Usernames.same(value.username(), username))
+                    .findFirst().orElse(null);
             Account callbackAccount = account == null ? null : copyAccount(account);
             // "auto" means "detect from the server's prompt"; any other stored id is an explicit owner choice.
             boolean templateExplicit = server != null && !"auto".equals(server.templateId());
@@ -140,6 +142,7 @@ public final class VaultRuntime implements VaultAccess {
                 if (create) store.create(password);
                 else {
                     store.unlock(password);
+                    vaultUnreadable = false;
                 }
                 trustedUnlockAttempted = true;
                 boolean[] trustReady = {false};
@@ -172,6 +175,8 @@ public final class VaultRuntime implements VaultAccess {
                     });
                 });
             } catch (Exception failure) {
+                vaultUnreadable = !create && (failure instanceof VaultCorruptException
+                        || failure instanceof UnsupportedVaultVersionException);
                 String key = failure instanceof WrongMasterPasswordException ? "blockvault.vault.unlock.wrong_password"
                         : failure instanceof UnsupportedVaultVersionException ? "blockvault.vault.unlock.unsupported"
                         : failure instanceof VaultCorruptException || failure instanceof IllegalArgumentException
@@ -414,12 +419,17 @@ public final class VaultRuntime implements VaultAccess {
         BackgroundExecutor.submit(() -> {
             String failureKey = null;
             try {
-                if (store != null) {
-                    store.lock();
-                    store = null;
+                java.nio.file.Path directory = DataDirs.resolve();
+                if (!(passwordlessEraseAllowed(directory) || vaultUnreadable)) {
+                    failureKey = "blockvault.data.erase.password_required";
+                } else {
+                    if (store != null) {
+                        store.lock();
+                        store = null;
+                    }
+                    DataDirs.delete(directory);
+                    trustedUnlockAttempted = false;
                 }
-                DataDirs.delete(DataDirs.resolve());
-                trustedUnlockAttempted = false;
             } catch (Exception failure) {
                 failureKey = "blockvault.data.erase.failed";
                 LOGGER.warn("BlockVault data erasure failed ({})", failure.getClass().getSimpleName());
@@ -434,6 +444,23 @@ public final class VaultRuntime implements VaultAccess {
             });
             return null;
         });
+    }
+
+    static void checkPasswordlessEraseAllowed(Consumer<Boolean> result) {
+        BackgroundExecutor.submit(() -> {
+            boolean allowed;
+            try { allowed = passwordlessEraseAllowed(DataDirs.resolve()) || vaultUnreadable; }
+            catch (RuntimeException unreadablePath) { allowed = true; }
+            boolean completed = allowed;
+            BackgroundExecutor.onGameThread(() -> result.accept(completed));
+            return null;
+        });
+    }
+
+    private static boolean passwordlessEraseAllowed(java.nio.file.Path directory) {
+        try { return !VaultStore.open(directory).exists(); }
+        catch (UnsupportedVaultVersionException | VaultCorruptException unreadableVault) { return true; }
+        catch (IOException unreadableVault) { return true; }
     }
 
     static void listBackups(Consumer<List<BackupSummary>> result) {
@@ -897,10 +924,10 @@ public final class VaultRuntime implements VaultAccess {
             String host = server.hosts().stream().findFirst().orElse(server.name());
             List<Account> active = server.accounts();
             if (active.isEmpty()) {
-                result.add(new VaultRow(server.name(), host, "", null, server.autofill(), server.templateId(), true));
+                result.add(new VaultRow(server.name(), host, "", null, server.autofill(), server.templateId(), true, false));
             } else {
                 for (Account account : active) result.add(new VaultRow(server.name(), host, account.username(),
-                        account.status(), server.autofill(), server.templateId(), false));
+                        account.status(), server.autofill(), server.templateId(), false, !account.isValidForUse()));
             }
         }
         return List.copyOf(result);

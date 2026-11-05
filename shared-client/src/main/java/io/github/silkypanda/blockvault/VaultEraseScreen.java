@@ -1,6 +1,6 @@
 package io.github.silkypanda.blockvault;
 
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
@@ -8,6 +8,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
@@ -20,6 +21,8 @@ final class VaultEraseScreen extends Screen {
     private Button cancelButton;
     private boolean busy;
     private boolean confirmUnverifiedErase;
+    private boolean eraseEligibilityChecked;
+    private boolean passwordlessEraseAllowed;
     private String failureKey;
 
     VaultEraseScreen(Screen parent) {
@@ -34,8 +37,8 @@ final class VaultEraseScreen extends Screen {
         password = new EditBox(font, center - 120, top + 82, 240, 20,
                 Component.translatable("blockvault.vault.password"));
         password.setHint(Component.translatable("blockvault.vault.password"));
-        password.setMaxLength(256);
-        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, null);
+        password.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
+        InputFilter.bind(password, InputRules::isMasterPasswordInput, null);
         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(password);
         eraseButton = Button.builder(Component.translatable(confirmUnverifiedErase
@@ -51,18 +54,28 @@ final class VaultEraseScreen extends Screen {
                         button -> Minecraft.getInstance().setScreenAndShow(parent))
                 .bounds(center + 28, top + 112, 92, 20).build();
         addRenderableWidget(cancelButton);
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.data.erase.without_password"), button -> {
-                    if (!busy) {
-                        confirmUnverifiedErase = true;
-                        failureKey = "blockvault.data.erase.without_password.warning";
-                        rebuildWidgets();
-                    }
-                }).bounds(center - 120, top + 138, 240, 20).build());
+        if (passwordlessEraseAllowed) {
+            addRenderableWidget(Button.builder(Component.translatable("blockvault.data.erase.without_password"), button -> {
+                        if (!busy) {
+                            confirmUnverifiedErase = true;
+                            failureKey = "blockvault.data.erase.without_password.warning";
+                            rebuildWidgets();
+                        }
+                    }).bounds(center - 120, top + 138, 240, 20).build());
+        }
         setInitialFocus(password);
+        if (!eraseEligibilityChecked) {
+            VaultRuntime.checkPasswordlessEraseAllowed(allowed -> {
+                if (Minecraft.getInstance().gui.screen() != this) return;
+                eraseEligibilityChecked = true;
+                passwordlessEraseAllowed = allowed;
+                if (allowed) rebuildWidgets();
+            });
+        }
     }
 
     private void eraseWithoutPassword() {
-        if (busy || !confirmUnverifiedErase) return;
+        if (busy || !confirmUnverifiedErase || !passwordlessEraseAllowed) return;
         busy = true;
         eraseButton.active = false;
         cancelButton.active = false;
@@ -104,17 +117,34 @@ final class VaultEraseScreen extends Screen {
         });
     }
 
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+            if (confirmUnverifiedErase) eraseWithoutPassword(); else erase();
+            return true;
+        }
+        return super.keyPressed(event);
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         int center = width / 2;
         int top = Math.max(24, height / 2 - 92);
         graphics.centeredText(font, title, center, top, 0xffff7777);
-        graphics.centeredText(font, Component.translatable("blockvault.data.erase.warning1"), center, top + 24, 0xffffffff);
-        graphics.centeredText(font, Component.translatable("blockvault.data.erase.warning2"), center, top + 40, 0xffffffff);
-        graphics.centeredText(font, Component.translatable("blockvault.data.erase.warning3"), center, top + 56, 0xffffcc66);
-        if (confirmUnverifiedErase) graphics.centeredText(font,
-                Component.translatable("blockvault.data.erase.without_password.warning"), center, top + 70, 0xffff7777);
+        int warningY = top + 24;
+        warningY = ScreenText.drawCenteredWrapped(graphics, font,
+                Component.translatable("blockvault.data.erase.warning1"), center, warningY,
+                width - 32, 0xffffffff, 10);
+        warningY = ScreenText.drawCenteredWrapped(graphics, font,
+                Component.translatable("blockvault.data.erase.warning2"), center, warningY,
+                width - 32, 0xffffffff, 10);
+        warningY = ScreenText.drawCenteredWrapped(graphics, font,
+                Component.translatable("blockvault.data.erase.warning3"), center, warningY,
+                width - 32, 0xffffcc66, 10);
+        if (confirmUnverifiedErase) ScreenText.drawCenteredWrapped(graphics, font,
+                Component.translatable("blockvault.data.erase.without_password.warning"), center, warningY,
+                width - 32, 0xffff7777, 10);
         if (busy || failureKey != null) graphics.centeredText(font,
                 Component.translatable(busy ? "blockvault.data.erase.working" : failureKey), center, top + 166,
                 busy ? 0xffcccccc : 0xffff7777);

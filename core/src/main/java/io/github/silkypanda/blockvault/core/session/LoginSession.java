@@ -7,7 +7,7 @@ import io.github.silkypanda.blockvault.core.detect.ResultKind;
 import io.github.silkypanda.blockvault.core.detect.ResultMatcher;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.vault.Account;
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Locale;
@@ -46,6 +46,9 @@ public final class LoginSession {
     private long lastPromptAt = Long.MIN_VALUE;
     private PromptKind lastPromptKind;
     private final EnumSet<PromptKind> dismissedPromptKinds = EnumSet.noneOf(PromptKind.class);
+    private final java.util.Set<String> promptedShortAliases = new java.util.HashSet<>();
+    private final java.util.Set<String> consumedShortAliases = new java.util.HashSet<>();
+    private long shortAliasPromptAt = Long.MIN_VALUE;
     private boolean attempted;
     private boolean registerRetry;
     private int generation;
@@ -73,6 +76,12 @@ public final class LoginSession {
     public void onSystemMessage(String message) {
         if (host == null || state == SessionState.CONFIRMED || message == null) return;
         String plain = message.length() > MAX_MESSAGE_CHARS ? message.substring(0, MAX_MESSAGE_CHARS) : message;
+        java.util.Set<String> explicitShortAliases = prompts.promptedShortCommands(plain);
+        if (!explicitShortAliases.isEmpty()) {
+            promptedShortAliases.clear();
+            promptedShortAliases.addAll(explicitShortAliases);
+            shortAliasPromptAt = scheduler.nowMillis();
+        }
         java.util.Set<PromptKind> matches = prompts.matchingPrompts(plain);
         if (matches.size() == 1) handlePrompt(matches.iterator().next(), plain);
         else if (matches.contains(PromptKind.LOGIN) && matches.contains(PromptKind.REGISTER)) {
@@ -93,13 +102,19 @@ public final class LoginSession {
             env.vault().find(expectedHost, expectedUsername, saved -> safely(() -> {
                 if (token != generation || host == null || !host.equals(expectedHost) || !username.equals(expectedUsername)) return;
                 Account existing = saved == null ? null : saved.account();
-                PromptKind selected = existing != null && existing.status() == Account.Status.VERIFIED
+                PromptKind selected = existing != null && existing.isValidForUse()
+                        && existing.status() == Account.Status.VERIFIED
                         ? PromptKind.LOGIN : PromptKind.REGISTER;
                 handlePrompt(selected, plain);
             }), () -> safely(() -> abandonPrompt(token)));
         }
         ResultKind result = results.classify(plain);
-        if (result != ResultKind.NONE) onResult(result, plain);
+        if (result != ResultKind.NONE) {
+            promptedShortAliases.clear();
+            consumedShortAliases.clear();
+            shortAliasPromptAt = Long.MIN_VALUE;
+            onResult(result, plain);
+        }
     }
 
     private void handlePrompt(PromptKind kind, String plain) {
@@ -115,6 +130,7 @@ public final class LoginSession {
         String command = matcher.group(1).toLowerCase(Locale.ROOT);
         int namespace = command.lastIndexOf(':');
         if (namespace >= 0) command = command.substring(namespace + 1);
+        if (isShortAuthenticationAlias(command) && !consumePromptedShortAlias(command)) return;
         String[] words = matcher.group(2) == null ? new String[0] : matcher.group(2).trim().split("\\s+");
         if (words.length == 0 || words[0].isEmpty()) {
             if (!contains("login", command)) return;
@@ -133,7 +149,7 @@ public final class LoginSession {
                 if (token != generation || revision != promptRevision || state != SessionState.PROMPTED
                         || action != Action.PASSWORDLESS) return;
                 Account account = saved == null ? null : saved.account();
-                if (account == null || account.status() != Account.Status.VERIFIED) {
+                if (account == null || !account.isValidForUse() || account.status() != Account.Status.VERIFIED) {
                     action = Action.NONE;
                     state = SessionState.UNKNOWN;
                     env.toast("blockvault.toast.no_saved_login");
@@ -153,20 +169,20 @@ public final class LoginSession {
             return;
         }
         if (contains("login", command)) {
-            if (!AsciiInput.isPasswordText(words[0])) return;
+            if (!InputRules.isPasswordArgument(words[0])) return;
             replacePending(words[0]);
             action = Action.MANUAL;
         } else if (contains("register", command)) {
-            if (!AsciiInput.isPasswordText(words[0])) return;
+            if (!InputRules.isPasswordArgument(words[0])) return;
             replacePending(words[0]);
             action = Action.MANUAL;
         } else if (contains("changepassword", command)) {
             if (words.length < 2) return;
-            if (!AsciiInput.isPasswordText(words[1])) return;
+            if (!InputRules.isPasswordArgument(words[1])) return;
             replacePending(words[1]);
             action = Action.MANUAL;
         } else if (contains("unregister", command)) {
-            if (!AsciiInput.isPasswordText(words[0])) return;
+            if (!InputRules.isPasswordArgument(words[0])) return;
             replacePending(words[0]);
             action = Action.UNREGISTER;
         } else return;
@@ -189,7 +205,7 @@ public final class LoginSession {
     public void confirmRegistration(char[] password, String email) {
         if (host == null || state != SessionState.PROMPTED || lastPromptKind != PromptKind.REGISTER || action == Action.REGISTER) return;
         if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
-        if (email != null && !email.isEmpty() && !AsciiInput.isEmail(email)) {
+        if (email != null && !email.isEmpty() && !InputRules.isEmail(email)) {
             env.toast("blockvault.toast.email_invalid");
             return;
         }
@@ -258,6 +274,8 @@ public final class LoginSession {
 
     /** Returns the current connection state. */
     public SessionState state() { return state; }
+    /** Whether a server message matches one of the loaded login or registration prompts. */
+    public boolean isPromptMessage(String message) { return !prompts.matchingPrompts(message).isEmpty(); }
     /** Returns whether an autofill or registration command has already been attempted. */
     public boolean attempted() { return attempted; }
 
@@ -285,11 +303,31 @@ public final class LoginSession {
         lastPromptAt = Long.MIN_VALUE;
         lastPromptKind = null;
         dismissedPromptKinds.clear();
+        promptedShortAliases.clear();
+        consumedShortAliases.clear();
+        shortAliasPromptAt = Long.MIN_VALUE;
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
     }
 
     private boolean contains(String group, String command) { return pack.commandNames(group).contains(command); }
+
+    private boolean isShortAuthenticationAlias(String command) {
+        if (command.length() > 3) return false;
+        return contains("login", command) || contains("register", command)
+                || contains("changepassword", command) || contains("unregister", command);
+    }
+
+    private boolean consumePromptedShortAlias(String command) {
+        return shortAliasPromptAt != Long.MIN_VALUE && scheduler.nowMillis() - shortAliasPromptAt <= 30_000
+                && promptedShortAliases.contains(command) && consumedShortAliases.add(command);
+    }
+
+    /** Used by command history so an unrelated short command is not suppressed. */
+    public boolean wasShortAliasPrompted(String command) {
+        return shortAliasPromptAt != Long.MIN_VALUE && scheduler.nowMillis() - shortAliasPromptAt <= 30_000
+                && promptedShortAliases.contains(command.toLowerCase(Locale.ROOT));
+    }
 
     private void safely(Runnable callback) {
         try { callback.run(); }
@@ -328,7 +366,7 @@ public final class LoginSession {
             }
             Account account = saved == null ? null : saved.account();
             if (kind == PromptKind.REGISTER) {
-                if (account != null && account.status() == Account.Status.PENDING) {
+                if (account != null && account.isValidForUse() && account.status() == Account.Status.PENDING) {
                     char[] oldPassword = account.password();
                     try { env.showSavePrompt(new PromptModel(CardVariant.UPDATE, host, username, oldPassword)); }
                     finally { Arrays.fill(oldPassword, '\0'); }
@@ -340,7 +378,8 @@ public final class LoginSession {
                 }
                 return;
             }
-            if (!globalAutofill || saved == null || account == null || account.status() != Account.Status.VERIFIED
+            if (!globalAutofill || saved == null || account == null || !account.isValidForUse()
+                    || account.status() != Account.Status.VERIFIED
                     || !saved.autofill()) return;
             char[] storedPassword = account.password();
             try { replacePending(storedPassword); }

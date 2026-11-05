@@ -2,6 +2,7 @@ package io.github.silkypanda.blockvault.core.vault;
 
 import io.github.silkypanda.blockvault.core.crypto.AesGcm;
 import io.github.silkypanda.blockvault.core.crypto.Kdf;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import io.github.silkypanda.blockvault.core.crypto.SecureBytes;
 import io.github.silkypanda.blockvault.core.crypto.VaultAuthException;
 import java.io.IOException;
@@ -72,7 +73,7 @@ public final class VaultStore {
     /** Creates and unlocks a new vault. Master-password work runs on the caller's background thread. */
     public void create(char[] masterPassword) throws IOException {
         if (exists()) throw new IllegalStateException("Vault already exists");
-        if (masterPassword == null || masterPassword.length < 8) {
+        if (masterPassword == null || InputRules.characterCount(masterPassword) < InputRules.MASTER_PASSWORD_MIN) {
             throw new IllegalArgumentException("Master password must contain at least 8 characters");
         }
         byte[] salt = SecureBytes.random(16);
@@ -578,7 +579,7 @@ public final class VaultStore {
      */
     public void changeMasterPassword(char[] oldPassword, char[] newPassword) throws Exception {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
-        if (newPassword == null || newPassword.length < 8) throw new IllegalArgumentException("Master password must contain at least 8 characters");
+        if (newPassword == null || InputRules.characterCount(newPassword) < InputRules.MASTER_PASSWORD_MIN) throw new IllegalArgumentException("Master password must contain at least 8 characters");
         if (oldPassword == null) throw new IllegalArgumentException("The current master password is required");
         if (java.util.Arrays.equals(oldPassword, newPassword)) {
             throw new IllegalArgumentException("New master password must differ from the current password");

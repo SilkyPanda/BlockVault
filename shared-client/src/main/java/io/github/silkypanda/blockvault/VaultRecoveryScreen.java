@@ -138,8 +138,9 @@ final class VaultRecoveryScreen extends Screen {
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, 14, 0xffffffff);
-        graphics.centeredText(font, Component.translatable(recoveryMode ? "blockvault.backup.recovery.help"
-                : "blockvault.backup.help"), width / 2, 34, 0xffc5c0cf);
+        ScreenText.drawCenteredWrapped(graphics, font, Component.translatable(recoveryMode
+                ? "blockvault.backup.recovery.help" : "blockvault.backup.help"), width / 2,
+                31, width - 24, 0xffc5c0cf, 10);
         graphics.centeredText(font, Component.translatable("blockvault.backup.page", Math.min(page + 1, totalPages()), totalPages()),
                 width / 2, Math.min(height - 56, firstRowY + pageSize * 25 + 27), 0xffaaaaaa);
         if (busy || statusKey != null) graphics.centeredText(font, Component.translatable(busy

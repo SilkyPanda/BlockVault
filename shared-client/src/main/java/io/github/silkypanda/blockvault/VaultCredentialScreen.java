@@ -2,12 +2,13 @@ package io.github.silkypanda.blockvault;
 
 import java.util.Arrays;
 import io.github.silkypanda.blockvault.core.session.CredentialPassword;
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
@@ -31,8 +32,8 @@ final class VaultCredentialScreen extends Screen {
         int top = Math.max(42, height / 2 - 54);
         passwordBox = new EditBox(font, x, top, 300, 20,
                 Component.translatable("blockvault.card.password"));
-        passwordBox.setMaxLength(256);
-        AsciiInputFilter.bind(passwordBox, AsciiInput::isPasswordText, null);
+        passwordBox.setMaxLength(InputRules.SERVER_PASSWORD_MAX * 2);
+        InputFilter.bind(passwordBox, InputRules::isServerPasswordInput, null);
         passwordBox.addFormatter((value, cursor) -> showPassword
                 ? FormattedCharSequence.forward(value, Style.EMPTY)
                 : FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
@@ -71,6 +72,12 @@ final class VaultCredentialScreen extends Screen {
         VaultRuntime.updatePassword(row, password);
         Arrays.fill(password, '\0');
         VaultRuntime.openVaultScreen();
+    }
+
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { save(); return true; }
+        return super.keyPressed(event);
     }
 
     @Override

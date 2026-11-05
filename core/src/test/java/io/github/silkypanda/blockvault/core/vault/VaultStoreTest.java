@@ -382,4 +382,25 @@ final class VaultStoreTest {
         second.unlock("secondpassword".toCharArray());
         assertEquals(0, second.vault().servers().size());
     }
+
+    @Test
+    void masterPasswordsMayUseLettersOfAnyLanguageAndSurviveUnicodeNormalization() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        store.create("p\u00e4ssw\u00f6rd-\u5bc6\u7801".toCharArray());
+        store.lock();
+        // The same text typed with decomposed accents must unlock the same vault.
+        VaultStore reopened = VaultStore.open(directory);
+        reopened.unlock("pa\u0308ssw\u00f6rd-\u5bc6\u7801".toCharArray());
+        reopened.lock();
+    }
+
+    @Test
+    void masterPasswordsStillRefuseSpacesControlCharactersAndTooFewCharacters() throws Exception {
+        VaultStore store = VaultStore.open(directory);
+        assertThrows(IllegalArgumentException.class, () -> store.create("has a space".toCharArray()));
+        assertThrows(IllegalArgumentException.class, () -> store.create("tab\tchar-123".toCharArray()));
+        assertThrows(IllegalArgumentException.class, () -> store.create("short".toCharArray()));
+        // Eight characters is enough even when some are outside the Basic Multilingual Plane.
+        store.create("\ud83d\ude00\ud83d\ude01\ud83d\ude02\ud83d\ude03\ud83d\ude04\ud83d\ude05\ud83d\ude06\ud83d\ude07".toCharArray());
+    }
 }

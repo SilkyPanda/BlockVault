@@ -1,6 +1,6 @@
 package io.github.silkypanda.blockvault;
 
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,7 +52,7 @@ final class VaultListScreen extends Screen {
         search.setValue(searchQuery);
         search.setHint(Component.translatable("blockvault.vault.search"));
         search.setMaxLength(128);
-        AsciiInputFilter.bind(search, AsciiInput::isPrintable,
+        InputFilter.bind(search, InputRules::isText,
                 value -> { searchQuery = value; page = 0; updateVisibleRows(); });
         addRenderableWidget(search);
 
@@ -72,7 +72,8 @@ final class VaultListScreen extends Screen {
                     "blockvault.vault.tooltip.trash", row ->
                     MinecraftHolder.open(new VaultDeleteScreen(row, this)));
         }
-        previousButton = Button.builder(Component.translatable("blockvault.vault.previous"), button -> {
+        previousButton = Button.builder(Component.translatable(footerButtonWidth < 50
+                ? "blockvault.vault.previous.short" : "blockvault.vault.previous"), button -> {
             page = Math.max(0, page - 1);
             updateVisibleRows();
         }).bounds(footerLeft, height - 34, footerButtonWidth, 20).build();
@@ -132,8 +133,10 @@ final class VaultListScreen extends Screen {
                 button.visible = hasRow;
                 button.active = hasRow && (!row.serverOnly() || column >= 2 && column <= 3);
                 if (hasRow && column == 2) {
-                    button.setMessage(Component.translatable(row.autofill()
-                            ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off"));
+                    String state = row.autofill() ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off";
+                    button.setMessage(Component.translatable(rowButtonWidth < 50
+                            ? (row.autofill() ? "blockvault.vault.autofill.enabled.short"
+                            : "blockvault.vault.autofill.disabled.short") : state));
                     button.setTooltip(Tooltip.create(Component.translatable(row.autofill()
                             ? "blockvault.vault.tooltip.autofill.on" : "blockvault.vault.tooltip.autofill.off")));
                 }
@@ -178,11 +181,14 @@ final class VaultListScreen extends Screen {
             int y = 72 + rowIndex * 34;
             String serverName = BlockVaultConfig.current().streamerMode()
                     ? Component.translatable("blockvault.settings.streamer.hidden").getString() : row.serverName();
-            graphics.text(font, Component.literal(clip(serverName, rowLabelWidth - ROW_TEXT_INSET)),
+            graphics.text(font, Component.literal(ScreenText.clip(font, serverName, rowLabelWidth - ROW_TEXT_INSET)),
                     contentLeft + ROW_TEXT_INSET, y, 0xffffffff);
             String accountLine;
             if (row.serverOnly()) {
                 accountLine = Component.translatable("blockvault.vault.server.settings").getString();
+            } else if (row.invalidAccount()) {
+                accountLine = row.username() + " · "
+                        + Component.translatable("blockvault.vault.status.invalid").getString();
             } else if (row.status() == null) {
                 accountLine = Component.translatable("blockvault.vault.status.unknown").getString();
             } else {
@@ -190,7 +196,7 @@ final class VaultListScreen extends Screen {
                         row.status().name().toLowerCase(java.util.Locale.ROOT)).getString();
                 accountLine = row.username() + " · " + status;
             }
-            graphics.text(font, Component.literal(clip(accountLine, rowLabelWidth - ROW_TEXT_INSET)),
+            graphics.text(font, Component.literal(ScreenText.clip(font, accountLine, rowLabelWidth - ROW_TEXT_INSET)),
                     contentLeft + ROW_TEXT_INSET, y + 12, 0xffb9b4c5);
         }
         if (rows.isEmpty()) graphics.centeredText(font, Component.translatable("blockvault.vault.empty"), width / 2, 80, 0xffcccccc);
@@ -198,11 +204,6 @@ final class VaultListScreen extends Screen {
                 width / 2, 80, 0xffcccccc);
         graphics.centeredText(font, Component.translatable("blockvault.vault.page",
                 Math.min(page + 1, totalPages()), totalPages()), width / 2, height - 50, 0xffaaaaaa);
-    }
-
-    private static String clip(String value, int maxPixels) {
-        int maxChars = Math.max(0, maxPixels / 6);
-        return value.length() <= maxChars ? value : maxChars < 2 ? "…" : value.substring(0, maxChars - 1) + "…";
     }
 
     @Override public boolean isPauseScreen() { return false; }

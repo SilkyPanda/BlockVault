@@ -1,7 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.vault.BackupSummary;
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -11,6 +11,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
@@ -36,8 +37,8 @@ final class VaultBackupRecoveryScreen extends Screen {
         password = new EditBox(font, center - 120, height / 2 - 6, 240, 20,
                 Component.translatable("blockvault.backup.recovery.password"));
         password.setHint(Component.translatable("blockvault.backup.recovery.password"));
-        password.setMaxLength(256);
-        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, null);
+        password.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
+        InputFilter.bind(password, InputRules::isMasterPasswordInput, null);
         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(password);
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.restore"), button -> restore())
@@ -60,6 +61,12 @@ final class VaultBackupRecoveryScreen extends Screen {
             failureKey = failed;
             if (failed != null && Minecraft.getInstance().gui.screen() == this) rebuildWidgets();
         });
+    }
+
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { restore(); return true; }
+        return super.keyPressed(event);
     }
 
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {

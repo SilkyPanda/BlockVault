@@ -30,6 +30,8 @@ public final class Hooks {
     private static String sessionUser;
     private static int sessionErrors;
     private static boolean warnedHistoryHook;
+    private static boolean settingsLoaded;
+    private static String queuedPrompt;
 
     private Hooks() { }
 
@@ -87,8 +89,14 @@ public final class Hooks {
             environment.attach(active);
             active.onJoin(host, minecraft.getUser().getName());
             BlockVaultConfig.load(settings -> {
-                if (session == active) active.configure(settings.autofill(), settings.autofillDelayMillis(),
-                        BlockVaultConfig.generatorPolicy(settings.generator()));
+                if (session == active) {
+                    active.configure(settings.autofill(), settings.autofillDelayMillis(),
+                            BlockVaultConfig.generatorPolicy(settings.generator()));
+                    settingsLoaded = true;
+                    String queued = queuedPrompt;
+                    queuedPrompt = null;
+                    if (queued != null) guard(active, () -> active.onSystemMessage(queued));
+                }
             });
         } catch (Exception failure) {
             LOGGER.warn("BlockVault could not initialize login detection");
@@ -96,7 +104,13 @@ public final class Hooks {
         }
     }
 
-    static boolean isSensitiveAlias(String command) { return sensitiveAliases.contains(command.toLowerCase(java.util.Locale.ROOT)); }
+    static boolean isSensitiveAlias(String command) {
+        String normalized = command.toLowerCase(java.util.Locale.ROOT);
+        if (!sensitiveAliases.contains(normalized)) return false;
+        if (normalized.length() > 3) return true;
+        LoginSession active = session;
+        return active != null && active.wasShortAliasPrompted(normalized);
+    }
 
     /** Ends the active session and wipes its in-memory credentials. */
     public static void onDisconnect() {
@@ -105,6 +119,8 @@ public final class Hooks {
         VaultRuntime.clearWaiting();
         session = null;
         environment = null;
+        settingsLoaded = false;
+        queuedPrompt = null;
     }
 
     static void applySettings(BlockVaultConfig.Settings settings) {
@@ -116,7 +132,13 @@ public final class Hooks {
     /** Delivers plain system chat to the login detector. */
     public static void onSystemMessage(Component message) {
         LoginSession active = session;
-        if (active != null && message != null) guard(active, () -> active.onSystemMessage(message.getString()));
+        if (active == null || message == null) return;
+        String plain = message.getString();
+        if (!settingsLoaded) {
+            if (plain.length() <= 2048 && active.isPromptMessage(plain)) queuedPrompt = plain;
+            return;
+        }
+        guard(active, () -> active.onSystemMessage(plain));
     }
 
     /** Captures an outgoing command without logging or retaining it outside the session. */

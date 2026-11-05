@@ -21,6 +21,6 @@ public abstract class CommandHistoryMixin {
     }
     @Inject(method = "addRecentChat", at = @At("HEAD"), cancellable = true, require = 0)
     private void blockvault$omitSensitiveRecall(String message, CallbackInfo callback) {
-        if (SensitiveCommands.isSensitive(message)) callback.cancel();
+        if (SensitiveCommands.isSensitiveChatLine(message)) callback.cancel();
     }
 }

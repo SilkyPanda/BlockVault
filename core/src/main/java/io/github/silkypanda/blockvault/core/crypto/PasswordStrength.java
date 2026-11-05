@@ -11,9 +11,9 @@ public final class PasswordStrength {
         boolean varied = false;
         char first = password[0];
         for (char value : password) {
-            lower |= value >= 'a' && value <= 'z';
-            upper |= value >= 'A' && value <= 'Z';
-            digit |= value >= '0' && value <= '9';
+            lower |= Character.isLowerCase(value) || Character.isLetter(value) && !Character.isUpperCase(value);
+            upper |= Character.isUpperCase(value);
+            digit |= Character.isDigit(value);
             symbol |= !Character.isLetterOrDigit(value);
             varied |= value != first;
         }

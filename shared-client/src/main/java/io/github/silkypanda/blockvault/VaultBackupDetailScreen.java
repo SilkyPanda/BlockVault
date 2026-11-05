@@ -135,21 +135,16 @@ final class VaultBackupDetailScreen extends Screen {
                     ? Component.translatable("blockvault.settings.streamer.hidden").getString() : entry.server().name();
             String username = BlockVaultConfig.current().streamerMode()
                     ? Component.translatable("blockvault.settings.streamer.hidden").getString() : entry.account().username();
-            graphics.text(font, Component.literal(clip(server + " · " + username, width / 2 - 20)),
+            graphics.text(font, Component.literal(ScreenText.clip(font, server + " · " + username, width / 2 - 20)),
                     10, y + 5, 0xffffffff);
             String password = revealedText.get(index);
-            if (password != null) graphics.text(font, Component.literal(clip(password, Math.max(1, width / 2 - 125))), width / 2 + 5,
+            if (password != null) graphics.text(font, Component.literal(ScreenText.clip(font, password, Math.max(1, width / 2 - 125))), width / 2 + 5,
                     y + 5, 0xffd9d3e5);
         }
         graphics.centeredText(font, Component.translatable("blockvault.backup.page", page + 1, totalPages()),
                 width / 2, height - 45, 0xffaaaaaa);
         if (busy) graphics.centeredText(font, Component.translatable("blockvault.backup.working"),
                 width / 2, height - 60, 0xffff7777);
-    }
-
-    private static String clip(String value, int maxPixels) {
-        int maxChars = Math.max(1, maxPixels / 6);
-        return value.length() <= maxChars ? value : maxChars < 2 ? "…" : value.substring(0, maxChars - 1) + "…";
     }
 
     private void clearRevealed() {

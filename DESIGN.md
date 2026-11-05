@@ -4,7 +4,8 @@ These rules apply to every change.
 
 **Security**
 - No network access of any kind, no external processes, no native code. `scripts/check-rules.sh` greps for the obvious cases.
-- Secrets are `char[]` or `byte[]` and are wiped when no longer needed. Never log a password, key, master password or vault content; log exception class names only.
+- Keep secrets in `char[]` or `byte[]` where practical and wipe owned arrays when no longer needed. Java strings, Gson values, and game text widgets can retain copies until garbage collection, so wiping is best-effort and must not be described as a guarantee. Never log a password, key, master password or vault content; log exception class names only.
+- Passwords accept Unicode letters, marks, numbers, punctuation and symbols, but reject whitespace, controls, invisible/format/private-use/unassigned characters, unpaired surrogates and `§`. Server passwords are 1–100 code points; master passwords are 8–256 code points. Usernames remain `[A-Za-z0-9_]`. International server names are normalized to punycode without network access. Reject a whole paste containing a forbidden character; never silently rewrite a password.
 - Anything read from a server (chat text, command trees) is untrusted: cap its length, match it under a time budget, and never let it delete data.
 - Writes are atomic (temp file, fsync, rename) and files are owner-only where the platform allows it.
 

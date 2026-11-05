@@ -126,7 +126,8 @@ final class VaultTrashScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, 12, 0xffffffff);
-        graphics.centeredText(font, Component.translatable("blockvault.trash.note"), width / 2, 26, 0xffaaaaaa);
+        ScreenText.drawCenteredWrapped(graphics, font, Component.translatable("blockvault.trash.note"), width / 2,
+                25, width - 24, 0xffaaaaaa, 10);
         boolean streamer = BlockVaultConfig.current().streamerMode();
         long now = System.currentTimeMillis();
         int labelWidth = Math.max(0, contentWidth - 160);
@@ -139,19 +140,14 @@ final class VaultTrashScreen extends Screen {
                     : row.serverName();
             String detail = Component.translatable("blockvault.trash.row.account",
                     row.usernames().isEmpty() ? "" : row.usernames().getFirst(), row.daysLeft(now)).getString();
-            graphics.text(font, Component.literal(clip(server, labelWidth)), contentLeft, y, 0xffffffff);
-            graphics.text(font, Component.literal(clip(detail, labelWidth)), contentLeft, y + 12, 0xffb9b4c5);
+            graphics.text(font, Component.literal(ScreenText.clip(font, server, labelWidth)), contentLeft, y, 0xffffffff);
+            graphics.text(font, Component.literal(ScreenText.clip(font, detail, labelWidth)), contentLeft, y + 12, 0xffb9b4c5);
         }
         if (rows.isEmpty()) {
             graphics.centeredText(font, Component.translatable("blockvault.trash.empty"), width / 2, 80, 0xffcccccc);
         }
         graphics.centeredText(font, Component.translatable("blockvault.vault.page",
                 Math.min(page + 1, totalPages()), totalPages()), width / 2, height - 72, 0xffaaaaaa);
-    }
-
-    private static String clip(String value, int maxPixels) {
-        int maxChars = Math.max(0, maxPixels / 6);
-        return value.length() <= maxChars ? value : maxChars < 2 ? "…" : value.substring(0, maxChars - 1) + "…";
     }
 
     @Override

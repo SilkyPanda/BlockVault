@@ -22,4 +22,18 @@ final class HostKeyTest {
         org.junit.jupiter.api.Assertions.assertEquals("play_1.example.com:25565",
                 HostKey.normalize("Play_1.Example.com").orElseThrow());
     }
+
+    @Test
+    void convertsInternationalizedHostnamesToTheirAsciiForm() {
+        assertEquals(java.util.Optional.of("xn--bcher-kva.de:25565"), HostKey.normalize("b\u00fccher.de"));
+        assertEquals(java.util.Optional.of("xn--bcher-kva.de:25566"), HostKey.normalize("B\u00dcCHER.de:25566"));
+        assertEquals(HostKey.normalize("xn--bcher-kva.de"), HostKey.normalize("b\u00fccher.de"));
+    }
+
+    @Test
+    void stillRejectsNonAsciiInIpv6LiteralsAndBadInternationalNames() {
+        assertTrue(HostKey.normalize("[\u0436::1]:25565").isEmpty());
+        assertTrue(HostKey.normalize("play \u00fc.de").isEmpty());
+        assertTrue(HostKey.normalize("b\u00fccher..de").isEmpty());
+    }
 }

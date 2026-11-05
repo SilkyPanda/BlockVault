@@ -7,11 +7,13 @@ BlockVault is a client-side password manager for Minecraft servers that use logi
 - Open the vault with `/blockvault` (both loaders), a keybind (unbound by default; Controls > Multiplayer), the NeoForge mod-list Config button, or Mod Menu on Fabric. `/blockvault lock` wipes the key from memory.
 - On a register prompt a card shows a generated password; confirm to register. On a login prompt a verified account is filled in once per connection. Cards wait until no other screen is open. Registration cards remain until dismissed; the configurable card-duration setting defaults to 5 seconds for idle save/update cards.
 - The vault list lets you search, reveal, copy, edit, change a server's template or autofill policy, and add a login by hand. Import and export are in Settings > Vault and files, alongside backups, master-password changes, and data-folder actions. The Fabric Mod Menu and NeoForge mod-list settings entries use YACL, which must be installed alongside BlockVault.
-- Deleting an account moves only that account to the **trash**. Server settings remain after its last account is deleted. Restore the account or delete it for good; anything left is removed after 60 days. Deleting for good can optionally also remove the password from backups. Older whole-server trash entries remain restorable.
+- Deleting an account moves only that account to the **trash**. If it was the server's last account, the server entry is removed; restoring the account recreates it. Deleted entries remain restorable for 60 days. Permanent deletion never removes anything from backups or exports.
 
 ## Statuses
 
 A saved account marked "Pending - server not confirmed" was written before the registration command was sent, but the server's success message was not seen. If registration succeeded, a successful manual login with that password promotes it to verified. Only verified accounts autofill.
+
+An account with invalid saved input stays in the vault and is marked for repair. BlockVault never autofills or sends that account until it is replaced with valid input.
 
 ## Local data
 
@@ -29,7 +31,7 @@ Override with the Java property `blockvault.dataDir`.
 | `vault.bv.bak1`-`bak3` | Automatic snapshots: at most one per 24 hours, newest is 1 |
 | `vault.bv.manual1`-`manual10` | Manual snapshots (Settings) |
 | `vault.bv.trust` | Raw vault key, only with `Trust this device` on (the default) |
-| `vault.bv.damaged` | Copy of a vault replaced during recovery |
+| `vault.bv.damaged.<timestamp>` | Timestamped copy of a vault replaced during recovery |
 | `config.json` | Preferences only |
 | `patterns.json` | Optional extra prompt/result patterns (regexes limited to 256 characters) |
 | `exports/` | Default destination for encrypted exports when no folder is entered |
@@ -37,18 +39,18 @@ Override with the Java property `blockvault.dataDir`.
 - **Export** writes a byte-for-byte encrypted copy named by BlockVault in the chosen folder, or in `exports/` by default. It refuses to overwrite a file. **Import** shows a preview of what would change, takes a restore point, then merges; see `CONFLICT_HANDLING.md`.
 - **Backups** are snapshots of the whole vault. Restoring one first saves the current vault as a restore point and keeps your current master password. If the main vault is missing or damaged, choose `Recover from backup` on the unlock screen and enter the password that encrypted that backup.
 - **Changing the master password** creates a new vault key and re-encrypts the vault and all backups. Copies made earlier (exports, cloud-synced files) keep the old key and old password.
-- **Erase all data** (Settings) verifies the master password, then deletes BlockVault's own files. Other files in that folder are kept. It is not a secure wipe of disk blocks. Close other Minecraft instances first, and uninstall the mod from your launcher separately.
+- **Erase all data** (Settings) verifies the master password before deleting BlockVault's own files. A separately confirmed passwordless erase is available only when the vault is missing or unreadable, and requires typing the confirmation phrase shown on screen. Exports in the BlockVault data folder are erased; exports in other folders are left alone. Other files in the data folder are kept. This is not a secure wipe of disk blocks. Close other Minecraft instances first, and uninstall the mod from your launcher separately.
 
 ## Security notes
 
-- Text fields use ASCII-only allowlists. Server and master passwords accept printable characters `!` through `~` (no spaces); usernames use letters, digits, and underscores; server addresses use ASCII hostname/IP syntax; email uses ASCII email characters; paths, search, and names allow printable ASCII including spaces.
+- Password input uses Unicode allow rules, not an ASCII-only rule. Server and master passwords accept letters of any language, digits, punctuation and symbols, and reject whitespace, control, invisible/format/private-use/unassigned characters and `§`. Server passwords allow 1–100 code points; master passwords allow 8–256 code points. Usernames remain `[A-Za-z0-9_]`. Server addresses may be internationalized and are stored in punycode. Names, search and paths accept readable text and ordinary spaces. A paste containing a forbidden password character is rejected as a whole.
 
 - `Trust this device` is on by default. It stores the vault key in `vault.bv.trust`, never the master password, and does not use an OS keychain. Anyone or any malware with access to your OS account and data folder can open the vault without the master password. Choose `Ask for master password every launch` to remove the file. POSIX permissions are owner-only; Windows relies on the profile folder's ACL and BlockVault does not set one.
 - There is no inactivity auto-lock. `Lock now` wipes the key and waits for the next password entry.
 - Neither mode protects against malware running as your user, a compromised Minecraft process, screenshots, clipboard managers, or a server that receives your credentials. Java strings and text fields can keep temporary copies until garbage collection.
 - Copied passwords stay on the clipboard; BlockVault never clears it.
 - Prompt detection reads server messages (including action-bar text), which a server or plugin can spoof. A credential is only sent to the server Minecraft is connected to. A failure-looking message never deletes a pending credential.
-- The master password needs at least 8 characters. A forgotten master password cannot be recovered unless you know the password of an available backup. Wrong passwords are reported separately from damaged files, except where the format cannot tell them apart.
+- The master password needs 8–256 code points. A forgotten master password cannot be recovered unless you know the password of an available backup. Wrong passwords are reported separately from damaged files, except where the format cannot tell them apart.
 - The memorable preset is easier to type but has fewer bits than the random presets.
 
 ## Building and code map

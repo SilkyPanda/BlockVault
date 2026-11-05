@@ -4,12 +4,13 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import io.github.silkypanda.blockvault.core.crypto.PasswordStrength;
 import io.github.silkypanda.blockvault.core.session.CredentialPassword;
-import io.github.silkypanda.blockvault.core.validation.AsciiInput;
+import io.github.silkypanda.blockvault.core.validation.InputRules;
 
 /** Minimal masked screen for creating or unlocking the encrypted local vault. */
 final class VaultAccessScreen extends Screen {
@@ -33,17 +34,17 @@ final class VaultAccessScreen extends Screen {
         password = new EditBox(font, center - 100, height / 2 + (create ? -48 : -28), 200, 20,
                 Component.translatable("blockvault.vault.password"));
         password.setHint(Component.translatable("blockvault.vault.password"));
-        password.setMaxLength(256);
+        password.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
         password.addFormatter(VaultAccessScreen::mask);
-        AsciiInputFilter.bind(password, AsciiInput::isPasswordText, capsLock::onValueChanged);
+        InputFilter.bind(password, InputRules::isMasterPasswordInput, capsLock::onValueChanged);
         addRenderableWidget(password);
         if (create) {
             confirmation = new EditBox(font, center - 100, height / 2 - 20, 200, 20,
                     Component.translatable("blockvault.vault.confirm"));
             confirmation.setHint(Component.translatable("blockvault.vault.confirm"));
-            confirmation.setMaxLength(256);
+            confirmation.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
             confirmation.addFormatter(VaultAccessScreen::mask);
-            AsciiInputFilter.bind(confirmation, AsciiInput::isPasswordText, capsLock::onValueChanged);
+            InputFilter.bind(confirmation, InputRules::isMasterPasswordInput, capsLock::onValueChanged);
             addRenderableWidget(confirmation);
             trustThisDevice = BlockVaultConfig.current().trustDevice();
             addRenderableWidget(Button.builder(trustMessage(), button -> {
@@ -56,7 +57,7 @@ final class VaultAccessScreen extends Screen {
                 .bounds(center - 100, height / 2 + (create ? 36 : 8), 200, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.open"), button ->
                         VaultRuntime.openRecoveryScreen(this))
-                .bounds(center - 100, height / 2 + (create ? 60 : 34), 200, 20).build());
+                .bounds(center - 100, height / 2 + (create ? 82 : 56), 200, 20).build());
         setInitialFocus(password);
     }
 
@@ -66,24 +67,30 @@ final class VaultAccessScreen extends Screen {
         failureKey = null;
         String entered = password.getValue();
         String repeated = create ? confirmation.getValue() : entered;
-        if (entered.isEmpty() || !entered.equals(repeated)) {
+        if (create && !entered.equals(repeated)) {
             failed = true;
-            password.setValue("");
-            if (confirmation != null) confirmation.setValue("");
+            confirmation.setValue("");
             return;
         }
-        if (!CredentialPassword.isValid(entered.toCharArray())) {
+        if (entered.isEmpty()) {
+            failed = true;
+            return;
+        }
+        if (entered.codePointCount(0, entered.length()) < InputRules.MASTER_PASSWORD_MIN) {
+            failed = true;
+            failureKey = "blockvault.vault.password.too_short";
+            return;
+        }
+        if (entered.codePointCount(0, entered.length()) > InputRules.MASTER_PASSWORD_MAX) {
+            failed = true;
+            failureKey = "blockvault.vault.password.too_long";
+            return;
+        }
+        if (!CredentialPassword.isValidMaster(entered.toCharArray())) {
             failed = true;
             failureKey = "blockvault.password.invalid";
             password.setValue("");
             if (confirmation != null) confirmation.setValue("");
-            return;
-        }
-        if (create && entered.length() < 8) {
-            failed = true;
-            failureKey = "blockvault.vault.password.too_short";
-            password.setValue("");
-            confirmation.setValue("");
             return;
         }
         char[] secret = entered.toCharArray();
@@ -96,6 +103,12 @@ final class VaultAccessScreen extends Screen {
     private Component trustMessage() {
         return Component.translatable("blockvault.vault.trust_setup", Component.translatable(
                 trustThisDevice ? "options.on" : "options.off"));
+    }
+
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) { submit(); return true; }
+        return super.keyPressed(event);
     }
 
     @Override
@@ -118,11 +131,12 @@ final class VaultAccessScreen extends Screen {
         }
         if (busy) {
             graphics.centeredText(font, Component.translatable(create ? "blockvault.access.creating"
-                    : "blockvault.access.unlocking"), width / 2, height / 2 + (create ? 59 : 32), 0xffcccccc);
+                    : "blockvault.access.unlocking"), width / 2,
+                    Math.min(height - 18, height / 2 + (create ? 108 : 82)), 0xffcccccc);
         } else if (failed) {
             graphics.centeredText(font, Component.translatable(failureKey != null ? failureKey : create
                     ? "blockvault.vault.password.mismatch" : "blockvault.vault.unlock.failed"), width / 2,
-                    height / 2 + (create ? 59 : 32), 0xffff5555);
+                    Math.min(height - 18, height / 2 + (create ? 108 : 82)), 0xffff5555);
         }
     }
 
