@@ -95,8 +95,8 @@ final class VaultRecoveryScreen extends Screen {
                 return;
             }
             if (contents == null) {
-                statusKey = "blockvault.backup.failed";
-                rebuildWidgets();
+                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
+                        new VaultBackupPasswordScreen(summary, this));
             } else {
                 net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
                         new VaultBackupDetailScreen(summary, contents, this));

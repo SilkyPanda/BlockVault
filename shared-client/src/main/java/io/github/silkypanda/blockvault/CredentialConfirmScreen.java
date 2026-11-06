@@ -66,6 +66,7 @@ final class CredentialConfirmScreen extends Screen {
             case UPDATE -> "blockvault.card.update.title";
             case REJECTED -> "blockvault.card.rejected.title";
             case SAVE -> "blockvault.card.save.title";
+            case PENDING_LOGIN -> "blockvault.card.pending_login.title";
         });
     }
 
@@ -135,8 +136,9 @@ final class CredentialConfirmScreen extends Screen {
         }
 
         if (model.variant() == CardVariant.REJECTED) initRejectedButtons();
+        else if (model.variant() == CardVariant.PENDING_LOGIN) initPendingLoginButtons();
         else initSaveButtons(registration);
-        if (!registration && model.variant() != CardVariant.REJECTED) scheduleTimer();
+        if (model.variant() == CardVariant.SAVE) scheduleTimer();
     }
 
     private void initSaveButtons(boolean registration) {
@@ -200,6 +202,28 @@ final class CredentialConfirmScreen extends Screen {
                 "blockvault.card.cancel", button -> onClose());
     }
 
+    private void initPendingLoginButtons() {
+        int pad = scaled(12);
+        int gap = scaled(6);
+        int y = cardY + scaled(84);
+        int buttonWidth = (cardWidth - pad * 2 - gap) / 2;
+        addButton(cardX + pad, y, buttonWidth, "blockvault.card.pending_login", button -> tryPendingLogin());
+        addButton(cardX + pad + buttonWidth + gap, y, buttonWidth, "blockvault.card.cancel", button -> onClose());
+        addButton(cardX + pad, y + scaled(24), buttonWidth, "blockvault.card.reveal", button -> reveal = !reveal);
+        addButton(cardX + pad + buttonWidth + gap, y + scaled(24), buttonWidth, "blockvault.card.copy", button -> copyFromField());
+    }
+
+    private void tryPendingLogin() {
+            if (!CredentialPassword.isValid(passwordBox.getValue().toCharArray())) {
+                VaultRuntime.showToast("blockvault.password.invalid");
+                return;
+            }
+            wipePassword();
+            password = passwordBox.getValue().toCharArray();
+            session.confirmPendingLogin(password);
+            onClose();
+    }
+
     private void addButton(int x, int y, int buttonWidth, String key, Button.OnPress action) {
         addRenderableWidget(Button.builder(Component.translatable(key), pressed -> {
             action.onPress(pressed);
@@ -232,6 +256,7 @@ final class CredentialConfirmScreen extends Screen {
 
     @Override public boolean keyPressed(KeyEvent event) {
         if (ScreenText.isEnter(event)) {
+            if (model.variant() == CardVariant.PENDING_LOGIN) { tryPendingLogin(); return true; }
             if (model.variant() == CardVariant.REJECTED) {
                 if (!CredentialPassword.isValid(passwordBox.getValue().toCharArray())) {
                     VaultRuntime.showToast("blockvault.toast.password_invalid");

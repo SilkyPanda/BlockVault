@@ -28,7 +28,8 @@ public final class VaultStore {
     /** Number of rolling automatic backups. */
     public static final int AUTO_BACKUP_SLOTS = 3;
     private static final int PREFIX_BYTES = 28;
-    private static final int TARGET_KDF_MILLIS = 250;
+    private static final int TARGET_KDF_MILLIS = 350;
+    private static volatile int calibratedKdfIterations;
 
     @FunctionalInterface
     private interface LockedAction<T> { T run() throws IOException; }
@@ -73,12 +74,12 @@ public final class VaultStore {
     /** Creates and unlocks a new vault. Master-password work runs on the caller's background thread. */
     public void create(char[] masterPassword) throws IOException {
         if (exists()) throw new IllegalStateException("Vault already exists");
-        if (masterPassword == null || InputRules.characterCount(masterPassword) < InputRules.MASTER_PASSWORD_MIN) {
+        if (masterPassword == null || InputRules.normalizedCharacterCount(masterPassword) < InputRules.MASTER_PASSWORD_MIN) {
             throw new IllegalArgumentException("Master password must contain at least 8 characters");
         }
         byte[] salt = SecureBytes.random(16);
         try {
-            int iterations = Kdf.calibrate(TARGET_KDF_MILLIS, VaultFile.MIN_KDF_ITERATIONS, VaultFile.MAX_KDF_ITERATIONS);
+            int iterations = calibratedKdfIterations();
             header = new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, iterations, salt);
             MasterPasswordKek kek = masterKek(masterPassword, salt, iterations, prefix(header));
             try { wrappedKey = kek.wrap(vaultKey = SecureBytes.random(32)); }
@@ -516,19 +517,38 @@ public final class VaultStore {
         }
     }
 
+    /** Inspects a backup that may have been created before the master password was changed. */
+    public Vault inspectBackup(BackupSummary backup, char[] backupPassword) throws Exception {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        byte[] bytes = readBackup(backup, backupPath(backup));
+        try { return decryptExternal(bytes, backupPassword); }
+        finally { SecureBytes.wipe(bytes); }
+    }
+
     /** Restores an automatic or manual backup while retaining the current master-password wrapper. */
     public void restoreBackup(BackupSummary backupInfo) throws Exception {
+        restoreBackup(backupInfo, null);
+    }
+
+    /** Restores a backup made with an older master password, re-encrypting it under the current vault key. */
+    public void restoreBackup(BackupSummary backupInfo, char[] backupPassword) throws Exception {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
         Path backup = backupPath(backupInfo);
         byte[] bytes = readBackup(backupInfo, backup);
         byte[] plaintext = null;
         Vault restored;
         try {
-            VaultFile.Parsed parsed = VaultFile.parse(bytes);
-            plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
-            restored = VaultJson.read(plaintext);
+            if (backupPassword == null) {
+                VaultFile.Parsed parsed = VaultFile.parse(bytes);
+                plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+                restored = VaultJson.read(plaintext);
+            } else {
+                restored = decryptExternal(bytes, backupPassword);
+            }
         } catch (UnsupportedVaultVersionException version) {
             throw version;
+        } catch (WrongMasterPasswordException wrongPassword) {
+            throw wrongPassword;
         } catch (Exception invalid) {
             throw new VaultCorruptException(invalid);
         } finally {
@@ -579,7 +599,7 @@ public final class VaultStore {
      */
     public void changeMasterPassword(char[] oldPassword, char[] newPassword) throws Exception {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
-        if (newPassword == null || InputRules.characterCount(newPassword) < InputRules.MASTER_PASSWORD_MIN) throw new IllegalArgumentException("Master password must contain at least 8 characters");
+        if (newPassword == null || InputRules.normalizedCharacterCount(newPassword) < InputRules.MASTER_PASSWORD_MIN) throw new IllegalArgumentException("Master password must contain at least 8 characters");
         if (oldPassword == null) throw new IllegalArgumentException("The current master password is required");
         if (java.util.Arrays.equals(oldPassword, newPassword)) {
             throw new IllegalArgumentException("New master password must differ from the current password");
@@ -602,7 +622,7 @@ public final class VaultStore {
         final byte[] newKey = SecureBytes.random(32);
         boolean committed = false;
         try {
-            int iterations = Kdf.calibrate(TARGET_KDF_MILLIS, VaultFile.MIN_KDF_ITERATIONS, VaultFile.MAX_KDF_ITERATIONS);
+            int iterations = calibratedKdfIterations();
             final VaultFile.Header nextHeader = new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, iterations, salt);
             MasterPasswordKek provider = masterKek(newPassword, salt, iterations, prefix(nextHeader));
             final byte[] nextWrapped;
@@ -626,7 +646,8 @@ public final class VaultStore {
             diskDigest = rotation.digest();
             SecureBytes.wipe(oldKey);
             if (Files.isRegularFile(path("vault.bv.trust"), java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-                trustThisDevice();
+                try { trustThisDevice(); }
+                catch (IOException trustFailure) { throw new TrustedDeviceUpdateException(trustFailure); }
             }
             if (!rotation.failedBackups().isEmpty()) {
                 throw new BackupReencryptionException(new IOException(rotation.failedBackups().size()
@@ -791,6 +812,18 @@ public final class VaultStore {
         }
     }
 
+    private static int calibratedKdfIterations() {
+        int cached = calibratedKdfIterations;
+        if (cached != 0) return cached;
+        synchronized (VaultStore.class) {
+            if (calibratedKdfIterations == 0) {
+                calibratedKdfIterations = Kdf.calibrate(TARGET_KDF_MILLIS,
+                        VaultFile.MIN_KDF_ITERATIONS, VaultFile.MAX_KDF_ITERATIONS);
+            }
+            return calibratedKdfIterations;
+        }
+    }
+
     private Path path(String name) { return directory.resolve(name); }
 
     private static void clearVaultPasswords(Vault value) {
@@ -857,7 +890,7 @@ public final class VaultStore {
                     Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
                 }
                 return;
-            } catch (java.nio.file.AccessDeniedException sharing) {
+            } catch (java.nio.file.FileSystemException sharing) {
                 last = sharing;
                 if (attempt == 2) break;
                 try { Thread.sleep(50L * (attempt + 1)); }

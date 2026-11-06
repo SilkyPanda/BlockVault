@@ -35,28 +35,6 @@ public final class Hooks {
 
     private Hooks() { }
 
-    static void reloadPatterns(java.util.function.Consumer<Boolean> result) {
-        BackgroundExecutor.submit(() -> {
-            PatternPack loaded;
-            try {
-                InputStream defaults = Hooks.class.getResourceAsStream("/assets/blockvault/patterns/default.json");
-                loaded = PatternPack.load(defaults, io.github.silkypanda.blockvault.core.vault.DataDirs.resolve()
-                        .resolve("patterns.json"), warning -> LOGGER.warn("BlockVault skipped an invalid pattern"));
-            } catch (Exception failure) {
-                BackgroundExecutor.onGameThread(() -> result.accept(false));
-                return null;
-            }
-            BackgroundExecutor.onGameThread(() -> {
-                patterns = loaded;
-                sensitiveAliases = java.util.stream.Stream.of("login", "register", "changepassword", "unregister")
-                        .flatMap(kind -> loaded.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
-                if (session != null) onJoin();
-                result.accept(true);
-            });
-            return null;
-        });
-    }
-
     /** Starts a multiplayer-only session when Minecraft has a current remote server. */
     public static void onJoin() {
         Minecraft minecraft = Minecraft.getInstance();
@@ -73,13 +51,9 @@ public final class Hooks {
         VaultRuntime.deliverPendingTrustNotice();
         onDisconnect();
         try {
-            if (patterns == null) {
-                InputStream defaults = Hooks.class.getResourceAsStream("/assets/blockvault/patterns/default.json");
-                patterns = PatternPack.load(defaults, io.github.silkypanda.blockvault.core.vault.DataDirs.resolve()
-                        .resolve("patterns.json"), warning -> LOGGER.warn("BlockVault skipped an invalid pattern"));
-                sensitiveAliases = java.util.stream.Stream.of("login", "register", "changepassword", "unregister")
-                        .flatMap(kind -> patterns.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
-            }
+            patterns = loadPatterns();
+            sensitiveAliases = java.util.stream.Stream.of("login", "register", "changepassword", "unregister")
+                    .flatMap(kind -> patterns.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
             environment = new McSessionEnv();
             LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.pickyServer());
             session = active;
@@ -90,7 +64,7 @@ public final class Hooks {
             active.onJoin(host, minecraft.getUser().getName());
             BlockVaultConfig.load(settings -> {
                 if (session == active) {
-                    active.configure(settings.autofill(), settings.autofillDelayMillis(),
+                    active.configure(settings.autofill(), settings.passwordlessLogin(), settings.autofillDelayMillis(),
                             BlockVaultConfig.generatorPolicy(settings.generator()));
                     settingsLoaded = true;
                     String queued = queuedPrompt;
@@ -102,6 +76,13 @@ public final class Hooks {
             LOGGER.warn("BlockVault could not initialize login detection");
             onDisconnect();
         }
+    }
+
+    private static PatternPack loadPatterns() throws java.io.IOException {
+        InputStream defaults = Hooks.class.getResourceAsStream("/assets/blockvault/patterns/default.json");
+        if (defaults == null) throw new java.io.IOException("Built-in pattern resource is missing");
+        return PatternPack.load(defaults, io.github.silkypanda.blockvault.core.vault.DataDirs.resolve()
+                .resolve("patterns.json"), warning -> LOGGER.warn("BlockVault skipped an invalid pattern"));
     }
 
     static boolean isSensitiveAlias(String command) {
@@ -125,7 +106,7 @@ public final class Hooks {
 
     static void applySettings(BlockVaultConfig.Settings settings) {
         LoginSession active = session;
-        if (active != null) active.configure(settings.autofill(), settings.autofillDelayMillis(),
+        if (active != null) active.configure(settings.autofill(), settings.passwordlessLogin(), settings.autofillDelayMillis(),
                 BlockVaultConfig.generatorPolicy(settings.generator()));
     }
 
@@ -153,7 +134,8 @@ public final class Hooks {
             String name = normalized.replaceFirst("^/", "").strip().toLowerCase(java.util.Locale.ROOT);
             int namespace = name.lastIndexOf(':');
             if (namespace >= 0) name = name.substring(namespace + 1);
-            if (patterns != null && patterns.commandNames("login").contains(name)) {
+            if (patterns != null && patterns.commandNames("login").contains(name)
+                    && active.wasShortAliasPrompted(name)) {
                 guard(active, () -> active.onOutgoingCommand(command));
                 return true;
             }

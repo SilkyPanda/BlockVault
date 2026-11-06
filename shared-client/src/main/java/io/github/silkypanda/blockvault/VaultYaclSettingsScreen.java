@@ -17,12 +17,12 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** YACL settings screen for BlockVault's non-secret client preferences. */
-final class VaultSettingsScreen extends Screen {
+final class VaultYaclSettingsScreen extends Screen {
     private static final BlockVaultConfig.Settings DEFAULTS = BlockVaultConfig.Settings.defaults();
     private final Screen parent;
     private boolean loadRequested;
 
-    VaultSettingsScreen(Screen parent) {
+    VaultYaclSettingsScreen(Screen parent) {
         super(Component.translatable("blockvault.settings.title"));
         this.parent = parent;
     }
@@ -55,6 +55,8 @@ final class VaultSettingsScreen extends Screen {
                 .description(description("blockvault.config.group.login.description"))
                 .option(boolOption("blockvault.config.option.autofill", "autofill", DEFAULTS.autofill(), () -> draft.autofill,
                         value -> draft.autofill = value))
+                .option(boolOption("blockvault.config.option.passwordless", "passwordless", DEFAULTS.passwordlessLogin(), () -> draft.passwordless,
+                        value -> draft.passwordless = value))
                 .option(Option.<Integer>createBuilder()
                         .name(Component.translatable("blockvault.config.option.delay"))
                         .description(description("blockvault.settings.description.delay"))
@@ -139,15 +141,10 @@ final class VaultSettingsScreen extends Screen {
                         () -> VaultRuntime.openVaultScreen()))
                 .option(screenAction("blockvault.config.action.backups", "blockvault.config.action.backups.description",
                         VaultRuntime::openBackupScreen))
-                .option(action("blockvault.config.action.reload_patterns", "blockvault.config.action.reload_patterns.description",
-                        () -> Hooks.reloadPatterns(success -> VaultRuntime.showToast(success
-                                ? "blockvault.patterns.reload.success" : "blockvault.patterns.reload.failed"))))
                 .option(screenAction("blockvault.config.action.master", "blockvault.config.action.master.description",
                         VaultRuntime::openMasterPasswordScreen))
                 .option(transferAction("blockvault.transfer.import.short", "blockvault.transfer.import.help", true))
                 .option(transferAction("blockvault.transfer.export.short", "blockvault.transfer.export.help", false))
-                .option(action("blockvault.config.action.open_data", "blockvault.settings.description.data.open",
-                        VaultRuntime::openDataDirectory))
                 .option(screenAction("blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
                         screen -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(screen))))
                 .build();
@@ -207,6 +204,7 @@ final class VaultSettingsScreen extends Screen {
 
     private static final class Draft {
         private boolean autofill;
+        private boolean passwordless;
         private int delay;
         private int duration;
         private CardPosition position;
@@ -217,6 +215,7 @@ final class VaultSettingsScreen extends Screen {
 
         private Draft(BlockVaultConfig.Settings settings) {
             autofill = settings.autofill();
+            passwordless = settings.passwordlessLogin();
             delay = settings.autofillDelayMillis();
             duration = settings.cardDurationSeconds();
             position = CardPosition.from(settings.cardPosition());
@@ -227,7 +226,7 @@ final class VaultSettingsScreen extends Screen {
         }
 
         private BlockVaultConfig.Settings toSettings() {
-            return new BlockVaultConfig.Settings(autofill, delay, duration, position.id, streamer,
+            return new BlockVaultConfig.Settings(autofill, passwordless, delay, duration, position.id, streamer,
                     generator.id, scrubHistory, unlockPolicy == UnlockPolicy.TRUST);
         }
     }

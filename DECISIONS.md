@@ -3,8 +3,9 @@
 **Product**
 - Per-server unique passwords in an encrypted local vault; no network, no sync.
 - The default generator is the server-friendly preset (16 characters, letters and digits). Other presets: balanced, maximum, memorable.
-- `Trust this device` is on by default; the owner accepted the trade-off (see README).
-- The clipboard is never cleared automatically. Master passwords contain 8–256 code points.
+- The vault creation screen asks whether to trust this device and explains that it stores the vault key locally. The existing default remains ON unless the owner changes it.
+- Passwordless `/login` is enabled by default and can be turned off in settings.
+- The clipboard is never cleared automatically. Master passwords contain 8–256 characters after NFC normalization.
 - The project license stays All Rights Reserved.
 - Action-bar (overlay) messages are treated like chat messages on both loaders.
 
@@ -21,4 +22,4 @@
 - If a privacy hook is inactive on the running Minecraft version, BlockVault warns once instead of crashing.
 - Manually added logins are saved as verified.
 - Invalid saved accounts remain readable and visible for manual repair, but cannot be autofilled or sent by passwordless login.
-- The data folder is opened with Minecraft's own helper (not `java.awt.Desktop`), with a clipboard-path fallback.
+- Open-data-folder is omitted from settings; the owner can navigate to the documented local data path.

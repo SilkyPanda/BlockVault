@@ -31,7 +31,7 @@
   },
   "result": {
     "success": [
-      "(?i)(successful(?:ly)?\\s+(?:log(?:ged)?\\s*in|login|registered)|logged\\s+in\\s+successfully|you(?:'| a)re\\s+now\\s+logged\\s+in|login\\s+successful|registration\\s+successful|successfully\\s+registered)",
+      "(?i)(successful(?:ly)?\\s+(?:log(?:ged)?\\s*in|login|registered)|logged\\s+in\\s+successfully|you(?:'| a)re\\s+now\\s+logged\\s+in|login\\s+successful|registration\\s+successful|successfully\\s+registered|already\\s+logged\\s+in)",
       "(?i)password\\s+(?:has\\s+been\\s+|was\\s+)?(?:successfully\\s+)?(?:changed|updated)",
       "(?i)(?:changed|updated)\\s+(?:your\\s+)?password\\s+successfully|successfully\\s+(?:changed|updated)\\s+(?:your\\s+)?password",
       "(?i)successfully\\s+unregistered|unregistered\\s+successfully|account\\s+(?:has\\s+been\\s+|was\\s+)?(?:successfully\\s+)?(?:unregistered|deleted|removed)"
@@ -39,7 +39,7 @@
     "failure": [
       "(?i)(wrong|incorrect|invalid)\\s+password|password\\s+(?:is\\s+)?(?:wrong|incorrect)",
       "(?i)(?:registration|register(?:ing)?|account creation)\\s+(?:has\\s+)?(?:failed|unsuccessful|error)",
-      "(?i)\\b(?:login|log in|authentication)\\s+(?:has\\s+)?(?:failed|unsuccessful)|\\bincorrect\\s+(?:login|account)\\s+credentials\\b|\\balready\\s+logged\\s+in\\b"
+      "(?i)\\b(?:login|log in|authentication)\\s+(?:has\\s+)?(?:failed|unsuccessful)|\\bincorrect\\s+(?:login|account)\\s+credentials\\b"
     ],
     "passwordRules": [
       "(?i)(?:password|passphrase)\\s+(?:is\\s+)?too\\s+(?:short|long)",

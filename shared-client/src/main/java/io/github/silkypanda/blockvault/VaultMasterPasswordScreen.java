@@ -54,11 +54,12 @@ final class VaultMasterPasswordScreen extends Screen {
     private void submit() {
         if (busy) return;
         mismatch = next.getValue().isEmpty() || !next.getValue().equals(confirm.getValue());
-        tooShort = next.getValue().codePointCount(0, next.getValue().length()) < InputRules.MASTER_PASSWORD_MIN;
-        tooLong = next.getValue().codePointCount(0, next.getValue().length()) > InputRules.MASTER_PASSWORD_MAX;
+        int nextLength = InputRules.normalizedCharacterCount(next.getValue().toCharArray());
+        tooShort = nextLength < InputRules.MASTER_PASSWORD_MIN;
+        tooLong = nextLength > InputRules.MASTER_PASSWORD_MAX;
         samePassword = current.getValue().equals(next.getValue());
-        invalidCharacters = !InputRules.isPasswordText(current.getValue())
-                || !InputRules.isPasswordText(next.getValue());
+        invalidCharacters = !InputRules.isMasterPassword(current.getValue().toCharArray())
+                || !InputRules.isMasterPassword(next.getValue().toCharArray());
         if (mismatch || tooShort || tooLong || samePassword || current.getValue().isEmpty() || invalidCharacters) {
             if (mismatch) confirm.setValue("");
             statusKey = null;
@@ -73,7 +74,8 @@ final class VaultMasterPasswordScreen extends Screen {
             Arrays.fill(oldPassword, '\0'); Arrays.fill(newPassword, '\0');
             busy = false; failed = failure != null;
             if (failure == null) Minecraft.getInstance().setScreenAndShow(parent);
-            else if ("blockvault.master.change.backups_failed".equals(failure)) {
+            else if ("blockvault.master.change.backups_failed".equals(failure)
+                    || "blockvault.master.change.trust_failed".equals(failure)) {
                 Minecraft.getInstance().setScreenAndShow(parent);
                 VaultRuntime.showToast(failure);
             }

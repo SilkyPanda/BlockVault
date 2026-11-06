@@ -69,8 +69,9 @@ final class VaultImportPreviewScreen extends Screen {
             graphics.centeredText(font, Component.translatable("blockvault.import.nothing"), width / 2, y, 0xffcccccc);
         } else {
             graphics.centeredText(font, Component.translatable("blockvault.import.summary",
-                    preview.count(ImportPreview.Kind.NEW_SERVER), preview.count(ImportPreview.Kind.NEW_ACCOUNT),
-                    preview.count(ImportPreview.Kind.UPDATED_ACCOUNT)), width / 2, y, 0xffcccccc);
+                    countPhrase("server", preview.count(ImportPreview.Kind.NEW_SERVER)),
+                    countPhrase("account", preview.count(ImportPreview.Kind.NEW_ACCOUNT)),
+                    countPhrase("password", preview.count(ImportPreview.Kind.UPDATED_ACCOUNT))), width / 2, y, 0xffcccccc);
             y += 18;
             int from = page * MAX_LINES;
             int to = Math.min(preview.changes().size(), from + MAX_LINES);
@@ -91,6 +92,11 @@ final class VaultImportPreviewScreen extends Screen {
                 height - 50, 0xffaaaaaa);
         else if (failed) graphics.centeredText(font, Component.translatable("blockvault.transfer.failed"), width / 2,
                 height - 50, 0xffff7777);
+    }
+
+    private static Component countPhrase(String item, long count) {
+        return count == 1 ? Component.translatable("blockvault.import.summary." + item + ".one")
+                : Component.translatable("blockvault.import.summary." + item + ".other", count);
     }
 
     private int totalPages() { return Math.max(1, (preview.changes().size() + MAX_LINES - 1) / MAX_LINES); }

@@ -50,7 +50,7 @@ neoForge {
 }
 
 dependencies {
-    implementation "dev.isxander:yet-another-config-lib:${project.yacl_version}"
+    compileOnly "dev.isxander:yet-another-config-lib:${project.yacl_version}"
 }
 
 tasks.withType(JavaCompile).configureEach {

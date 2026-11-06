@@ -109,9 +109,9 @@ public final class VaultMerger {
     public static ImportPreview diff(Vault current, Vault other, long nowMillis) {
         List<ImportPreview.Change> changes = new ArrayList<>();
         for (ServerEntry incoming : other.servers()) {
-            ServerEntry local = current.servers().stream()
-                    .filter(candidate -> candidate.id().equals(incoming.id()) || sharesHost(candidate, incoming))
-                    .findFirst().orElse(null);
+            ServerEntry local = current.servers().stream().filter(candidate -> candidate.id().equals(incoming.id()))
+                    .findFirst().orElseGet(() -> current.servers().stream()
+                            .filter(candidate -> sharesHost(candidate, incoming)).findFirst().orElse(null));
             if (local == null) {
                 changes.add(new ImportPreview.Change(ImportPreview.Kind.NEW_SERVER, incoming.name(), null));
                 for (Account account : incoming.accounts()) {

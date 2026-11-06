@@ -131,7 +131,7 @@ final class VaultListScreen extends Screen {
             for (int column = 0; column < ROW_ACTIONS; column++) {
                 Button button = rowButtons.get(rowIndex * ROW_ACTIONS + column);
                 button.visible = hasRow;
-                button.active = hasRow && (!row.serverOnly() || column >= 2 && column <= 3);
+                button.active = hasRow;
                 if (hasRow && column == 2) {
                     String state = row.autofill() ? "blockvault.vault.autofill.on" : "blockvault.vault.autofill.off";
                     button.setMessage(Component.translatable(rowButtonWidth < 50
@@ -184,13 +184,9 @@ final class VaultListScreen extends Screen {
             graphics.text(font, Component.literal(ScreenText.clip(font, serverName, rowLabelWidth - ROW_TEXT_INSET)),
                     contentLeft + ROW_TEXT_INSET, y, 0xffffffff);
             String accountLine;
-            if (row.serverOnly()) {
-                accountLine = Component.translatable("blockvault.vault.server.settings").getString();
-            } else if (row.invalidAccount()) {
+            if (row.invalidAccount()) {
                 accountLine = row.username() + " · "
                         + Component.translatable("blockvault.vault.status.invalid").getString();
-            } else if (row.status() == null) {
-                accountLine = Component.translatable("blockvault.vault.status.unknown").getString();
             } else {
                 String status = Component.translatable("blockvault.vault.status." +
                         row.status().name().toLowerCase(java.util.Locale.ROOT)).getString();

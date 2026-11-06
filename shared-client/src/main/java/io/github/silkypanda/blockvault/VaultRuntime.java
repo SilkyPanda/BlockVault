@@ -179,7 +179,7 @@ public final class VaultRuntime implements VaultAccess {
                         || failure instanceof UnsupportedVaultVersionException);
                 String key = failure instanceof WrongMasterPasswordException ? "blockvault.vault.unlock.wrong_password"
                         : failure instanceof UnsupportedVaultVersionException ? "blockvault.vault.unlock.unsupported"
-                        : failure instanceof VaultCorruptException || failure instanceof IllegalArgumentException
+                        : failure instanceof VaultCorruptException
                         ? "blockvault.vault.unlock.corrupt" : create ? "blockvault.vault.create.failed"
                         : "blockvault.vault.unlock.failed";
                 BackgroundExecutor.onGameThread(() -> {
@@ -332,54 +332,6 @@ public final class VaultRuntime implements VaultAccess {
         BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultMasterPasswordScreen(parent)));
     }
 
-    static void openDataDirectory() {
-        BackgroundExecutor.submit(() -> {
-            boolean opened = false;
-            java.nio.file.Path directory = null;
-            try {
-                directory = DataDirs.createDirectory();
-                opened = openWithMinecraft(directory);
-            } catch (Exception failure) {
-                LOGGER.warn("BlockVault could not open its data directory ({})", failure.getClass().getSimpleName());
-            }
-            boolean result = opened;
-            String path = directory == null ? null : directory.toString();
-            BackgroundExecutor.onGameThread(() -> {
-                if (result) toast("blockvault.data.opened");
-                else if (path != null) {
-                    Minecraft.getInstance().keyboardHandler.setClipboard(path);
-                    toast("blockvault.data.open.copied");
-                } else toast("blockvault.data.open.failed");
-            });
-            return null;
-        });
-    }
-
-    /**
-     * Opens a folder with Minecraft's own platform helper (the one behind the game's "Open Folder" buttons), which
-     * avoids starting AWT inside the game process. The helper is looked up by reflection under both known class
-     * names so a rename in a Minecraft update falls back to copying the path instead of breaking the build.
-     */
-    private static boolean openWithMinecraft(java.nio.file.Path directory) {
-        for (String className : new String[] {"net.minecraft.util.Util", "net.minecraft.Util"}) {
-            try {
-                Class<?> util = Class.forName(className);
-                java.lang.reflect.Method getPlatform = util.getMethod("getPlatform");
-                Object platform = getPlatform.invoke(null);
-                Class<?> platformType = getPlatform.getReturnType();
-                try {
-                    platformType.getMethod("openPath", java.nio.file.Path.class).invoke(platform, directory);
-                } catch (NoSuchMethodException noPathVariant) {
-                    platformType.getMethod("openFile", java.io.File.class).invoke(platform, directory.toFile());
-                }
-                return true;
-            } catch (ReflectiveOperationException | RuntimeException candidateFailed) {
-                // Try the next class name, then fall back to showing the path.
-            }
-        }
-        return false;
-    }
-
     static void eraseAllData(char[] masterPassword, Consumer<String> result) {
         char[] password = masterPassword.clone();
         Arrays.fill(masterPassword, '\0');
@@ -506,6 +458,25 @@ public final class VaultRuntime implements VaultAccess {
         }, () -> BackgroundExecutor.onGameThread(() -> result.accept(null)));
     }
 
+    static void inspectBackup(BackupSummary backup, char[] backupPassword,
+                              Consumer<io.github.silkypanda.blockvault.core.vault.Vault> result) {
+        char[] secret = backupPassword.clone();
+        Arrays.fill(backupPassword, '\0');
+        withVault(() -> {
+            io.github.silkypanda.blockvault.core.vault.Vault contents;
+            try { contents = store.inspectBackup(backup, secret); }
+            catch (Exception failure) {
+                LOGGER.warn("BlockVault could not inspect the backup with the entered password ({})", failure.getClass().getSimpleName());
+                contents = null;
+            } finally { Arrays.fill(secret, '\0'); }
+            io.github.silkypanda.blockvault.core.vault.Vault inspected = contents;
+            BackgroundExecutor.onGameThread(() -> result.accept(inspected));
+        }, () -> {
+            Arrays.fill(secret, '\0');
+            BackgroundExecutor.onGameThread(() -> result.accept(null));
+        });
+    }
+
     static void restoreBackup(BackupSummary backup, Consumer<Boolean> result) {
         withVault(() -> {
             boolean success;
@@ -521,6 +492,24 @@ public final class VaultRuntime implements VaultAccess {
         }, () -> BackgroundExecutor.onGameThread(() -> result.accept(false)));
     }
 
+    static void restoreBackup(BackupSummary backup, char[] backupPassword, Consumer<Boolean> result) {
+        char[] secret = backupPassword.clone();
+        Arrays.fill(backupPassword, '\0');
+        withVault(() -> {
+            boolean success;
+            try { store.restoreBackup(backup, secret); success = true; }
+            catch (Exception failure) {
+                LOGGER.warn("BlockVault backup restore failed ({})", failure.getClass().getSimpleName());
+                success = false;
+            } finally { Arrays.fill(secret, '\0'); }
+            boolean completed = success;
+            BackgroundExecutor.onGameThread(() -> result.accept(completed));
+        }, () -> {
+            Arrays.fill(secret, '\0');
+            BackgroundExecutor.onGameThread(() -> result.accept(false));
+        });
+    }
+
     static void changeMasterPassword(char[] oldPassword, char[] newPassword, Consumer<String> result) {
         withVault(() -> {
             String failureKey = null;
@@ -528,6 +517,8 @@ public final class VaultRuntime implements VaultAccess {
                 store.changeMasterPassword(oldPassword, newPassword);
             } catch (Exception failure) {
                 failureKey = failure instanceof WrongMasterPasswordException ? "blockvault.master.current.wrong"
+                        : failure instanceof io.github.silkypanda.blockvault.core.vault.TrustedDeviceUpdateException
+                                ? "blockvault.master.change.trust_failed"
                         : failure instanceof BackupReencryptionException ? "blockvault.master.change.backups_failed"
                         : failure instanceof IllegalArgumentException ? "blockvault.master.new.invalid"
                         : failure instanceof IOException ? "blockvault.master.change.io" : "blockvault.master.failed";
@@ -561,7 +552,13 @@ public final class VaultRuntime implements VaultAccess {
     /** Creates the settings screen for loader-provided config-screen entrypoints. */
     public static net.minecraft.client.gui.screens.Screen createSettingsScreen(
             net.minecraft.client.gui.screens.Screen parent) {
-        return new VaultSettingsScreen(parent);
+        try {
+            Class<?> yaclScreen = Class.forName("io.github.silkypanda.blockvault.VaultYaclSettingsScreen");
+            return (net.minecraft.client.gui.screens.Screen) yaclScreen
+                    .getDeclaredConstructor(net.minecraft.client.gui.screens.Screen.class).newInstance(parent);
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return new VaultNativeSettingsScreen(parent);
+        }
     }
 
     /** Reveals a selected credential only for the duration of the callback. */
@@ -766,7 +763,6 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Moves one complete account entry to the trash after the caller has confirmed the action. */
     static void deleteAccount(VaultRow row) {
-        if (row.serverOnly()) return;
         withVault(() -> {
             Vault current = store.vault();
             ServerEntry server = findServer(current, row.host());
@@ -830,7 +826,7 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Applies the explicit local-device trust preference without retaining the master password. */
     static void setTrustedDevice(boolean trusted) {
-        trustedUnlockAttempted = true;
+        if (!trusted) trustedUnlockAttempted = true;
         BackgroundExecutor.submit(() -> {
             try {
                 ensureStore();
@@ -923,12 +919,8 @@ public final class VaultRuntime implements VaultAccess {
         for (ServerEntry server : vault.servers()) {
             String host = server.hosts().stream().findFirst().orElse(server.name());
             List<Account> active = server.accounts();
-            if (active.isEmpty()) {
-                result.add(new VaultRow(server.name(), host, "", null, server.autofill(), server.templateId(), true, false));
-            } else {
-                for (Account account : active) result.add(new VaultRow(server.name(), host, account.username(),
-                        account.status(), server.autofill(), server.templateId(), false, !account.isValidForUse()));
-            }
+            for (Account account : active) result.add(new VaultRow(server.name(), host, account.username(),
+                    account.status(), server.autofill(), server.templateId(), !account.isValidForUse()));
         }
         return List.copyOf(result);
     }
@@ -940,7 +932,6 @@ public final class VaultRuntime implements VaultAccess {
             BackgroundExecutor.onGameThread(() -> {
                 net.minecraft.client.gui.screens.Screen screen = Minecraft.getInstance().gui.screen();
                 if (screen instanceof VaultListScreen list) list.updateRows(rows);
-                else Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows));
             });
             return null;
         });
@@ -968,13 +959,14 @@ public final class VaultRuntime implements VaultAccess {
     private static void closeBlockVaultScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         net.minecraft.client.gui.screens.Screen screen = minecraft.gui.screen();
-        if (screen instanceof VaultListScreen || screen instanceof VaultCredentialScreen
+        if (screen != null && (screen instanceof VaultListScreen || screen instanceof VaultCredentialScreen
                 || screen instanceof VaultTemplateScreen || screen instanceof VaultDeleteScreen
-                || screen instanceof VaultTransferScreen || screen instanceof VaultSettingsScreen
+                || screen instanceof VaultTransferScreen || screen instanceof VaultNativeSettingsScreen
+                || screen.getClass().getName().equals("io.github.silkypanda.blockvault.VaultYaclSettingsScreen")
                 || screen instanceof VaultRecoveryScreen || screen instanceof VaultBackupDetailScreen
                 || screen instanceof VaultBackupRecoveryScreen || screen instanceof VaultMasterPasswordScreen
-                || screen instanceof VaultEraseScreen
-                || screen instanceof VaultAccessScreen) {
+                || screen instanceof VaultBackupPasswordScreen || screen instanceof VaultEraseScreen
+                || screen instanceof VaultAccessScreen)) {
             minecraft.setScreenAndShow(null);
         }
     }

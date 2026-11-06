@@ -85,7 +85,7 @@ final class BlockVaultConfig {
         if (!java.util.Set.of("top_left", "top_right", "bottom_left", "bottom_right").contains(position)) position = defaults.cardPosition();
         String generator = string(json, "generator", defaults.generator());
         if (!java.util.Set.of("defaults", "pickyServer", "max", "memorable").contains(generator)) generator = defaults.generator();
-        return new Settings(bool(json, "autofill", defaults.autofill()), integer(json, "autofillDelayMillis", 200, 5000,
+        return new Settings(bool(json, "autofill", defaults.autofill()), bool(json, "passwordlessLogin", defaults.passwordlessLogin()), integer(json, "autofillDelayMillis", 200, 5000,
                 defaults.autofillDelayMillis()),
                 integer(json, "cardDurationSeconds", 1, 60, defaults.cardDurationSeconds()),
                 position, bool(json, "streamerMode", defaults.streamerMode()),
@@ -97,6 +97,7 @@ final class BlockVaultConfig {
         Files.createDirectories(path.getParent());
         JsonObject json = new JsonObject();
         json.addProperty("autofill", settings.autofill());
+        json.addProperty("passwordlessLogin", settings.passwordlessLogin());
         json.addProperty("autofillDelayMillis", settings.autofillDelayMillis());
         json.addProperty("cardDurationSeconds", settings.cardDurationSeconds());
         json.addProperty("cardPosition", settings.cardPosition());
@@ -141,10 +142,18 @@ final class BlockVaultConfig {
         };
     }
 
-    record Settings(boolean autofill, int autofillDelayMillis, int cardDurationSeconds,
+    record Settings(boolean autofill, boolean passwordlessLogin, int autofillDelayMillis, int cardDurationSeconds,
                     String cardPosition, boolean streamerMode, String generator, boolean scrubHistory,
                     boolean trustDevice) {
-        static Settings defaults() { return new Settings(true, 400, 5, "top_right", false, "pickyServer", true, true); }
-        Settings withTrustDevice(boolean value) { return new Settings(autofill, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, value); }
+        static Settings defaults() { return new Settings(true, true, 400, 5, "top_right", false, "pickyServer", true, true); }
+        Settings withTrustDevice(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, value); }
+        Settings withAutofill(boolean value) { return new Settings(value, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
+        Settings withPasswordlessLogin(boolean value) { return new Settings(autofill, value, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
+        Settings withAutofillDelayMillis(int value) { return new Settings(autofill, passwordlessLogin, value, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
+        Settings withCardDurationSeconds(int value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, value, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
+        Settings withCardPosition(String value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, value, streamerMode, generator, scrubHistory, trustDevice); }
+        Settings withStreamerMode(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, cardPosition, value, generator, scrubHistory, trustDevice); }
+        Settings withGenerator(String value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, value, scrubHistory, trustDevice); }
+        Settings withScrubHistory(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, value, trustDevice); }
     }
 }

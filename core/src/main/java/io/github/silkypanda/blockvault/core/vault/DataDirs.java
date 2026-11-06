@@ -15,7 +15,7 @@ public final class DataDirs {
         String override = System.getProperty("blockvault.dataDir");
         if (override != null && !override.isBlank()) return Path.of(override).toAbsolutePath().normalize();
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
+        if (os.startsWith("windows")) {
             // Local (not Roaming) AppData: the vault and its trusted-device key must never roam to a network profile.
             String localAppData = System.getenv("LOCALAPPDATA");
             if (localAppData == null || localAppData.isBlank()) {

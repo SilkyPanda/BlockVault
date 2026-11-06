@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 public final class LoginSession {
     private static final long DEBOUNCE_MILLIS = 1500;
     private static final long RESULT_TIMEOUT_MILLIS = 5_000;
+    private static final long PROMPT_LISTENING_MILLIS = 20_000;
     /** Server text is untrusted and unbounded; only this many characters are ever matched. */
     private static final int MAX_MESSAGE_CHARS = 2048;
     /** Used when a server rejects a password but its message gives no usable numbers. */
@@ -35,6 +36,7 @@ public final class LoginSession {
     private PasswordGenerator.Policy policy;
     // Fail closed while settings are still loading, so an early prompt cannot ignore the owner's opt-out.
     private boolean globalAutofill;
+    private boolean passwordlessLogin = true;
     private long autofillDelayMillis = 400;
     private SessionState state = SessionState.IDLE;
     private String host;
@@ -49,6 +51,7 @@ public final class LoginSession {
     private final java.util.Set<String> promptedShortAliases = new java.util.HashSet<>();
     private final java.util.Set<String> consumedShortAliases = new java.util.HashSet<>();
     private long shortAliasPromptAt = Long.MIN_VALUE;
+    private long promptListeningUntil = Long.MIN_VALUE;
     private boolean attempted;
     private boolean registerRetry;
     private int generation;
@@ -70,19 +73,22 @@ public final class LoginSession {
         onDisconnect();
         host = hostKey;
         username = mcUsername;
+        promptListeningUntil = scheduler.nowMillis() + PROMPT_LISTENING_MILLIS;
     }
 
     /** Processes a plain system message only; callers must exclude signed player chat. */
     public void onSystemMessage(String message) {
         if (host == null || state == SessionState.CONFIRMED || message == null) return;
         String plain = message.length() > MAX_MESSAGE_CHARS ? message.substring(0, MAX_MESSAGE_CHARS) : message;
-        java.util.Set<String> explicitShortAliases = prompts.promptedShortCommands(plain);
+        boolean listenForPrompts = scheduler.nowMillis() <= promptListeningUntil;
+        java.util.Set<String> explicitShortAliases = listenForPrompts
+                ? prompts.promptedShortCommands(plain) : java.util.Set.of();
         if (!explicitShortAliases.isEmpty()) {
             promptedShortAliases.clear();
             promptedShortAliases.addAll(explicitShortAliases);
             shortAliasPromptAt = scheduler.nowMillis();
         }
-        java.util.Set<PromptKind> matches = prompts.matchingPrompts(plain);
+        java.util.Set<PromptKind> matches = listenForPrompts ? prompts.matchingPrompts(plain) : java.util.Set.of();
         if (matches.size() == 1) handlePrompt(matches.iterator().next(), plain);
         else if (matches.contains(PromptKind.LOGIN) && matches.contains(PromptKind.REGISTER)) {
             if (dismissedPromptKinds.contains(PromptKind.LOGIN)
@@ -133,7 +139,7 @@ public final class LoginSession {
         if (isShortAuthenticationAlias(command) && !consumePromptedShortAlias(command)) return;
         String[] words = matcher.group(2) == null ? new String[0] : matcher.group(2).trim().split("\\s+");
         if (words.length == 0 || words[0].isEmpty()) {
-            if (!contains("login", command)) return;
+            if (!contains("login", command) || !passwordlessLogin) return;
             // A bare login is an explicit request, independent of the automatic-login switches.
             if (state == SessionState.SENT) return;
             cancelTimer();
@@ -233,6 +239,23 @@ public final class LoginSession {
         finally { Arrays.fill(staged, '\0'); }
     }
 
+    /** Sends a saved pending password only after the owner confirms the login card. */
+    public void confirmPendingLogin(char[] password) {
+        if (host == null || state != SessionState.PROMPTED || lastPromptKind != PromptKind.LOGIN
+                || action != Action.NONE || !CredentialPassword.isValid(password)) return;
+        replacePending(password);
+        action = Action.AUTOFILL;
+        state = SessionState.SENT;
+        int token = generation;
+        char[] staged = pending.clone();
+        env.vault().savePending(host, username, staged, saved -> safely(() -> {
+            Arrays.fill(staged, '\0');
+            if (token != generation || state != SessionState.SENT || action != Action.AUTOFILL) return;
+            if (!saved) { wipePending(); action = Action.NONE; state = SessionState.UNKNOWN; return; }
+            send(false, null, token);
+        }));
+    }
+
     /** Updates the rejected server credential after an explicit user confirmation. */
     public void updateRejectedPassword(char[] password) {
         if (host == null || state != SessionState.REJECTED) return;
@@ -281,10 +304,15 @@ public final class LoginSession {
 
     /** Applies client preferences on the session thread before future prompt handling. */
     public void configure(boolean autofill, long delayMillis, PasswordGenerator.Policy nextPolicy) {
+        configure(autofill, true, delayMillis, nextPolicy);
+    }
+
+    public void configure(boolean autofill, boolean passwordless, long delayMillis, PasswordGenerator.Policy nextPolicy) {
         if (delayMillis < 200 || delayMillis > 5000 || nextPolicy == null) {
             throw new IllegalArgumentException("Invalid session preferences");
         }
         globalAutofill = autofill;
+        passwordlessLogin = passwordless;
         autofillDelayMillis = delayMillis;
         policy = nextPolicy;
     }
@@ -306,6 +334,7 @@ public final class LoginSession {
         promptedShortAliases.clear();
         consumedShortAliases.clear();
         shortAliasPromptAt = Long.MIN_VALUE;
+        promptListeningUntil = Long.MIN_VALUE;
         promptRevision++;
         template = CommandTemplate.builtins().get("authme");
     }
@@ -376,6 +405,12 @@ public final class LoginSession {
                             host, username, generated, template.register().contains("{email}"), policy)); }
                     finally { Arrays.fill(generated, '\0'); }
                 }
+                return;
+            }
+            if (account != null && account.isValidForUse() && account.status() == Account.Status.PENDING) {
+                char[] pendingPassword = account.password();
+                try { env.showSavePrompt(new PromptModel(CardVariant.PENDING_LOGIN, host, username, pendingPassword)); }
+                finally { Arrays.fill(pendingPassword, '\0'); }
                 return;
             }
             if (!globalAutofill || saved == null || account == null || !account.isValidForUse()
@@ -496,6 +531,9 @@ public final class LoginSession {
             action = Action.NONE;
         } else if (result == ResultKind.PASSWORD_RULE && state == SessionState.SENT && action == Action.REGISTER) {
             cancelTimer();
+            // The server explicitly rejected this password. Do not leave it as a PENDING
+            // account where the next visit could offer the rejected value again.
+            env.vault().delete(host, username);
             if (!registerRetry) {
                 registerRetry = true;
                 var hint = results.parseRuleHint(plain);

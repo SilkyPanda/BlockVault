@@ -91,7 +91,16 @@ public final class InputRules {
     /** A master password: {@link #MASTER_PASSWORD_MIN} to {@link #MASTER_PASSWORD_MAX} acceptable code points. */
     public static boolean isMasterPassword(char[] value) {
         return validPassword(value, MASTER_PASSWORD_MAX)
-                && characterCount(value) >= MASTER_PASSWORD_MIN;
+                && normalizedCharacterCount(value) >= MASTER_PASSWORD_MIN
+                && normalizedCharacterCount(value) <= MASTER_PASSWORD_MAX;
+    }
+
+    /** Character count after the NFC normalization used by the master-password KDF. */
+    public static int normalizedCharacterCount(char[] value) {
+        if (value == null) return 0;
+        String raw = new String(value);
+        String normalized = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFC);
+        return normalized.codePointCount(0, normalized.length());
     }
 
     /** A password typed into a command: acceptable characters and within the server password length. */

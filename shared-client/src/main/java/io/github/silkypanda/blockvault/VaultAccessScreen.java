@@ -54,7 +54,7 @@ final class VaultAccessScreen extends Screen {
         }
         addRenderableWidget(Button.builder(Component.translatable(create
                         ? "blockvault.vault.create" : "blockvault.vault.unlock"), button -> submit())
-                .bounds(center - 100, height / 2 + (create ? 36 : 8), 200, 20).build());
+                .bounds(center - 100, height / 2 + (create ? 56 : 8), 200, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.open"), button ->
                         VaultRuntime.openRecoveryScreen(this))
                 .bounds(center - 100, height / 2 + (create ? 82 : 56), 200, 20).build());
@@ -76,12 +76,13 @@ final class VaultAccessScreen extends Screen {
             failed = true;
             return;
         }
-        if (entered.codePointCount(0, entered.length()) < InputRules.MASTER_PASSWORD_MIN) {
+        int normalizedLength = InputRules.normalizedCharacterCount(entered.toCharArray());
+        if (normalizedLength < InputRules.MASTER_PASSWORD_MIN) {
             failed = true;
             failureKey = "blockvault.vault.password.too_short";
             return;
         }
-        if (entered.codePointCount(0, entered.length()) > InputRules.MASTER_PASSWORD_MAX) {
+        if (normalizedLength > InputRules.MASTER_PASSWORD_MAX) {
             failed = true;
             failureKey = "blockvault.vault.password.too_long";
             return;
@@ -123,6 +124,8 @@ final class VaultAccessScreen extends Screen {
             int[] colors = {0xffff6666, 0xffffbb55, 0xffeedd55, 0xff77dd88};
             graphics.centeredText(font, Component.translatable("blockvault.vault.password.strength",
                     Component.translatable(labels[strength])), width / 2, height / 2 - 80, colors[strength]);
+            graphics.centeredText(font, Component.translatable("blockvault.vault.trust.explanation"),
+                    width / 2, height / 2 + 35, 0xffc3bfcc);
         }
         if (capsLock.likelyOn()) {
             graphics.centeredText(font, Component.translatable("blockvault.access.caps_lock"), width / 2,

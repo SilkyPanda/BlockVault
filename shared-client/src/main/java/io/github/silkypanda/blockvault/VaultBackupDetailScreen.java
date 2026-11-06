@@ -22,6 +22,7 @@ final class VaultBackupDetailScreen extends Screen {
     private final BackupSummary backup;
     private final Vault contents;
     private final Screen parent;
+    private final char[] restorePassword;
     private final List<Entry> entries = new ArrayList<>();
     private final List<char[]> revealed = new ArrayList<>();
     /** Display text for revealed passwords, built once on reveal instead of once per rendered frame. */
@@ -31,10 +32,15 @@ final class VaultBackupDetailScreen extends Screen {
     private boolean busy;
 
     VaultBackupDetailScreen(BackupSummary backup, Vault contents, Screen parent) {
+        this(backup, contents, parent, null);
+    }
+
+    VaultBackupDetailScreen(BackupSummary backup, Vault contents, Screen parent, char[] restorePassword) {
         super(Component.translatable("blockvault.backup.details.title"));
         this.backup = backup;
         this.contents = contents;
         this.parent = parent;
+        this.restorePassword = restorePassword == null ? null : restorePassword.clone();
         for (ServerEntry server : contents.servers()) {
             for (Account account : server.accounts()) {
                 entries.add(new Entry(server, account));
@@ -104,7 +110,7 @@ final class VaultBackupDetailScreen extends Screen {
         busy = true;
         clearRevealed();
         rebuildWidgets();
-        VaultRuntime.restoreBackup(backup, success -> {
+        java.util.function.Consumer<Boolean> completed = success -> {
             busy = false;
             if (success) {
                 clearContents();
@@ -114,7 +120,9 @@ final class VaultBackupDetailScreen extends Screen {
                 confirmRestore = false;
                 rebuildWidgets();
             }
-        });
+        };
+        if (restorePassword == null) VaultRuntime.restoreBackup(backup, completed);
+        else VaultRuntime.restoreBackup(backup, restorePassword.clone(), completed);
     }
 
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
@@ -161,7 +169,11 @@ final class VaultBackupDetailScreen extends Screen {
         contents.trash().forEach(entry -> entry.server().accounts().forEach(Account::clearPassword));
     }
 
-    @Override public void removed() { clearRevealed(); clearContents(); super.removed(); }
+    @Override public void removed() {
+        clearRevealed(); clearContents();
+        if (restorePassword != null) java.util.Arrays.fill(restorePassword, '\0');
+        super.removed();
+    }
     @Override public boolean isPauseScreen() { return false; }
 
     private record Entry(ServerEntry server, Account account) { }
