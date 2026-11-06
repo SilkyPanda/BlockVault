@@ -192,7 +192,6 @@ final class VaultYaclSettingsScreen extends Screen {
         private boolean autofill;
         private boolean passwordless;
         private int delay;
-        private int duration;
         private CardPosition position;
         private boolean streamer;
         private GeneratorPreset generator;
@@ -203,7 +202,6 @@ final class VaultYaclSettingsScreen extends Screen {
             autofill = settings.autofill();
             passwordless = settings.passwordlessLogin();
             delay = settings.autofillDelayMillis();
-            duration = settings.cardDurationSeconds();
             position = CardPosition.from(settings.cardPosition());
             streamer = settings.streamerMode();
             generator = GeneratorPreset.from(settings.generator());
@@ -212,7 +210,7 @@ final class VaultYaclSettingsScreen extends Screen {
         }
 
         private BlockVaultConfig.Settings toSettings() {
-            return new BlockVaultConfig.Settings(autofill, passwordless, delay, duration, position.id, streamer,
+            return new BlockVaultConfig.Settings(autofill, passwordless, delay, position.id, streamer,
                     generator.id, scrubHistory, unlockPolicy == UnlockPolicy.TRUST);
         }
     }

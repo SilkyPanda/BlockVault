@@ -340,40 +340,6 @@ public final class VaultRuntime implements VaultAccess {
         BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultMasterPasswordScreen(parent)));
     }
 
-    static void eraseAllData(char[] masterPassword, Consumer<String> result) {
-        char[] password = masterPassword.clone();
-        Arrays.fill(masterPassword, '\0');
-        BackgroundExecutor.submit(() -> {
-            String failureKey = null;
-            try {
-                java.nio.file.Path directory = DataDirs.resolve();
-                VaultStore verifier = VaultStore.open(directory);
-                if (!verifier.exists()) throw new IOException("No encrypted vault is available to verify the password");
-                try { verifier.unlock(password); }
-                finally { verifier.lock(); }
-                if (store != null) {
-                    store.lock();
-                    store = null;
-                }
-                DataDirs.delete(directory);
-                trustedUnlockAttempted = false;
-            } catch (Exception failure) {
-                failureKey = failure instanceof WrongMasterPasswordException
-                        ? "blockvault.data.erase.wrong_password" : "blockvault.data.erase.failed";
-                LOGGER.warn("BlockVault data erasure failed ({})", failure.getClass().getSimpleName());
-            } finally { Arrays.fill(password, '\0'); }
-            String completed = failureKey;
-            BackgroundExecutor.onGameThread(() -> {
-                if (completed == null) {
-                    BlockVaultConfig.resetAfterDataErasure();
-                    Hooks.onDisconnect();
-                }
-                result.accept(completed);
-            });
-            return null;
-        });
-    }
-
     /** Erases data after the explicit warning/confirmation flow, including when the master password is forgotten. */
     static void eraseAllDataWithoutPassword(Consumer<String> result) {
         BackgroundExecutor.submit(() -> {
@@ -409,7 +375,7 @@ public final class VaultRuntime implements VaultAccess {
 
     static void openImportScreen(net.minecraft.client.gui.screens.Screen parent) {
         if (!hasVaultFile()) {
-            toast("blockvault.transfer.requires_vault");
+            openVaultScreen(parent);
             return;
         }
         Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(parent, true));

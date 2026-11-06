@@ -12,32 +12,30 @@ Use Fabric and NeoForge for UI checks. For server behavior, use a test account a
 - [x] Sensitive login commands do not appear in command history.
 - [x] Create with **Trust this device** on; relaunch unlocks without a prompt. Manual lock, correct password, and incorrect password behavior work.
 - [x] Create with device trust off; relaunch asks for the master password. Change the master password, restart, and verify the new password works while the old one does not.
+- [x] Unicode master passwords work as separate sequences: `Café-Moon-42!` (`é` U+00E9) and `Café-Moon-42!` (`e` + U+0301). `Aa1!` shows the short-password message.
 - [x] Native settings tooltips appear on hover.
 - [x] Native settings button labels fit inside their bounds at the tested scale/window size.
+- [x] Native settings hint sits below Back at the tested common GUI scales and window sizes.
 - [x] Unlock screen spacing works at the tested small and large window sizes.
+- [x] A short valid password during password change shows the 8-character minimum; after a successful change, the vault locks and unlocks with the new password.
+- [x] Restore with no replacement, with a same-username replacement, and with an unrelated username preserves/replaces the expected entries.
+- [x] Restoring over a live same-name account warns about the existing account and overwrite; cancel leaves it unchanged and confirm restores the trashed password.
+- [x] Export's **Copy folder path** copies the containing folder; displayed file path matches the exported file.
+- [x] Import with no vault is blocked in both settings screens; creating a vault enables import.
 - [x] Per-account Autofill and per-account command templates work for two accounts on the same server.
 - [x] The account edit screen has no Delete button; the vault list moves a whole account to Trash.
+- [x] GitHub Actions built both loader artifacts successfully.
 
 ## Still to test
 
 ### Build and settings
 
-- [ ] Check the latest GitHub Actions run for core tests and both loader builds. You run builds on GitHub, so no local build is needed.
-- [ ] Test Unicode master passwords in two separate vaults:
-  1. Create and unlock one with `Café-Moon-42!` (`é` is U+00E9).
-  2. Create and unlock another with `Café-Moon-42!` (`e` followed by U+0301). It looks similar but uses a different character sequence.
-  3. Try `Aa1!`. At 4 characters, it is below the 8-character minimum; expect a short-password message, not an invalid-character message or damaged-vault error.
-- [ ] In native settings, left-click Autofill delay to increase by 100 ms and right-click to decrease by 100 ms. Right-click previously did nothing; retest after the mouse-button change. Check the 200 ms and 5000 ms limits and verify settings persist after restart.
-- [ ] The native settings hint should sit below Back, not between the settings rows and action buttons. Confirm this at common GUI scales and window sizes.
-- [ ] Check idle card timeout: join a test server, trigger a save/update card, then do not touch it. It should close after 10 seconds. A registration card should stay until dismissed; it previously stayed open, so verify the fix.
-- [ ] Create with a short but otherwise valid new master password during password change. It should show the 8-character minimum message. After a successful password change, confirm the vault locks immediately and can be unlocked with the new password.
+- [ ] In native settings, drag Autofill delay to several values. Confirm it changes in 100 ms steps, stays between 200 ms and 5000 ms, and persists after restart.
+- [ ] Trigger Save, Update, Register, Pending login, and Rejected cards. Leave each idle for at least 30 seconds and confirm every card remains open until you close it with its button or Escape.
 
 ### Vault entries and data transfer
 
-- [ ] Test restore in three cases: restore with no replacement account; restore after creating a same-username account with a different password (the deleted password should replace it); restore while another username exists (that unrelated entry should remain).
-- [ ] If restoring over a live same-name account, verify the warning says the account already exists, suggests testing it first, and explains the overwrite. Cancel and verify no change; confirm and verify the trashed password replaces the live one.
-- [ ] Export a vault, click **Copy folder path**, and paste the result into a text field. It should be the containing folder. Compare the displayed full file path with the actual exported file.
-- [ ] With no `vault.bv` present, click **Import vault** in both settings screens. Import should be blocked with a message to create a vault first. Create a vault and confirm import becomes available.
+- [ ] With no vault, choose **Import vault** from both settings screens. Confirm the create-vault screen opens; create a vault, return to settings, then import.
 
 ### Login detection and results
 
@@ -57,6 +55,6 @@ Use Fabric and NeoForge for UI checks. For server behavior, use a test account a
 
 - [ ] Export and import between two profiles. Check preview, cancel, merge results, wrong export password, and restore point creation.
 - [ ] Create and inspect a backup, restore it, then change the master password. New backups should use the new password; an older backup should remain recoverable with its original password.
-- [ ] Open **Permanently erase data** and verify its warning names the vault, backups, and exports in BlockVault's data folder and says to save wanted files elsewhere. Press erase and confirm a separate confirmation screen appears. Cancel and verify nothing was deleted. Then test erase with the master password and **Forgot password? Erase data** without it; create a fresh vault afterward.
+- [ ] Open **Erase BlockVault data** and verify the warning names the vault, backups, and exports in BlockVault's data folder and says to save wanted files elsewhere. Confirm the separate confirmation screen, cancel and verify nothing was deleted, then confirm erase without entering a password. Create a fresh vault afterward.
 - [ ] Confirm passwords never appear in logs or chat. Check streamer mode hides server details and prompt cards wait until another screen closes.
 - [ ] On Windows, macOS, and Linux, create and unlock a vault; check data location and file permissions. On Windows, also replace an existing file through backup/restore or another vault operation.

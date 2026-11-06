@@ -2,10 +2,10 @@ package io.github.silkypanda.blockvault;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /** Native settings and vault-management fallback used when YACL is not installed. */
@@ -13,7 +13,6 @@ final class VaultNativeSettingsScreen extends Screen {
     private final Screen parent;
     private BlockVaultConfig.Settings settings = BlockVaultConfig.Settings.defaults();
     private boolean loaded;
-    private Button delayButton;
 
     VaultNativeSettingsScreen(Screen parent) {
         super(Component.translatable("blockvault.settings.title"));
@@ -48,10 +47,7 @@ final class VaultNativeSettingsScreen extends Screen {
                 "blockvault.settings.description.unlock_policy", settings.trustDevice(), value -> {
                     update(current -> current.withTrustDevice(value), () -> VaultRuntime.setTrustedDevice(value));
                 });
-        delayButton = addValue(left, 24 + row * 5, contentWidth, "blockvault.config.option.delay", "blockvault.settings.description.delay",
-                () -> Component.translatable("blockvault.config.value.millis", settings.autofillDelayMillis()),
-                () -> update(current -> current.withAutofillDelayMillis(
-                        Math.min(5000, current.autofillDelayMillis() + 100))));
+        addDelaySlider(left, 24 + row * 5, contentWidth);
         addValue(left, 24 + row * 6, contentWidth, "blockvault.config.option.position", "blockvault.settings.description.position",
                 () -> Component.translatable("blockvault.config.position." + settings.cardPosition()),
                 () -> {
@@ -95,6 +91,33 @@ final class VaultNativeSettingsScreen extends Screen {
                 .bounds(x, y, buttonWidth, 20).tooltip(Tooltip.create(Component.translatable(tooltipKey))).build());
     }
 
+    private void addDelaySlider(int x, int y, int controlWidth) {
+        int steps = (5000 - 200) / 100;
+        double normalized = (settings.autofillDelayMillis() - 200) / 4800.0;
+        AbstractSliderButton slider = new AbstractSliderButton(x, y, controlWidth, 20,
+                delayMessage(settings.autofillDelayMillis()), normalized) {
+            @Override protected void updateMessage() {
+                int millis = 200 + (int) Math.round(value * steps) * 100;
+                setMessage(delayMessage(millis));
+            }
+
+            @Override protected void applyValue() {
+                int millis = 200 + (int) Math.round(value * steps) * 100;
+                value = (millis - 200) / 4800.0;
+                updateMessage();
+                VaultNativeSettingsScreen.this.update(current -> current.withAutofillDelayMillis(millis));
+            }
+        };
+        slider.setTooltip(Tooltip.create(Component.translatable("blockvault.settings.description.delay")));
+        addRenderableWidget(slider);
+    }
+
+    private static Component delayMessage(int millis) {
+        return Component.translatable("blockvault.config.option.delay")
+                .append(Component.literal(": "))
+                .append(Component.translatable("blockvault.config.value.millis", millis));
+    }
+
     private Button addValue(int x, int y, int controlWidth, String key, String tooltipKey,
                             java.util.function.Supplier<Component> value, Runnable next) {
         Component label = Component.translatable(key).append(Component.literal(": ")).append(value.get());
@@ -122,15 +145,6 @@ final class VaultNativeSettingsScreen extends Screen {
                 init();
             }
         });
-    }
-
-    @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 1 && delayButton != null && delayButton.isMouseOver(event.x(), event.y())) {
-            update(current -> current.withAutofillDelayMillis(Math.max(200, current.autofillDelayMillis() - 100)));
-            return true;
-        }
-        return super.mouseClicked(event, doubleClick);
     }
 
     @Override

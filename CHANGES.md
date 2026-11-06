@@ -15,7 +15,8 @@
 - **Added** passwordless `/login`: typing a bare login command sends the verified saved password through the server's configured login template, regardless of global or per-server autofill settings.
 - **Changed** credential capture to always be allowed, removed its per-server toggle and opt-out action, and kept autofill as a separate per-server setting.
 - **Fixed** YACL Reset bindings to use BlockVault's actual default values instead of the values loaded when the screen opens. Restored the vault-row Copy label.
-- **Changed** the default idle save/update card duration from 10 seconds to 5 seconds; the YACL setting remains configurable.
+- **Changed** all login cards to remain open until manually dismissed.
+- **Changed** native Autofill delay control to a draggable slider; removed the unused card-duration setting.
 - **Moved** import/export from the vault list into YACL's Vault and files tab, and placed credential prompt settings under Login. Widened vault-row labels to reduce clipped server names.
 
 ## Review follow-up
@@ -26,3 +27,5 @@
 - Limited short-alias capture and history scrubbing to aliases explicitly requested by a server prompt.
 - Wrapped long help text, corrected password-screen layout, added Enter submission to password forms, and preserved the entered password when confirmation mismatches.
 - Updated project docs and QA steps to reflect the current trash, backup, erase, input, and review status.
+- Removed master-password entry from **Erase BlockVault data**; the separate confirmation now authorizes deletion directly.
+- Changed import-without-a-vault actions to open vault creation, and moved the test results already marked Pass into the checklist's Passed section.

@@ -5,7 +5,6 @@ import io.github.silkypanda.blockvault.core.session.CredentialPassword;
 import io.github.silkypanda.blockvault.core.validation.InputRules;
 import io.github.silkypanda.blockvault.core.session.LoginSession;
 import io.github.silkypanda.blockvault.core.session.PromptModel;
-import io.github.silkypanda.blockvault.core.session.Scheduler;
 import io.github.silkypanda.blockvault.core.session.SessionState;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import java.util.Arrays;
@@ -40,17 +39,8 @@ final class CredentialConfirmScreen extends Screen {
     private float scale;
     private int cardX;
     private int cardY;
-    private int mouseX;
-    private int mouseY;
-    private long remainingNanos;
-    private long lastTimerNanos;
-    private Scheduler.Handle timer;
     private String resizedPassword;
     private String resizedEmail;
-    private boolean initialized;
-    private long focusAfterNanos;
-    private long lastActivityNanos;
-    private boolean focusApplied;
 
     CredentialConfirmScreen(PromptModel model, LoginSession session, Runnable closed) {
         super(title(model.variant()));
@@ -79,20 +69,11 @@ final class CredentialConfirmScreen extends Screen {
     protected void init() {
         if (passwordBox != null) resizedPassword = passwordBox.getValue();
         if (emailBox != null) resizedEmail = emailBox.getValue();
-        if (timer != null) timer.cancel();
-        timer = null;
         BlockVaultConfig.Settings config = BlockVaultConfig.current();
         registration = model.variant() == CardVariant.REGISTER
                 || model.variant() == CardVariant.UPDATE && session.state() == SessionState.PROMPTED;
         emailRequired = registration && model.emailRequired();
         int baseHeight = emailRequired ? EMAIL_HEIGHT : BASE_HEIGHT;
-        if (!initialized) remainingNanos = (long) config.cardDurationSeconds() * 1_000_000_000L;
-        initialized = true;
-        long now = System.nanoTime();
-        lastTimerNanos = now;
-        lastActivityNanos = now;
-        focusAfterNanos = now + 400_000_000L;
-        focusApplied = false;
         scale = Math.min(1.0f, (float) (0.98 * Math.sqrt((width * (double) height * 0.30)
                 / (BASE_WIDTH * (double) baseHeight))));
         scale = Math.min(scale, Math.min((width - 16.0f) / BASE_WIDTH, (height - 16.0f) / baseHeight));
@@ -115,7 +96,7 @@ final class CredentialConfirmScreen extends Screen {
         passwordBox = new EditBox(font, cardX + pad, fieldY, cardWidth - pad * 2, scaled(20),
                 Component.translatable("blockvault.card.password"));
         passwordBox.setMaxLength(InputRules.SERVER_PASSWORD_MAX * 2);
-        InputFilter.bind(passwordBox, InputRules::isServerPasswordInput, value -> noteActivity());
+        InputFilter.bind(passwordBox, InputRules::isServerPasswordInput, null);
         passwordBox.setHint(Component.translatable("blockvault.card.password"));
         passwordBox.setValue(resizedPassword != null ? resizedPassword
                 : model.variant() == CardVariant.REJECTED ? "" : new String(password));
@@ -129,7 +110,7 @@ final class CredentialConfirmScreen extends Screen {
                     Component.translatable("blockvault.card.email"));
             emailBox.setHint(Component.translatable("blockvault.card.email"));
             emailBox.setMaxLength(254);
-            InputFilter.bind(emailBox, InputRules::isEmailText, value -> noteActivity());
+            InputFilter.bind(emailBox, InputRules::isEmailText, null);
             if (resizedEmail != null) emailBox.setValue(resizedEmail);
             resizedEmail = null;
             addRenderableWidget(emailBox);
@@ -138,7 +119,7 @@ final class CredentialConfirmScreen extends Screen {
         if (model.variant() == CardVariant.REJECTED) initRejectedButtons();
         else if (model.variant() == CardVariant.PENDING_LOGIN) initPendingLoginButtons();
         else initSaveButtons(registration);
-        if (model.variant() == CardVariant.SAVE) scheduleTimer();
+        setInitialFocus(passwordBox);
     }
 
     private void initSaveButtons(boolean registration) {
@@ -272,38 +253,14 @@ final class CredentialConfirmScreen extends Screen {
         return super.keyPressed(event);
     }
 
-    private void scheduleTimer() {
-        timer = BackgroundExecutor.scheduler().schedule(250, () -> {
-            if (Minecraft.getInstance().gui.screen() != this) return;
-            long now = System.nanoTime();
-            long elapsedStart = Math.max(lastTimerNanos, Math.max(focusAfterNanos, lastActivityNanos));
-            lastTimerNanos = now;
-            boolean hovering = mouseX >= cardX && mouseX < cardX + cardWidth
-                    && mouseY >= cardY && mouseY < cardY + cardHeight;
-            if (now >= focusAfterNanos && !focusApplied) {
-                focusApplied = true;
-                if (passwordBox != null && !passwordBox.isFocused()
-                        && (emailBox == null || !emailBox.isFocused())) passwordBox.setFocused(true);
-            }
-            if (!hovering && now > elapsedStart) remainingNanos -= now - elapsedStart;
-            if (remainingNanos <= 0) onClose();
-            else scheduleTimer();
-        });
-    }
-
-    private void noteActivity() { lastActivityNanos = System.nanoTime(); }
-
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        this.mouseX = mouseX;
-        this.mouseY = mouseY;
         graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xf20d0c12);
         graphics.fill(cardX, cardY, cardX + cardWidth, cardY + scaled(2), 0xff9b72ff);
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        noteActivity();
         if (event.x() < cardX || event.x() >= cardX + cardWidth
                 || event.y() < cardY || event.y() >= cardY + cardHeight) {
             // Keep the only copy of manually entered credentials on screen until the owner chooses an action.
@@ -346,8 +303,6 @@ final class CredentialConfirmScreen extends Screen {
     private void finishClose() {
         if (closing) return;
         closing = true;
-        if (timer != null) timer.cancel();
-        timer = null;
         if (model.variant() == CardVariant.REJECTED) session.dismissRejectedPrompt();
         else if (session.state() == SessionState.PROMPTED) session.dismissPrompt();
         wipePassword();
