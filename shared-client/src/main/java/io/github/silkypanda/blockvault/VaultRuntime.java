@@ -5,6 +5,7 @@ import io.github.silkypanda.blockvault.core.session.CredentialPassword;
 import io.github.silkypanda.blockvault.core.session.SavedCredential;
 import io.github.silkypanda.blockvault.core.session.VaultAccess;
 import io.github.silkypanda.blockvault.core.vault.Account;
+import io.github.silkypanda.blockvault.core.vault.AccountPreferences;
 import io.github.silkypanda.blockvault.core.vault.BackupSummary;
 import io.github.silkypanda.blockvault.core.vault.BackupReencryptionException;
 import io.github.silkypanda.blockvault.core.vault.DataDirs;
@@ -65,12 +66,14 @@ public final class VaultRuntime implements VaultAccess {
                     .filter(value -> value.isValidForUse() && Usernames.same(value.username(), username))
                     .findFirst().orElse(null);
             Account callbackAccount = account == null ? null : copyAccount(account);
-            // "auto" means "detect from the server's prompt"; any other stored id is an explicit owner choice.
-            boolean templateExplicit = server != null && !"auto".equals(server.templateId());
-            String templateId = server == null ? "auto" : server.templateId();
+            // Account preferences override the legacy server defaults, allowing same-server accounts to differ.
+            String templateId = server == null || account == null ? "auto"
+                    : AccountPreferences.template(account, server.templateId());
+            boolean templateExplicit = !"auto".equals(templateId);
             CommandTemplate template = CommandTemplate.builtins().getOrDefault(templateId, CommandTemplate.builtins().get("authme"));
             SavedCredential saved = server == null ? null
-                    : new SavedCredential(callbackAccount, server.autofill(), template, templateExplicit);
+                    : new SavedCredential(callbackAccount, account != null
+                            && AccountPreferences.autofill(account, true), template, templateExplicit);
             BackgroundExecutor.onGameThread(() -> {
                 try { result.accept(saved); }
                 finally { if (callbackAccount != null) callbackAccount.clearPassword(); }
@@ -739,7 +742,15 @@ public final class VaultRuntime implements VaultAccess {
             for (int index = 0; index < servers.size(); index++) {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
-                    servers.set(index, server.withAutofill(autofill));
+                    List<Account> accounts = new ArrayList<>(server.accounts());
+                    for (int accountIndex = 0; accountIndex < accounts.size(); accountIndex++) {
+                        Account account = accounts.get(accountIndex);
+                        if (Usernames.same(account.username(), row.username())) {
+                            accounts.set(accountIndex, AccountPreferences.withAutofill(account, autofill));
+                            break;
+                        }
+                    }
+                    servers.set(index, server.withAccounts(accounts));
                     break;
                 }
             }
@@ -757,7 +768,15 @@ public final class VaultRuntime implements VaultAccess {
             for (int index = 0; index < servers.size(); index++) {
                 ServerEntry server = servers.get(index);
                 if (server.hosts().contains(row.host())) {
-                    servers.set(index, server.withTemplate(storedTemplate));
+                    List<Account> accounts = new ArrayList<>(server.accounts());
+                    for (int accountIndex = 0; accountIndex < accounts.size(); accountIndex++) {
+                        Account account = accounts.get(accountIndex);
+                        if (Usernames.same(account.username(), row.username())) {
+                            accounts.set(accountIndex, AccountPreferences.withTemplate(account, storedTemplate));
+                            break;
+                        }
+                    }
+                    servers.set(index, server.withAccounts(accounts));
                     break;
                 }
             }
@@ -925,7 +944,8 @@ public final class VaultRuntime implements VaultAccess {
             String host = server.hosts().stream().findFirst().orElse(server.name());
             List<Account> active = server.accounts();
             for (Account account : active) result.add(new VaultRow(server.name(), host, account.username(),
-                    account.status(), server.autofill(), server.templateId(), !account.isValidForUse()));
+                    account.status(), AccountPreferences.autofill(account, true),
+                    AccountPreferences.template(account, "auto"), !account.isValidForUse()));
         }
         return List.copyOf(result);
     }

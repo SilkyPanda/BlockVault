@@ -23,6 +23,7 @@
   "prompt": {
     "login": [
       "(?i)/login\\b",
+      "(?i)/(?:l|log)\\b",
       "(?i)/(?:l|log)\\s+<"
     ],
     "register": [

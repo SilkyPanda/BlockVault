@@ -105,6 +105,8 @@ public final class VaultJson {
     }
 
     private static ServerEntry readServer(JsonObject item) {
+        boolean legacyAutofill = item.get("autofill").getAsBoolean();
+        String legacyTemplate = item.get("template").getAsString();
         List<String> hosts = new ArrayList<>();
         item.getAsJsonArray("hosts").forEach(host -> hosts.add(host.getAsString()));
         List<Account> accounts = new ArrayList<>();
@@ -123,9 +125,22 @@ public final class VaultJson {
                 accounts.add(new Account("", new char[0], Account.Status.PENDING, 0, 0, 0, metadata));
             }
         }
+        for (int index = 0; index < accounts.size(); index++) {
+            Account account = accounts.get(index);
+            Account migrated = account;
+            if (!AccountPreferences.hasAutofill(migrated)) {
+                migrated = AccountPreferences.withAutofill(migrated, legacyAutofill);
+            }
+            if (!AccountPreferences.hasTemplate(migrated)) {
+                migrated = AccountPreferences.withTemplate(migrated, legacyTemplate);
+            }
+            if (migrated != account) {
+                account.clearPassword();
+                accounts.set(index, migrated);
+            }
+        }
         return new ServerEntry(item.get("id").getAsString(), item.get("name").getAsString(), hosts,
-                item.get("autofill").getAsBoolean(),
-                item.get("template").getAsString(), accounts, unknown(item, SERVER_KEYS));
+                legacyAutofill, legacyTemplate, accounts, unknown(item, SERVER_KEYS));
     }
 
     /** Account metadata excluding the removed previous-password snapshot. */

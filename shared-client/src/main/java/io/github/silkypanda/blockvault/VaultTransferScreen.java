@@ -21,6 +21,7 @@ final class VaultTransferScreen extends Screen {
     private boolean failed;
     private boolean busy;
     private String exportedPath;
+    private Button copyExportFolder;
 
     VaultTransferScreen(Screen parent, boolean importing) {
         super(Component.translatable(importing ? "blockvault.transfer.import.title" : "blockvault.transfer.export.title"));
@@ -53,6 +54,14 @@ final class VaultTransferScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"),
                 button -> net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent))
                 .bounds(left + 156, height / 2 + 36, 144, 20).build());
+        copyExportFolder = Button.builder(Component.translatable("blockvault.transfer.copy_folder"), button -> {
+            if (exportedPath != null) {
+                Path file = Path.of(exportedPath);
+                VaultRuntime.copyToClipboard(file.getParent().toString());
+            }
+        }).bounds(left + 78, height / 2 + 88, 144, 20).build();
+        copyExportFolder.visible = false;
+        addRenderableWidget(copyExportFolder);
     }
 
     private void transfer() {
@@ -71,7 +80,8 @@ final class VaultTransferScreen extends Screen {
             VaultRuntime.exportVault(path, exported -> {
                 busy = false;
                 failed = exported == null;
-        exportedPath = exported == null ? null : exported.toAbsolutePath().normalize().toString();
+                exportedPath = exported == null ? null : exported.toAbsolutePath().normalize().toString();
+                if (copyExportFolder != null) copyExportFolder.visible = exported != null;
             });
             return;
         }

@@ -59,7 +59,7 @@ final class VaultAccessScreen extends Screen {
                 .bounds(center - 100, height / 2 + (create ? 56 : 8), 200, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.open"), button ->
                         VaultRuntime.openRecoveryScreen(this))
-                .bounds(center - 100, height / 2 + (create ? 82 : 56), 200, 20).build());
+                .bounds(center - 100, height / 2 + (create ? 82 : 34), 200, 20).build());
         setInitialFocus(password);
     }
 

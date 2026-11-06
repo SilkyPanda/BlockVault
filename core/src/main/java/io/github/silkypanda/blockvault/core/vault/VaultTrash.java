@@ -35,15 +35,31 @@ public final class VaultTrash {
     }
 
     /**
-     * Puts a trash entry back. It is merged with whatever is live now using the normal rule: same server (shared
-     * host) and same username, newer {@code modifiedAt} wins, live copy wins a tie.
+     * Puts a trash entry back. The explicitly restored account replaces any live account with the same username
+     * on a matching host, while unrelated accounts and current server settings are preserved.
      */
     public static Vault restore(Vault vault, String trashId, long nowMillis) {
         TrashEntry entry = vault.trash().stream().filter(t -> t.id().equals(trashId)).findFirst().orElse(null);
         if (entry == null) return vault;
         List<TrashEntry> trash = new ArrayList<>(vault.trash());
         trash.removeIf(t -> t.id().equals(trashId));
-        List<ServerEntry> servers = VaultMerger.mergeServers(vault.servers(), List.of(entry.server()), nowMillis);
+        List<ServerEntry> servers = new ArrayList<>(vault.servers());
+        ServerEntry restoredServer = entry.server();
+        boolean placed = false;
+        for (int index = 0; index < servers.size(); index++) {
+            ServerEntry live = servers.get(index);
+            if (!live.id().equals(restoredServer.id())
+                    && live.hosts().stream().noneMatch(restoredServer.hosts()::contains)) continue;
+            List<Account> accounts = new ArrayList<>(live.accounts());
+            for (Account restored : restoredServer.accounts()) {
+                accounts.removeIf(account -> Usernames.same(account.username(), restored.username()));
+                accounts.add(restored);
+            }
+            servers.set(index, live.withAccounts(accounts));
+            placed = true;
+            break;
+        }
+        if (!placed) servers.add(restoredServer);
         return new Vault(vault.v(), servers, trash, vault.extra());
     }
 

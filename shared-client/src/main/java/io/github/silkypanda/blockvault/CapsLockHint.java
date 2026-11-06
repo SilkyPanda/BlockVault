@@ -14,7 +14,7 @@ final class CapsLockHint {
         if (value.length() == previous.length() + 1 && value.startsWith(previous)) {
             char typed = value.charAt(value.length() - 1);
             if (Character.isLetter(typed) && (Character.isUpperCase(typed) || Character.isLowerCase(typed))) {
-                boolean shift = Keybinds.shiftDown();
+                boolean shift = io.github.silkypanda.blockvault.mixin.ShiftState.shiftDown();
                 likelyOn = Character.isUpperCase(typed) != shift;
             }
         }
