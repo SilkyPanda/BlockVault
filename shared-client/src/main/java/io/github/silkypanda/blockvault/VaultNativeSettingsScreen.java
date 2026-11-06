@@ -33,32 +33,33 @@ final class VaultNativeSettingsScreen extends Screen {
             });
             return;
         }
-        int left = width / 2 - 102;
+        int contentWidth = Math.max(1, Math.min(420, width - 24));
+        int left = (width - contentWidth) / 2;
         int row = 20;
-        addToggle(left, 24, "blockvault.config.option.autofill", "blockvault.settings.description.autofill", settings.autofill(), value ->
+        addToggle(left, 24, contentWidth, "blockvault.config.option.autofill", "blockvault.settings.description.autofill", settings.autofill(), value ->
                 update(current -> current.withAutofill(value)));
-        addToggle(left, 24 + row, "blockvault.config.option.passwordless", "blockvault.settings.description.passwordless", settings.passwordlessLogin(), value ->
+        addToggle(left, 24 + row, contentWidth, "blockvault.config.option.passwordless", "blockvault.settings.description.passwordless", settings.passwordlessLogin(), value ->
                 update(current -> current.withPasswordlessLogin(value)));
-        addToggle(left, 24 + row * 2, "blockvault.config.option.streamer", "blockvault.settings.description.streamer", settings.streamerMode(), value ->
+        addToggle(left, 24 + row * 2, contentWidth, "blockvault.config.option.streamer", "blockvault.settings.description.streamer", settings.streamerMode(), value ->
                 update(current -> current.withStreamerMode(value)));
-        addToggle(left, 24 + row * 3, "blockvault.config.option.scrub_history", "blockvault.settings.description.scrub_history", settings.scrubHistory(), value ->
+        addToggle(left, 24 + row * 3, contentWidth, "blockvault.config.option.scrub_history", "blockvault.settings.description.scrub_history", settings.scrubHistory(), value ->
                 update(current -> current.withScrubHistory(value)));
-        addToggle(left, 24 + row * 4, "blockvault.config.option.unlock_policy",
+        addToggle(left, 24 + row * 4, contentWidth, "blockvault.config.option.unlock_policy",
                 "blockvault.settings.description.unlock_policy", settings.trustDevice(), value -> {
                     update(current -> current.withTrustDevice(value), () -> VaultRuntime.setTrustedDevice(value));
                 });
-        delayButton = addValue(left, 24 + row * 5, "blockvault.config.option.delay", "blockvault.settings.description.delay",
+        delayButton = addValue(left, 24 + row * 5, contentWidth, "blockvault.config.option.delay", "blockvault.settings.description.delay",
                 () -> Component.translatable("blockvault.config.value.millis", settings.autofillDelayMillis()),
                 () -> update(current -> current.withAutofillDelayMillis(
                         Math.min(5000, current.autofillDelayMillis() + 100))));
-        addValue(left, 24 + row * 6, "blockvault.config.option.position", "blockvault.settings.description.position",
+        addValue(left, 24 + row * 6, contentWidth, "blockvault.config.option.position", "blockvault.settings.description.position",
                 () -> Component.translatable("blockvault.config.position." + settings.cardPosition()),
                 () -> {
                     java.util.List<String> positions = java.util.List.of("top_left", "top_right", "bottom_left", "bottom_right");
                     String next = positions.get((positions.indexOf(settings.cardPosition()) + 1) % positions.size());
                     update(current -> current.withCardPosition(next));
                 });
-        addValue(left, 24 + row * 7, "blockvault.config.option.generator", "blockvault.settings.description.generator",
+        addValue(left, 24 + row * 7, contentWidth, "blockvault.config.option.generator", "blockvault.settings.description.generator",
                 () -> Component.translatable("blockvault.settings.generator.preset." + settings.generator()),
                 () -> {
                     java.util.List<String> presets = java.util.List.of("basic", "memorable");
@@ -66,8 +67,8 @@ final class VaultNativeSettingsScreen extends Screen {
                     update(current -> current.withGenerator(next));
                 });
         int actionY = 198;
-        int gap = 4;
-        int buttonWidth = 100;
+        int gap = 8;
+        int buttonWidth = (contentWidth - gap) / 2;
         addAction(left, actionY, buttonWidth, "blockvault.config.action.vault", "blockvault.config.action.vault.description", () -> VaultRuntime.openVaultScreen(this));
         addAction(left + buttonWidth + gap, actionY, buttonWidth, "blockvault.config.action.backups", "blockvault.config.action.backups.description", () -> VaultRuntime.openBackupScreen(this));
         addAction(left, actionY + 24, buttonWidth, "blockvault.config.action.master", "blockvault.config.action.master.description", () -> VaultRuntime.openMasterPasswordScreen(this));
@@ -78,14 +79,14 @@ final class VaultNativeSettingsScreen extends Screen {
         addAction(left + buttonWidth + gap, actionY + 48, buttonWidth, "blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
                 () -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(this)));
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button ->
-                Minecraft.getInstance().setScreenAndShow(parent)).bounds(left, actionY + 72, 204, 20).build());
+                Minecraft.getInstance().setScreenAndShow(parent)).bounds(left, actionY + 72, contentWidth, 20).build());
     }
 
-    private void addToggle(int x, int y, String key, String tooltipKey, boolean value,
+    private void addToggle(int x, int y, int controlWidth, String key, String tooltipKey, boolean value,
                            java.util.function.Consumer<Boolean> change) {
         String label = Component.translatable(value ? "options.on" : "options.off").getString();
         Component message = Component.translatable(key).append(Component.literal(": ")).append(Component.literal(label));
-        addRenderableWidget(Button.builder(message, button -> change.accept(!value)).bounds(x, y, 204, 20)
+        addRenderableWidget(Button.builder(message, button -> change.accept(!value)).bounds(x, y, controlWidth, 20)
                 .tooltip(Tooltip.create(Component.translatable(tooltipKey))).build());
     }
 
@@ -94,10 +95,10 @@ final class VaultNativeSettingsScreen extends Screen {
                 .bounds(x, y, buttonWidth, 20).tooltip(Tooltip.create(Component.translatable(tooltipKey))).build());
     }
 
-    private Button addValue(int x, int y, String key, String tooltipKey,
+    private Button addValue(int x, int y, int controlWidth, String key, String tooltipKey,
                             java.util.function.Supplier<Component> value, Runnable next) {
         Component label = Component.translatable(key).append(Component.literal(": ")).append(value.get());
-        Button button = Button.builder(label, pressed -> next.run()).bounds(x, y, 204, 20)
+        Button button = Button.builder(label, pressed -> next.run()).bounds(x, y, controlWidth, 20)
                 .tooltip(Tooltip.create(Component.translatable(tooltipKey))).build();
         addRenderableWidget(button);
         return button;
@@ -125,7 +126,7 @@ final class VaultNativeSettingsScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 1 && delayButton != null && delayButton.isMouseOver(event.x(), event.y())) {
+        if (event.button() == 2 && delayButton != null && delayButton.isMouseOver(event.x(), event.y())) {
             update(current -> current.withAutofillDelayMillis(Math.max(200, current.autofillDelayMillis() - 100)));
             return true;
         }

@@ -33,8 +33,8 @@ final class VaultEraseScreen extends Screen {
     @Override
     protected void init() {
         int center = width / 2;
-        int top = Math.max(24, height / 2 - 92);
-        password = new EditBox(font, center - 120, top + 82, 240, 20,
+        int top = Math.max(18, height / 2 - 120);
+        password = new EditBox(font, center - 120, top + 108, 240, 20,
                 Component.translatable("blockvault.vault.password"));
         password.setHint(Component.translatable("blockvault.vault.password"));
         password.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
@@ -47,12 +47,12 @@ final class VaultEraseScreen extends Screen {
                             if (confirmUnverifiedErase) eraseWithoutPassword();
                             else erase();
                         })
-                .bounds(center - 120, top + 112, 140, 20).build();
+                .bounds(center - 120, top + 138, 140, 20).build();
         eraseButton.active = !busy;
         addRenderableWidget(eraseButton);
         cancelButton = Button.builder(Component.translatable("blockvault.vault.back"),
                         button -> Minecraft.getInstance().setScreenAndShow(parent))
-                .bounds(center + 28, top + 112, 92, 20).build();
+                .bounds(center + 28, top + 138, 92, 20).build();
         addRenderableWidget(cancelButton);
         if (passwordlessEraseAllowed) {
             addRenderableWidget(Button.builder(Component.translatable("blockvault.data.erase.without_password"), button -> {
@@ -61,7 +61,7 @@ final class VaultEraseScreen extends Screen {
                             failureKey = "blockvault.data.erase.without_password.warning";
                             rebuildWidgets();
                         }
-                    }).bounds(center - 120, top + 138, 240, 20).build());
+                    }).bounds(center - 120, top + 164, 240, 20).build());
         }
         setInitialFocus(password);
         if (!eraseEligibilityChecked) {
@@ -129,7 +129,7 @@ final class VaultEraseScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         int center = width / 2;
-        int top = Math.max(24, height / 2 - 92);
+        int top = Math.max(18, height / 2 - 120);
         graphics.centeredText(font, title, center, top, 0xffff7777);
         int warningY = top + 24;
         warningY = ScreenText.drawCenteredWrapped(graphics, font,
@@ -145,7 +145,7 @@ final class VaultEraseScreen extends Screen {
                 Component.translatable("blockvault.data.erase.without_password.warning"), center, warningY,
                 width - 32, 0xffff7777, 10);
         if (busy || failureKey != null) graphics.centeredText(font,
-                Component.translatable(busy ? "blockvault.data.erase.working" : failureKey), center, top + 166,
+                Component.translatable(busy ? "blockvault.data.erase.working" : failureKey), center, top + 192,
                 busy ? 0xffcccccc : 0xffff7777);
     }
 

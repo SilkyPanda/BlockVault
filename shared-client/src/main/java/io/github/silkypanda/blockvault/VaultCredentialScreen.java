@@ -40,17 +40,15 @@ final class VaultCredentialScreen extends Screen {
                 ? FormattedCharSequence.forward(value, Style.EMPTY)
                 : FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(passwordBox);
+        int actionWidth = 146;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.save"), button -> { save(); })
-                .bounds(x, top + 52, 94, 20).build());
+                .bounds(x, top + 52, actionWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.card.reveal"), button -> { showPassword = !showPassword; })
-                .bounds(x + 103, top + 52, 197, 20).build());
+                .bounds(x + 154, top + 52, actionWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.copyPassword(row); })
-                .bounds(x, top + 78, 94, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete"), button ->
-                Minecraft.getInstance().setScreenAndShow(new VaultDeleteScreen(row, this)))
-                .bounds(x + 103, top + 78, 94, 20).build());
+                .bounds(x, top + 78, actionWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { Minecraft.getInstance().setScreenAndShow(parent); })
-                .bounds(x + 206, top + 78, 94, 20).build());
+                .bounds(x + 154, top + 78, actionWidth, 20).build());
         setInitialFocus(passwordBox);
     }
 

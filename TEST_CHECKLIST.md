@@ -1,50 +1,58 @@
 # Manual test checklist
 
-Run the in-game checks on Fabric and NeoForge. The passed section records checks you reported as passed; everything else remains unverified. For login behavior, use a test server/account and avoid a password you use elsewhere.
+Use Fabric and NeoForge for the UI and login checks. For server behavior, use a test account and a password that you do not use elsewhere. Items are only marked passed when you reported them as passed.
 
-## Reported passed
+## Passed
 
-- [x] GitHub Actions build passed (as reported). The in-game checks below are tracked separately.
-- [x] Build and launch both loaders with YACL installed and absent; verify the settings entry opens YACL or the native fallback.
-- [x] Return from the vault and its sub-screens with Back and Escape. Verify `/blockvault` and BlockVault keybinds are absent.
-- [x] Add, edit, reveal, copy, trash, restore, and permanently delete an account; invalid account input is never sent.
-- [x] Export/import and backup flows were exercised, including recovery of a deleted account. Recheck the restore cases below after this change.
-- [x] Confirm sensitive login commands do not appear in command history.
+- [x] GitHub Actions builds passed; builds will be run on GitHub rather than locally.
+- [x] Launch both loaders with YACL present and absent; the settings entry opens YACL or the native fallback.
+- [x] Return from the vault and its sub-screens using Back and Escape. `/blockvault` and BlockVault keybinds are absent.
+- [x] Add, edit, reveal, copy, trash, restore, and permanently delete an account. Invalid account input is not sent.
+- [x] Export/import and backup flows, including recovering a deleted account.
+- [x] Sensitive login commands do not appear in command history.
+- [x] Create with **Trust this device** enabled; relaunch unlocks without a prompt. Manual lock, correct password, and incorrect password behavior work.
+- [x] Create with device trust disabled; relaunch asks for the master password. Changing the master password works after restart; the old password does not.
 
 ## Still to test
 
 ### Build and settings
 
-- [ ] Run `./gradlew test` in `core/`. Rebuild the loader jars locally with `./gradlew build` in `fabric/` and `neoforge/` if you need local artifacts; CI already passed its build.
-- [ ] In each loader, launch once with YACL and once without it. Open settings from the loader's normal entry point and verify the right screen appears.
-- [ ] Create a vault with **Trust this device** on. Close and relaunch: it should unlock without a prompt. Lock it manually, then unlock with the correct and an incorrect master password.
-- [ ] Repeat vault creation with device trust off. Close and relaunch: require the master password. Change the master password, restart, and verify the new one works while the old one does not.
-- [ ] Test master passwords containing composed and decomposed Unicode. Try one whose normalized length is below the minimum; it should show a length error, not a corrupt-vault error.
-- [ ] Hover each native settings control for its tooltip. Left-click and right-click the Autofill delay control; confirm it increases/decreases by 100 ms and stays within bounds. Change settings, restart, and verify they persist. Leave an idle card open and confirm it closes after 10 seconds.
-- [ ] Open Unlock vault at a small and large window size. Check the password field, Unlock button, and **Recover from backup** button have even spacing and do not overlap.
+- [ ] Check the latest GitHub Actions run for `core` tests and both loader builds. No local build is needed.
+- [ ] Test Unicode master passwords in two separate vaults:
+  1. Create and unlock one with `Café-Moon-42!` (the `é` is one character, U+00E9).
+  2. Create and unlock another with `Café-Moon-42!` (the accent is U+0301 after the `e`). It looks similar but has a different character sequence.
+  3. Try `Aa1!` as a master password. It is shorter than the 8-character minimum; creation should report a length error, not a damaged vault.
+- [ ] In native settings, hover each control for its tooltip. Click Autofill delay with the left mouse button: it should increase by 100 ms. Right-click it: it should decrease by 100 ms. Repeat at 200 ms and 5000 ms to check the limits, then change another setting and restart to verify settings persist.
+- [ ] Check idle card timeout: join a test server, trigger a save/update card, then do not touch it. It should close after 10 seconds. A registration card should stay until dismissed.
+- [ ] At common GUI scales and window sizes, inspect the native settings screen. Every toggle, value, and action button label must stay inside its button. Hover tooltips, including for **Permanently erase data**.
+- [ ] Open Unlock vault at a small and large window size. The password field, Unlock button, and Recover from backup button should have even spacing and not overlap.
 
 ### Vault entries
 
-- [ ] Create two accounts on the same server. In the vault, toggle Autofill for only one account. Reconnect and trigger a login prompt for each: only the enabled account should autofill. Toggle the setting again and verify it persists after restart.
-- [ ] Set different command templates for two accounts on the same server. Trigger registration/login for each and verify the selected account's template is used.
-- [ ] Edit an account's password and save. Confirm there is no action to delete only the password; Delete should move the entire account entry to Trash.
-- [ ] Delete an account, add the same username again with a different password, then restore the deleted entry. The restored entry should contain the original password, replacing the newer same-name entry. Also restore when no replacement exists and when unrelated accounts exist; those unrelated accounts should remain.
-- [ ] Use **Copy folder path** after exporting. Paste into a text field and confirm it is the containing folder (not the encrypted file path). Check the export's displayed full path still matches the created file.
+- [ ] Create two accounts on one test server. Turn Autofill on for one and off for the other. Trigger login prompts for each; only the enabled account should fill. Restart and confirm each choice persists.
+- [ ] Choose different command templates for those accounts. Trigger each account’s login or registration flow; each should use its own template.
+- [ ] Edit an account password and save. Confirm the edit screen has no Delete button. From the vault list, delete the account entry; it should move to Trash with its password intact.
+- [ ] Test restore in three cases: restore with no replacement account; restore after creating a same-username account with a different password (the deleted password should replace it); restore while another username exists (that unrelated entry should remain).
+- [ ] Export a vault, click **Copy folder path**, and paste the result into a text field. It should be the containing folder. Compare the displayed full file path with the actual exported file.
 
-### Login detection and outcomes
+### Login detection and results
 
-- [ ] On a test server whose prompt says `/l <password>`, `/log <password>`, or `/reg <password>`, join and wait for the prompt. For each alias, enter a test password and confirm BlockVault captures it or offers the expected confirmation card. Confirm the same alias is not intercepted when the server has not prompted it.
-- [ ] Register a test account. Confirm the password is saved before the command is sent. If the server rejects its format, confirm the retry uses a compliant replacement and does not offer the rejected value again.
-- [ ] With a verified account, reconnect and test autofill enabled/disabled, the configured delay, and bare `/login` with passwordless login enabled/disabled. Verify BlockVault sends the password only after bare `/login` when enabled.
-- [ ] With a pending account, confirm no password is sent until **Try login** is selected. Verify success marks it verified and rejection leaves it recoverable.
-- [ ] Exercise wrong password, already logged in, registration success/failure, and timeout responses. An “already logged in” response must not mark a correct password as rejected.
-- [ ] Add a valid custom rule to `patterns.json`, reconnect, and verify it takes effect. Add a malformed rule and confirm it is ignored without breaking built-in rules.
-- [ ] Trigger a login prompt as an action-bar message and as a system message; neither should require player chat. Confirm player chat cannot trigger credential actions and prompts arriving after the 20-second join window are ignored.
+- [ ] Verify short aliases one at a time on a test server that explicitly shows each command in its prompt:
+  1. Join and wait for a prompt containing `/l <password>`. Type `/l test-value` and submit. Confirm it is captured/handled as a login command.
+  2. Repeat with `/log <password>` and `/log test-value`.
+  3. Repeat with `/reg <password>` and `/reg test-value`.
+  4. Reconnect to a server whose prompt does not mention one of these aliases. That alias should pass through normally; short aliases should only be recognized when the server prompt lists them.
+- [ ] Register a test account. Confirm BlockVault saves the password before sending the command. If the server rejects its password rules, confirm the retry uses a compliant replacement and does not offer the rejected value again.
+- [ ] With a verified account, test Autofill on/off, its delay, and bare `/login` with passwordless login on/off. The saved password should only be sent by bare `/login` when passwordless login is enabled.
+- [ ] With a pending account, confirm no password is sent until **Try login** is selected. Success should verify it; rejection should leave it recoverable.
+- [ ] Exercise wrong-password, already-logged-in, registration success/failure, and timeout messages. “Already logged in” must not mark a correct password as rejected.
+- [ ] Add a valid custom rule to `patterns.json`, reconnect, and confirm it works. Add a malformed rule and confirm it is ignored without breaking built-in rules.
+- [ ] Trigger prompts as action-bar and system messages; both should work. Player chat must not trigger credential actions. A prompt after the 20-second join window should be ignored.
 
-### Backups, files, and privacy
+### Backups, erase, files, and privacy
 
-- [ ] Export and import between two profiles. Check the preview, cancel, merge result, wrong export password, and creation of a restore point.
-- [ ] Create a backup, inspect it, restore it, then change the master password. Verify new backups use the new password and an older backup can still be recovered with its original password.
-- [ ] Erase a healthy vault with its master password. Confirm passwordless erase is offered only when the vault is missing or unreadable.
+- [ ] Export and import between two profiles. Check preview, cancel, merge results, wrong export password, and restore point creation.
+- [ ] Create and inspect a backup, restore it, then change the master password. New backups should use the new password; an older backup should still be recoverable with its original password.
+- [ ] Open **Permanently erase data** and read the warning. Confirm it says backups and exports in the BlockVault data folder will be deleted and tells you to save wanted copies somewhere safe. Cancel and confirm nothing was deleted. Then erase a test vault with its master password and confirm success. Passwordless erase should only be available if the vault is missing or unreadable.
 - [ ] Confirm passwords never appear in logs or chat. Check streamer mode hides server details and prompt cards wait until another screen closes.
-- [ ] On Windows, macOS, and Linux, create and unlock a vault and check its data location and file permissions. On Windows, also replace an existing file through backup/restore or another vault operation.
+- [ ] On Windows, macOS, and Linux, create and unlock a vault; check data location and file permissions. On Windows, also replace an existing file through backup/restore or another vault operation.
