@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.vault.Account;
@@ -213,20 +214,22 @@ final class LoginSessionTest {
     }
 
     @Test
-    void ruleComplaintOffersOneAdjustedRetryAndNeverDeletesThePendingCredential() throws Exception {
+    void ruleComplaintDeletesRejectedPendingCredentialAndOffersOneAdjustedRetry() throws Exception {
         FakeEnv env = new FakeEnv();
         LoginSession session = session(env, new FakeScheduler());
         session.onJoin("example.org:25565", "Alex");
         session.onSystemMessage("Please register using /register <password> <confirmPassword>");
         session.confirmRegistration("first-secret".toCharArray());
         session.onSystemMessage("Password too short, at least 24 characters");
-        assertEquals(0, env.deleted);
+        assertEquals(1, env.deleted);
+        assertNull(env.credential);
         assertEquals(CardVariant.REGISTER, env.card.variant());
         assertEquals(24, env.card.policy().length());
         session.confirmRegistration(env.card.password());
         session.onSystemMessage("Password too short, at least 24 characters");
         assertEquals(SessionState.REJECTED, session.state());
-        assertEquals(0, env.deleted);
+        assertEquals(2, env.deleted);
+        assertNull(env.credential);
     }
 
     @Test
@@ -357,7 +360,9 @@ final class LoginSessionTest {
             if (cancelUnlock) { cancels++; cancelAction = cancelled; cancelled.run(); } else result.accept(credential);
         }
         @Override public void savePending(String host, String username, char[] password, Consumer<Boolean> saved) {
-            order.add("pending"); saved.accept(true);
+            order.add("pending");
+            credential = new SavedCredential(account(password, Account.Status.PENDING), true, null, false);
+            saved.accept(true);
         }
         @Override public void markVerified(String host, String username) { verified++; }
         @Override public void delete(String host, String username) { deleted++; credential = null; }
@@ -369,6 +374,9 @@ final class LoginSessionTest {
         void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, null, false); }
         private static Account account(String secret, Account.Status status) {
             return new Account("Alex", secret.toCharArray(), status, 0, 0, 0, null);
+        }
+        private static Account account(char[] secret, Account.Status status) {
+            return new Account("Alex", secret, status, 0, 0, 0, null);
         }
     }
 

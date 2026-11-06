@@ -40,7 +40,7 @@ final class PatternMatcherTest {
     }
 
     @Test
-    void distinguishesRegistrationRulesFromLoginFailures() throws Exception {
+    void distinguishesRegistrationRulesFailuresAndAlreadyLoggedInSuccess() throws Exception {
         ResultMatcher matcher = new ResultMatcher(pack());
         for (String rule : java.util.List.of("Invalid password: must contain a digit",
                 "Invalid password format", "Invalid password length, 8-16 characters",
@@ -48,7 +48,8 @@ final class PatternMatcherTest {
                 "Password is unsafe", "This password is too common")) {
             assertEquals(ResultKind.PASSWORD_RULE, matcher.classify(rule), rule);
         }
-        for (String failure : java.util.List.of("You are already logged in!", "Login failed",
+        assertEquals(ResultKind.SUCCESS, matcher.classify("You are already logged in!"));
+        for (String failure : java.util.List.of("Login failed",
                 "Incorrect login credentials", "Incorrect password")) {
             assertEquals(ResultKind.FAILURE, matcher.classify(failure), failure);
         }
