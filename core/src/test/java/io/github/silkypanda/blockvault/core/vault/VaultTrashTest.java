@@ -37,13 +37,13 @@ final class VaultTrashTest {
     }
 
     @Test
-    void restoringOverALiveAccountUsesTheNewerOne() {
+    void restoringOverALiveAccountRestoresTheDeletedPassword() {
         Vault trashed = VaultTrash.trashAccount(vault(account("Alex", "old", 10)), "id", "Alex", 1000);
-        // The user registered Alex again, with a newer password, while the old one sat in the trash.
+        // Restoring the deleted entry explicitly replaces the same username's live replacement.
         Vault live = new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), true,
                 "auto", List.of(account("Alex", "new", 50)))), trashed.trash());
         Vault restored = VaultTrash.restore(live, trashed.trash().getFirst().id(), 2000);
-        assertEquals("new", new String(restored.servers().getFirst().accounts().getFirst().password()));
+        assertEquals("old", new String(restored.servers().getFirst().accounts().getFirst().password()));
         assertEquals(0, restored.trash().size());
     }
 
