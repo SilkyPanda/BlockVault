@@ -80,7 +80,7 @@ final class VaultStoreTest {
     }
 
     @Test
-    void backupRotationIsAtMostDailyAndRestoreReplacesVaultContents() throws Exception {
+    void backupRotationSkipsIdenticalSnapshotsAndRestoreReplacesVaultContents() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("correcthorse".toCharArray());
         ServerEntry before = new ServerEntry("one", "one", List.of("one.example"), true,
@@ -97,13 +97,15 @@ final class VaultStoreTest {
 
         Files.setLastModifiedTime(backup1, FileTime.fromMillis(System.currentTimeMillis() - 2L * 24 * 60 * 60 * 1000));
         store.save(store.vault());
-        assertArrayEquals(first, Files.readAllBytes(directory.resolve("vault.bv.bak2")));
-        assertTrue(store.backups().stream().anyMatch(backup -> !backup.manual() && backup.slot() == 2));
+        assertTrue(Files.notExists(directory.resolve("vault.bv.bak2")));
+        assertEquals(1, store.backups().stream().filter(backup -> !backup.manual()).count());
         ServerEntry after = new ServerEntry("two", "two", List.of("two.example"), true,
                 "auto", List.of());
         store.save(new Vault(Vault.VERSION, List.of(after)));
+        store.save(store.vault());
+        assertArrayEquals(first, Files.readAllBytes(directory.resolve("vault.bv.bak2")));
         BackupSummary firstSnapshot = store.backups().stream()
-                .filter(backup -> !backup.manual() && backup.slot() == 1).findFirst().orElseThrow();
+                .filter(backup -> !backup.manual() && backup.slot() == 2).findFirst().orElseThrow();
         store.restoreBackup(firstSnapshot);
         assertEquals(1, store.vault().servers().size());
         assertEquals("one.example", store.vault().servers().get(0).hosts().get(0));
