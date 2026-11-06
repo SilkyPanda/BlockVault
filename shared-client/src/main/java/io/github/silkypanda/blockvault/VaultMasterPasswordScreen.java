@@ -58,8 +58,8 @@ final class VaultMasterPasswordScreen extends Screen {
         tooShort = nextLength < InputRules.MASTER_PASSWORD_MIN;
         tooLong = nextLength > InputRules.MASTER_PASSWORD_MAX;
         samePassword = current.getValue().equals(next.getValue());
-        invalidCharacters = !InputRules.isMasterPassword(current.getValue().toCharArray())
-                || !InputRules.isMasterPassword(next.getValue().toCharArray());
+        invalidCharacters = !InputRules.isPasswordText(current.getValue())
+                || !InputRules.isPasswordText(next.getValue());
         if (mismatch || tooShort || tooLong || samePassword || current.getValue().isEmpty() || invalidCharacters) {
             if (mismatch) confirm.setValue("");
             statusKey = null;

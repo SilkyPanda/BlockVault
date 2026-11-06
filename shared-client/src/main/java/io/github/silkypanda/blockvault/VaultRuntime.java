@@ -374,22 +374,18 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Separate confirmed erase path for a vault that is missing or too damaged to verify. */
+    /** Erases data after the explicit warning/confirmation flow, including when the master password is forgotten. */
     static void eraseAllDataWithoutPassword(Consumer<String> result) {
         BackgroundExecutor.submit(() -> {
             String failureKey = null;
             try {
                 java.nio.file.Path directory = DataDirs.resolve();
-                if (!(passwordlessEraseAllowed(directory) || vaultUnreadable)) {
-                    failureKey = "blockvault.data.erase.password_required";
-                } else {
-                    if (store != null) {
-                        store.lock();
-                        store = null;
-                    }
-                    DataDirs.delete(directory);
-                    trustedUnlockAttempted = false;
+                if (store != null) {
+                    store.lock();
+                    store = null;
                 }
+                DataDirs.delete(directory);
+                trustedUnlockAttempted = false;
             } catch (Exception failure) {
                 failureKey = "blockvault.data.erase.failed";
                 LOGGER.warn("BlockVault data erasure failed ({})", failure.getClass().getSimpleName());
@@ -406,21 +402,17 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    static void checkPasswordlessEraseAllowed(Consumer<Boolean> result) {
-        BackgroundExecutor.submit(() -> {
-            boolean allowed;
-            try { allowed = passwordlessEraseAllowed(DataDirs.resolve()) || vaultUnreadable; }
-            catch (RuntimeException unreadablePath) { allowed = true; }
-            boolean completed = allowed;
-            BackgroundExecutor.onGameThread(() -> result.accept(completed));
-            return null;
-        });
+    static boolean hasVaultFile() {
+        try { return java.nio.file.Files.isRegularFile(DataDirs.resolve().resolve("vault.bv")); }
+        catch (RuntimeException inaccessible) { return false; }
     }
 
-    private static boolean passwordlessEraseAllowed(java.nio.file.Path directory) {
-        try { return !VaultStore.open(directory).exists(); }
-        catch (UnsupportedVaultVersionException | VaultCorruptException unreadableVault) { return true; }
-        catch (IOException unreadableVault) { return true; }
+    static void openImportScreen(net.minecraft.client.gui.screens.Screen parent) {
+        if (!hasVaultFile()) {
+            toast("blockvault.transfer.requires_vault");
+            return;
+        }
+        Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(parent, true));
     }
 
     static void listBackups(Consumer<List<BackupSummary>> result) {
@@ -521,9 +513,13 @@ public final class VaultRuntime implements VaultAccess {
     static void changeMasterPassword(char[] oldPassword, char[] newPassword, Consumer<String> result) {
         withVault(() -> {
             String failureKey = null;
+            boolean lockAfterChange = false;
             try {
                 store.changeMasterPassword(oldPassword, newPassword);
+                lockAfterChange = true;
             } catch (Exception failure) {
+                lockAfterChange = failure instanceof BackupReencryptionException
+                        || failure instanceof io.github.silkypanda.blockvault.core.vault.TrustedDeviceUpdateException;
                 failureKey = failure instanceof WrongMasterPasswordException ? "blockvault.master.current.wrong"
                         : failure instanceof io.github.silkypanda.blockvault.core.vault.TrustedDeviceUpdateException
                                 ? "blockvault.master.change.trust_failed"
@@ -535,8 +531,16 @@ public final class VaultRuntime implements VaultAccess {
                 Arrays.fill(oldPassword, '\0');
                 Arrays.fill(newPassword, '\0');
             }
+            if (lockAfterChange) {
+                store.lock();
+                trustedUnlockAttempted = true;
+            }
             String outcome = failureKey;
-            BackgroundExecutor.onGameThread(() -> result.accept(outcome));
+            boolean wasLocked = lockAfterChange;
+            BackgroundExecutor.onGameThread(() -> {
+                if (wasLocked) toast("blockvault.master.change.locked");
+                result.accept(outcome);
+            });
         }, () -> {
             Arrays.fill(oldPassword, '\0');
             Arrays.fill(newPassword, '\0');
@@ -806,8 +810,34 @@ public final class VaultRuntime implements VaultAccess {
         });
     }
 
-    /** Puts a trash entry back into the vault (newer copy wins if the same server and user already exist). */
-    static void restoreFromTrash(String trashId, Consumer<List<TrashRow>> result) {
+    /** Restores a deleted account, asking before replacing a live account with the same username. */
+    static void restoreFromTrash(String trashId, net.minecraft.client.gui.screens.Screen parent,
+                                 Consumer<List<TrashRow>> result) {
+        withVault(() -> {
+            Vault vault = store.vault();
+            TrashEntry removed = vault.trash().stream().filter(entry -> entry.id().equals(trashId)).findFirst().orElse(null);
+            boolean conflict = false;
+            if (removed != null) {
+                for (ServerEntry live : vault.servers()) {
+                    boolean sameServer = live.id().equals(removed.server().id())
+                            || live.hosts().stream().anyMatch(removed.server().hosts()::contains);
+                    if (!sameServer) continue;
+                    conflict = removed.server().accounts().stream().anyMatch(deleted -> live.accounts().stream()
+                            .anyMatch(account -> Usernames.same(account.username(), deleted.username())));
+                    if (conflict) break;
+                }
+            }
+            if (!conflict) {
+                restoreFromTrashNow(trashId, result);
+                return;
+            }
+            BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultConfirmScreen(
+                    parent, "blockvault.trash.restore.conflict.title", "blockvault.trash.restore.conflict.message",
+                    "blockvault.trash.restore.overwrite", () -> restoreFromTrashNow(trashId, result))));
+        }, () -> BackgroundExecutor.onGameThread(() -> toast("blockvault.vault.error")));
+    }
+
+    private static void restoreFromTrashNow(String trashId, Consumer<List<TrashRow>> result) {
         changeTrash(result, vault -> VaultTrash.restore(vault, trashId, System.currentTimeMillis()));
     }
 

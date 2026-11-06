@@ -21,8 +21,8 @@ final class VaultEraseScreen extends Screen {
     private Button cancelButton;
     private boolean busy;
     private boolean confirmUnverifiedErase;
-    private boolean eraseEligibilityChecked;
-    private boolean passwordlessEraseAllowed;
+    private boolean passwordlessEraseAllowed = true;
+    private boolean confirmationOpen;
     private String failureKey;
 
     VaultEraseScreen(Screen parent) {
@@ -41,12 +41,8 @@ final class VaultEraseScreen extends Screen {
         InputFilter.bind(password, InputRules::isMasterPasswordInput, null);
         password.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(password);
-        eraseButton = Button.builder(Component.translatable(confirmUnverifiedErase
-                        ? "blockvault.data.erase.confirm_without_password" : "blockvault.data.erase.confirm"),
-                        button -> {
-                            if (confirmUnverifiedErase) eraseWithoutPassword();
-                            else erase();
-                        })
+        eraseButton = Button.builder(Component.translatable("blockvault.data.erase.confirm"),
+                        button -> requestConfirmation(false))
                 .bounds(center - 120, top + 138, 140, 20).build();
         eraseButton.active = !busy;
         addRenderableWidget(eraseButton);
@@ -58,20 +54,24 @@ final class VaultEraseScreen extends Screen {
             addRenderableWidget(Button.builder(Component.translatable("blockvault.data.erase.without_password"), button -> {
                         if (!busy) {
                             confirmUnverifiedErase = true;
-                            failureKey = "blockvault.data.erase.without_password.warning";
-                            rebuildWidgets();
+                            requestConfirmation(true);
                         }
                     }).bounds(center - 120, top + 164, 240, 20).build());
         }
         setInitialFocus(password);
-        if (!eraseEligibilityChecked) {
-            VaultRuntime.checkPasswordlessEraseAllowed(allowed -> {
-                if (Minecraft.getInstance().gui.screen() != this) return;
-                eraseEligibilityChecked = true;
-                passwordlessEraseAllowed = allowed;
-                if (allowed) rebuildWidgets();
-            });
-        }
+    }
+
+    private void requestConfirmation(boolean withoutPassword) {
+        if (busy || (!withoutPassword && password.getValue().isEmpty())) return;
+        confirmationOpen = true;
+        Minecraft.getInstance().setScreenAndShow(new VaultConfirmScreen(this,
+                "blockvault.data.confirm.title",
+                withoutPassword ? "blockvault.data.erase.without_password.warning" : "blockvault.data.erase.confirm.warning",
+                withoutPassword ? "blockvault.data.erase.confirm_without_password" : "blockvault.data.erase.confirm",
+                () -> {
+                    confirmationOpen = false;
+                    if (withoutPassword) eraseWithoutPassword(); else erase();
+                }, () -> confirmationOpen = false));
     }
 
     private void eraseWithoutPassword() {
@@ -152,7 +152,7 @@ final class VaultEraseScreen extends Screen {
     @Override public boolean isPauseScreen() { return false; }
 
     @Override public void removed() {
-        if (password != null) password.setValue("");
+        if (!confirmationOpen && password != null) password.setValue("");
         super.removed();
     }
 

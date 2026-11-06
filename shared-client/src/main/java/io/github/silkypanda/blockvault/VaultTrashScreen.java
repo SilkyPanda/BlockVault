@@ -42,7 +42,7 @@ final class VaultTrashScreen extends Screen {
             int y = 40 + index * 34;
             int rowIndex = index;
             Button restore = Button.builder(Component.translatable("blockvault.trash.restore"),
-                    button -> withRow(rowIndex, row -> VaultRuntime.restoreFromTrash(row.id(), this::update)))
+                    button -> withRow(rowIndex, row -> VaultRuntime.restoreFromTrash(row.id(), this, this::update)))
                     .bounds(actionsX, y, buttonWidth, 20).build();
             Button delete = Button.builder(Component.translatable("blockvault.trash.delete"),
                     button -> withRow(rowIndex, row -> deleteRow(row)))

@@ -65,6 +65,11 @@ final class VaultTransferScreen extends Screen {
     }
 
     private void transfer() {
+        if (importing && !VaultRuntime.hasVaultFile()) {
+            failed = true;
+            failureKey = "blockvault.transfer.requires_vault";
+            return;
+        }
         if (busy || (importing && pathBox.getValue().isBlank())) return;
         if (!InputRules.isText(pathBox.getValue())) { failed = true; return; }
         busy = true;

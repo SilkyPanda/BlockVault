@@ -73,7 +73,7 @@ final class VaultNativeSettingsScreen extends Screen {
         addAction(left + buttonWidth + gap, actionY, buttonWidth, "blockvault.config.action.backups", "blockvault.config.action.backups.description", () -> VaultRuntime.openBackupScreen(this));
         addAction(left, actionY + 24, buttonWidth, "blockvault.config.action.master", "blockvault.config.action.master.description", () -> VaultRuntime.openMasterPasswordScreen(this));
         addAction(left + buttonWidth + gap, actionY + 24, buttonWidth, "blockvault.transfer.import.short", "blockvault.transfer.import.help",
-                () -> Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(this, true)));
+                () -> VaultRuntime.openImportScreen(this));
         addAction(left, actionY + 48, buttonWidth, "blockvault.transfer.export.short", "blockvault.transfer.export.help",
                 () -> Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(this, false)));
         addAction(left + buttonWidth + gap, actionY + 48, buttonWidth, "blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
@@ -126,7 +126,7 @@ final class VaultNativeSettingsScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 2 && delayButton != null && delayButton.isMouseOver(event.x(), event.y())) {
+        if (event.button() == 1 && delayButton != null && delayButton.isMouseOver(event.x(), event.y())) {
             update(current -> current.withAutofillDelayMillis(Math.max(200, current.autofillDelayMillis() - 100)));
             return true;
         }
@@ -137,7 +137,7 @@ final class VaultNativeSettingsScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         if (loaded) graphics.centeredText(font, Component.translatable("blockvault.settings.native.hint"),
-                width / 2, 184, 0xffaaa5b5);
+                width / 2, 294, 0xffaaa5b5);
         if (!loaded) graphics.centeredText(font, Component.translatable("blockvault.settings.loading"), width / 2,
                 height / 2, 0xffaaaaaa);
     }

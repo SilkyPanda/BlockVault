@@ -165,8 +165,10 @@ final class VaultYaclSettingsScreen extends Screen {
         return ButtonOption.createBuilder()
                 .name(Component.translatable(name))
                 .description(description(description))
-                .action((screen, option) -> Minecraft.getInstance().setScreenAndShow(
-                        new VaultTransferScreen(screen, importing)))
+                .action((screen, option) -> {
+                    if (importing) VaultRuntime.openImportScreen(screen);
+                    else Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(screen, false));
+                })
                 .build();
     }
 

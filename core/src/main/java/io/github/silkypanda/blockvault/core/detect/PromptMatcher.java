@@ -50,8 +50,16 @@ public final class PromptMatcher {
             for (String alias : pack.commandNames(group)) {
                 if (alias.length() > 3) continue;
                 Pattern command = Pattern.compile("(?i)/(?:[a-z0-9_]+:)?" + Pattern.quote(alias)
-                        + "\\b(?=\\s+<)");
-                if (command.matcher(text).find()) prompted.add(alias);
+                        + "\\b");
+                java.util.regex.Matcher found = command.matcher(text);
+                while (found.find()) {
+                    String before = text.substring(Math.max(0, found.start() - 120), found.start());
+                    String after = text.substring(found.end()).stripLeading();
+                    if (PLACEHOLDER.matcher(text.substring(found.end())).lookingAt()
+                            || DIRECTIVE.matcher(before).find() || DIRECTIVE.matcher(after).lookingAt()) {
+                        prompted.add(alias);
+                    }
+                }
             }
         }
         return Set.copyOf(prompted);
