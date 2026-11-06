@@ -29,3 +29,5 @@
 - Updated project docs and QA steps to reflect the current trash, backup, erase, input, and review status.
 - Removed master-password entry from **Erase BlockVault data**; the separate confirmation now authorizes deletion directly.
 - Changed import-without-a-vault actions to open vault creation, and moved the test results already marked Pass into the checklist's Passed section.
+- Return to the encrypted import form after creating a vault from an import action; added confirmed deletion for manual and automatic backups.
+- Skip manual and automatic snapshots for empty vaults, and skip an automatic snapshot when the newest automatic backup contains the same vault data.

@@ -42,6 +42,7 @@ public final class VaultRuntime implements VaultAccess {
     private static VaultStore store;
     private static volatile boolean accessScreenOpen;
     private static volatile boolean openVaultAfterAccess;
+    private static volatile boolean openImportAfterAccess;
     private static volatile boolean trustedUnlockAttempted;
     private static volatile boolean pendingTrustNotice;
     private static volatile boolean vaultUnreadable;
@@ -161,12 +162,16 @@ public final class VaultRuntime implements VaultAccess {
                 List<Waiting> resumed = new ArrayList<>(WAITING);
                 WAITING.clear();
                 boolean showVaultAfterUnlock = openVaultAfterAccess && resumed.isEmpty();
+                boolean showImportAfterAccess = openImportAfterAccess && resumed.isEmpty();
                 openVaultAfterAccess = false;
+                openImportAfterAccess = false;
                 BackgroundExecutor.onGameThread(() -> {
                     closeAccessScreen();
                     toast("blockvault.toast.unlocked");
                     if (create && trustReady[0]) showTrustedDeviceNotice();
-                    if (showVaultAfterUnlock) BackgroundExecutor.submit(() -> {
+                    if (showImportAfterAccess) Minecraft.getInstance().setScreenAndShow(
+                            new VaultTransferScreen(vaultReturnScreen, true));
+                    else if (showVaultAfterUnlock) BackgroundExecutor.submit(() -> {
                         showVaultRows(vaultReturnScreen);
                         return null;
                     });
@@ -220,6 +225,7 @@ public final class VaultRuntime implements VaultAccess {
     public static void accessScreenClosed() {
         accessScreenOpen = false;
         openVaultAfterAccess = false;
+        openImportAfterAccess = false;
         List<Waiting> dropped = new ArrayList<>(WAITING);
         WAITING.clear();
         // Tell every operation that was waiting that the owner declined, so nothing is left hanging.
@@ -375,6 +381,7 @@ public final class VaultRuntime implements VaultAccess {
 
     static void openImportScreen(net.minecraft.client.gui.screens.Screen parent) {
         if (!hasVaultFile()) {
+            openImportAfterAccess = true;
             openVaultScreen(parent);
             return;
         }
@@ -395,17 +402,29 @@ public final class VaultRuntime implements VaultAccess {
         }, () -> BackgroundExecutor.onGameThread(() -> result.accept(List.of())));
     }
 
-    static void createManualBackup(Consumer<Boolean> result) {
+    static void createManualBackup(Consumer<String> result) {
         withVault(() -> {
-            boolean success;
+            String outcome;
             try {
-                store.createManualBackup();
-                success = true;
+                outcome = store.createManualBackup() ? null : "blockvault.backup.empty.not_created";
             } catch (Exception failure) {
                 LOGGER.warn("BlockVault manual backup failed ({})", failure.getClass().getSimpleName());
-                success = false;
+                outcome = "blockvault.backup.failed";
             }
-            boolean completed = success;
+            String completed = outcome;
+            BackgroundExecutor.onGameThread(() -> result.accept(completed));
+        }, () -> BackgroundExecutor.onGameThread(() -> result.accept("blockvault.backup.failed")));
+    }
+
+    static void deleteBackup(BackupSummary backup, Consumer<Boolean> result) {
+        withVault(() -> {
+            boolean deleted;
+            try { deleted = store.deleteBackup(backup); }
+            catch (Exception failure) {
+                LOGGER.warn("BlockVault backup deletion failed ({})", failure.getClass().getSimpleName());
+                deleted = false;
+            }
+            boolean completed = deleted;
             BackgroundExecutor.onGameThread(() -> result.accept(completed));
         }, () -> BackgroundExecutor.onGameThread(() -> result.accept(false)));
     }

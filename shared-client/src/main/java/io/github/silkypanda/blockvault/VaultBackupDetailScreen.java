@@ -30,6 +30,7 @@ final class VaultBackupDetailScreen extends Screen {
     private int page;
     private boolean confirmRestore;
     private boolean busy;
+    private boolean deleteFailed;
 
     VaultBackupDetailScreen(BackupSummary backup, Vault contents, Screen parent) {
         this(backup, contents, parent, null);
@@ -52,6 +53,8 @@ final class VaultBackupDetailScreen extends Screen {
 
     @Override protected void init() {
         int center = width / 2;
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.delete"), button -> requestDelete())
+                .bounds(width - 112, 8, 102, 20).build()).active = !busy;
         int totalPages = totalPages();
         page = Math.min(page, totalPages - 1);
         int pageCount = Math.min(PAGE_SIZE, Math.max(0, entries.size() - page * PAGE_SIZE));
@@ -125,6 +128,28 @@ final class VaultBackupDetailScreen extends Screen {
         else VaultRuntime.restoreBackup(backup, restorePassword.clone(), completed);
     }
 
+    private void requestDelete() {
+        if (busy) return;
+        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(new VaultConfirmScreen(this,
+                "blockvault.data.confirm.title", "blockvault.backup.delete.warning", "blockvault.backup.delete",
+                () -> {
+                    busy = true;
+                    deleteFailed = false;
+                    rebuildWidgets();
+                    VaultRuntime.deleteBackup(backup, deleted -> {
+                        busy = false;
+                        if (deleted) {
+                            clearContents();
+                            net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+                            if (parent instanceof VaultRecoveryScreen recovery) recovery.refreshBackups();
+                        } else {
+                            deleteFailed = true;
+                            rebuildWidgets();
+                        }
+                    });
+                }));
+    }
+
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         String kind = Component.translatable(backup.manual() ? "blockvault.backup.manual" : "blockvault.backup.automatic").getString();
@@ -152,6 +177,8 @@ final class VaultBackupDetailScreen extends Screen {
         graphics.centeredText(font, Component.translatable("blockvault.backup.page", page + 1, totalPages()),
                 width / 2, height - 45, 0xffaaaaaa);
         if (busy) graphics.centeredText(font, Component.translatable("blockvault.backup.working"),
+                width / 2, height - 60, 0xffff7777);
+        else if (deleteFailed) graphics.centeredText(font, Component.translatable("blockvault.backup.delete.failed"),
                 width / 2, height - 60, 0xffff7777);
     }
 

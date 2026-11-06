@@ -109,10 +109,10 @@ final class VaultRecoveryScreen extends Screen {
         busy = true;
         statusKey = null;
         rebuildWidgets();
-        VaultRuntime.createManualBackup(success -> {
+        VaultRuntime.createManualBackup(outcome -> {
             busy = false;
-            statusKey = success ? "blockvault.backup.manual.created" : "blockvault.backup.failed";
-            if (success) VaultRuntime.listBackups(loaded -> {
+            statusKey = outcome == null ? "blockvault.backup.manual.created" : outcome;
+            if (outcome == null) VaultRuntime.listBackups(loaded -> {
                 if (net.minecraft.client.Minecraft.getInstance().gui.screen() != this) return;
                 backups = loaded;
                 page = 0;

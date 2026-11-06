@@ -432,6 +432,33 @@ public final class VaultStore {
         return List.copyOf(result);
     }
 
+    /** Deletes the selected backup and compacts its numbered series. Returns false if it has changed since listing. */
+    public boolean deleteBackup(BackupSummary backup) throws IOException {
+        if (vaultKey == null) throw new IllegalStateException("Vault is locked");
+        int slots = backup.manual() ? MANUAL_BACKUP_SLOTS : AUTO_BACKUP_SLOTS;
+        if (backup.slot() < 1 || backup.slot() > slots) return false;
+        Path lockPath = path("vault.bv.lock");
+        ensurePrivateDirectory();
+        try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = lockChannel.lock()) {
+            if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
+            setPermissions(lockPath, false);
+            Path selected = backupPath(backup);
+            if (!Files.isRegularFile(selected)
+                    || Files.getLastModifiedTime(selected).toMillis() != backup.createdAt()) return false;
+            Files.delete(selected);
+            for (int slot = backup.slot(); slot < slots; slot++) {
+                Path destination = backupPath(new BackupSummary(backup.manual(), slot, 0, 0));
+                Path next = backupPath(new BackupSummary(backup.manual(), slot + 1, 0, 0));
+                if (Files.isRegularFile(next)) Files.move(next, destination, StandardCopyOption.REPLACE_EXISTING);
+                else Files.deleteIfExists(destination);
+            }
+            Files.deleteIfExists(backupPath(new BackupSummary(backup.manual(), slots, 0, 0)));
+            fsyncDirectory(directory);
+            return true;
+        }
+    }
+
     /** Lists recovery points without requiring the main vault to exist or unlock. */
     public static List<BackupSummary> availableBackups(Path directory) throws IOException {
         VaultStore store = new VaultStore(directory);
@@ -489,7 +516,7 @@ public final class VaultStore {
     }
 
     /** Makes a manually requested encrypted snapshot, retaining the ten newest. */
-    public void createManualBackup() throws IOException {
+    public boolean createManualBackup() throws IOException {
         if (vaultKey == null) throw new IllegalStateException("Vault is locked");
         Files.createDirectories(directory);
         Path lockPath = path("vault.bv.lock");
@@ -497,7 +524,9 @@ public final class VaultStore {
              FileLock lock = lockChannel.lock()) {
             if (!lock.isValid()) throw new IOException("Could not acquire vault lock");
             setPermissions(lockPath, false);
+            if (!Files.isRegularFile(path("vault.bv")) || !fileHasBackupData(path("vault.bv"))) return false;
             rotateManualBackups();
+            return true;
         }
     }
 
@@ -728,15 +757,61 @@ public final class VaultStore {
     private void rotateBackupsIfDue() throws IOException {
         Path current = path("vault.bv");
         if (!Files.isRegularFile(current)) return;
-        if (vault == null || vault.servers().stream().allMatch(server -> server.accounts().isEmpty())) return;
+        if (!fileHasBackupData(current)) return;
         Path newest = path("vault.bv.bak1");
         long now = System.currentTimeMillis();
         if (Files.isRegularFile(newest)) {
+            if (sameBackupContents(newest, current)) return;
             long age = now - Files.getLastModifiedTime(newest).toMillis();
             // A negative age means the clock moved backwards; do not let that suppress backups for days.
             if (age >= 0 && age < BACKUP_INTERVAL_MILLIS) return;
         }
         rotateBackupsNow();
+    }
+
+    private boolean sameBackupContents(Path backup, Path currentVault) {
+        byte[] backupBytes = null;
+        byte[] backupPlaintext = null;
+        byte[] currentBytes = null;
+        byte[] currentPlaintext = null;
+        try {
+            backupBytes = readBounded(backup);
+            currentBytes = readBounded(currentVault);
+            VaultFile.Parsed backupFile = VaultFile.parse(backupBytes);
+            VaultFile.Parsed currentFile = VaultFile.parse(currentBytes);
+            backupPlaintext = AesGcm.decrypt(vaultKey, backupFile.dataNonce(), backupFile.headerAad(), backupFile.ciphertext());
+            currentPlaintext = AesGcm.decrypt(vaultKey, currentFile.dataNonce(), currentFile.headerAad(), currentFile.ciphertext());
+            return MessageDigest.isEqual(backupPlaintext, currentPlaintext);
+        } catch (Exception unreadableBackup) {
+            return false;
+        } finally {
+            SecureBytes.wipe(backupBytes);
+            SecureBytes.wipe(backupPlaintext);
+            SecureBytes.wipe(currentBytes);
+            SecureBytes.wipe(currentPlaintext);
+        }
+    }
+
+    private boolean fileHasBackupData(Path file) {
+        byte[] encoded = null;
+        byte[] plaintext = null;
+        try {
+            encoded = readBounded(file);
+            VaultFile.Parsed parsed = VaultFile.parse(encoded);
+            plaintext = AesGcm.decrypt(vaultKey, parsed.dataNonce(), parsed.headerAad(), parsed.ciphertext());
+            return hasBackupData(VaultJson.read(plaintext));
+        } catch (Exception unreadableVault) {
+            return false;
+        } finally {
+            SecureBytes.wipe(encoded);
+            SecureBytes.wipe(plaintext);
+        }
+    }
+
+    private static boolean hasBackupData(Vault value) {
+        if (value == null) return false;
+        if (value.servers().stream().anyMatch(server -> !server.accounts().isEmpty())) return true;
+        return value.trash().stream().anyMatch(entry -> !entry.server().accounts().isEmpty());
     }
 
     private void rotateBackupsNow() throws IOException {
