@@ -6,7 +6,7 @@
 - The vault creation screen asks whether to trust this device and explains that it stores the vault key locally. The existing default remains ON unless the owner changes it.
 - Passwordless `/login` is enabled by default and can be turned off in settings.
 - The clipboard is never cleared automatically. Master passwords contain 8–256 characters after NFC normalization.
-- The project license stays All Rights Reserved.
+- The project is licensed under GNU GPL version 3 only; see `LICENSE`.
 - Action-bar (overlay) messages are treated like chat messages on both loaders.
 
 **Data**

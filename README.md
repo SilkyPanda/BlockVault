@@ -2,6 +2,8 @@
 
 BlockVault is a client-side password manager for Minecraft servers with login plugins. It stores server credentials in an encrypted local vault and does not connect to external services.
 
+Copyright © 2026 SilkyPanda. BlockVault is free software licensed under the GNU General Public License, version 3 only. See [LICENSE](LICENSE).
+
 ## Use
 
 - Open or lock the vault with the configurable keybinds, Mod Menu on Fabric, or the mod config screen.

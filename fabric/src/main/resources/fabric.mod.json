@@ -9,7 +9,7 @@
   "contact": {
     "sources": "https://github.com/SilkyPanda/BlockVault"
   },
-  "license": "All-Rights-Reserved",
+  "license": "GPL-3.0-only",
   "mixins": ["blockvault.mixins.json"],
   "environment": "client",
   "entrypoints": {
