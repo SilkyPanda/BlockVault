@@ -44,6 +44,7 @@ public final class VaultRuntime implements VaultAccess {
     private static volatile boolean trustedUnlockAttempted;
     private static volatile boolean pendingTrustNotice;
     private static volatile boolean vaultUnreadable;
+    private static volatile net.minecraft.client.gui.screens.Screen vaultReturnScreen;
 
     /** Returns the shared vault facade. */
     public static VaultRuntime access() { return Holder.INSTANCE; }
@@ -163,7 +164,7 @@ public final class VaultRuntime implements VaultAccess {
                     toast("blockvault.toast.unlocked");
                     if (create && trustReady[0]) showTrustedDeviceNotice();
                     if (showVaultAfterUnlock) BackgroundExecutor.submit(() -> {
-                        showVaultRows();
+                        showVaultRows(vaultReturnScreen);
                         return null;
                     });
                     BackgroundExecutor.submit(() -> {
@@ -249,7 +250,11 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     /** Opens the vault view if unlocked, otherwise asks for its master password. */
-    public static void openVaultScreen() {
+    public static void openVaultScreen() { openVaultScreen(null); }
+
+    /** Opens the vault and returns to the caller's settings screen when the vault view is closed. */
+    public static void openVaultScreen(net.minecraft.client.gui.screens.Screen parent) {
+        vaultReturnScreen = parent;
         BlockVaultConfig.load(settings -> BackgroundExecutor.submit(() -> {
             try {
                 ensureStore();
@@ -262,7 +267,7 @@ public final class VaultRuntime implements VaultAccess {
                         requestAccessScreen(false);
                     } else {
                         openVaultAfterAccess = false;
-                        showVaultRows();
+                        showVaultRows(vaultReturnScreen);
                     }
                 }
             } catch (Exception failure) {
@@ -322,7 +327,7 @@ public final class VaultRuntime implements VaultAccess {
             String completed = failureKey;
             BackgroundExecutor.onGameThread(() -> {
                 result.accept(completed);
-                if (completed == null) showVaultRows();
+                if (completed == null) showVaultRows(vaultReturnScreen);
             });
             return null;
         }));
@@ -905,11 +910,11 @@ public final class VaultRuntime implements VaultAccess {
         }
     }
 
-    private static void showVaultRows() {
+    private static void showVaultRows(net.minecraft.client.gui.screens.Screen parent) {
         purgeTrash();
         List<VaultRow> rows = vaultRows();
         BackgroundExecutor.onGameThread(() -> {
-            Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows));
+            Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows, parent));
         });
     }
 
@@ -940,7 +945,7 @@ public final class VaultRuntime implements VaultAccess {
     private static void requestAccessScreen(boolean create) {
         if (accessScreenOpen) return;
         accessScreenOpen = true;
-        BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultAccessScreen(create)));
+        BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultAccessScreen(create, vaultReturnScreen)));
     }
 
     private static void enqueue(Runnable action, Runnable cancelled) {

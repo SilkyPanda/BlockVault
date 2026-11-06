@@ -16,6 +16,7 @@ final class VaultListScreen extends Screen {
     private static final int PAGE_SIZE = 6;
     private static final int ROW_TEXT_INSET = 8;
     private List<VaultRow> rows;
+    private final net.minecraft.client.gui.screens.Screen parent;
     private final List<Button> rowButtons = new ArrayList<>();
     private static final int ROW_ACTIONS = 5;
     private EditBox search;
@@ -30,9 +31,10 @@ final class VaultListScreen extends Screen {
     private int footerButtonWidth;
     private String searchQuery = "";
 
-    VaultListScreen(List<VaultRow> rows) {
+    VaultListScreen(List<VaultRow> rows, net.minecraft.client.gui.screens.Screen parent) {
         super(Component.translatable("blockvault.vault.title"));
         this.rows = List.copyOf(rows);
+        this.parent = parent;
     }
 
     @Override
@@ -60,7 +62,7 @@ final class VaultListScreen extends Screen {
             int y = 68 + index * 34;
             int actionsX = contentLeft + rowLabelWidth + 4;
             addRowButton(index, actionsX, y, "blockvault.vault.reveal", null, row ->
-                    MinecraftHolder.open(new VaultCredentialScreen(row)));
+                    MinecraftHolder.open(new VaultCredentialScreen(row, this)));
             addRowButton(index, actionsX + rowButtonWidth + 2, y, "blockvault.vault.copy", null, VaultRuntime::copyPassword);
             addRowButton(index, actionsX + (rowButtonWidth + 2) * 2, y, "blockvault.vault.autofill.off",
                     "blockvault.vault.tooltip.autofill", row ->
@@ -163,6 +165,8 @@ final class VaultListScreen extends Screen {
         updateVisibleRows();
     }
 
+    net.minecraft.client.gui.screens.Screen parentScreen() { return parent; }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         List<VaultRow> visible = pageRows();
@@ -206,5 +210,9 @@ final class VaultListScreen extends Screen {
 
     private static final class MinecraftHolder {
         private static void open(Screen screen) { net.minecraft.client.Minecraft.getInstance().setScreenAndShow(screen); }
+    }
+
+    @Override public void onClose() {
+        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
     }
 }

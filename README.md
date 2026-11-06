@@ -4,9 +4,10 @@ BlockVault is a client-side password manager for Minecraft servers with login pl
 
 ## Use
 
-- Open the vault with `/blockvault`, the optional keybind, Mod Menu on Fabric, or the mod config button on NeoForge. `/blockvault lock` locks the vault.
+- Open or lock the vault with the configurable keybinds, Mod Menu on Fabric, or the mod config screen.
 - On a recognized register prompt, review the generated password and confirm before BlockVault sends it. Verified saved logins can autofill on later joins. Pending logins require confirmation.
 - Manage saved accounts, server login settings, backups, import/export, and vault security from the vault and settings screens. YACL is optional; a native settings screen is used when it is unavailable.
+- When enabled, bare `/login` sends the verified saved password to the connected server. This is a client-side shortcut for the server's `/login` command.
 - Add extra prompt, result, or command-name rules in `patterns.json` in BlockVault's data folder. Follow the JSON structure in `core/src/main/resources/assets/blockvault/patterns/default.json`; custom rules are appended to the built-ins, and invalid entries are skipped. The file is read when a server connection starts, so reconnect after editing it.
 
 ## Data and security

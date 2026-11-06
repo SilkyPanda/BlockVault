@@ -2,7 +2,7 @@
 
 **Product**
 - Per-server unique passwords in an encrypted local vault; no network, no sync.
-- The default generator is the server-friendly preset (16 characters, letters and digits). Other presets: balanced, maximum, memorable.
+- The available generator presets are Basic (16 letters and digits) and Memorable (four words and two digits).
 - The vault creation screen asks whether to trust this device and explains that it stores the vault key locally. The existing default remains ON unless the owner changes it.
 - Passwordless `/login` is enabled by default and can be turned off in settings.
 - The clipboard is never cleared automatically. Master passwords contain 8–256 characters after NFC normalization.

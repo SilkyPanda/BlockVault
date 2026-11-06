@@ -15,6 +15,7 @@ import io.github.silkypanda.blockvault.core.validation.InputRules;
 /** Minimal masked screen for creating or unlocking the encrypted local vault. */
 final class VaultAccessScreen extends Screen {
     private final boolean create;
+    private final Screen parent;
     private EditBox password;
     private EditBox confirmation;
     private boolean failed;
@@ -23,9 +24,10 @@ final class VaultAccessScreen extends Screen {
     private String failureKey;
     private final CapsLockHint capsLock = new CapsLockHint();
 
-    VaultAccessScreen(boolean create) {
+    VaultAccessScreen(boolean create, Screen parent) {
         super(Component.translatable(create ? "blockvault.vault.create.title" : "blockvault.vault.unlock.title"));
         this.create = create;
+        this.parent = parent;
     }
 
     @Override
@@ -149,7 +151,7 @@ final class VaultAccessScreen extends Screen {
     public void onClose() {
         clearFields();
         VaultRuntime.accessScreenClosed();
-        super.onClose();
+        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
     }
 
     /** Called when another screen replaces this one without the owner cancelling (kick screen, credential card). */

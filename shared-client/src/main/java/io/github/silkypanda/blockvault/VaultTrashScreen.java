@@ -153,7 +153,7 @@ final class VaultTrashScreen extends Screen {
     @Override
     public void onClose() {
         // Back goes to the vault list with fresh rows.
-        if (parent instanceof VaultListScreen) VaultRuntime.openVaultScreen();
+        if (parent instanceof VaultListScreen) VaultRuntime.openVaultScreen(((VaultListScreen) parent).parentScreen());
         else Minecraft.getInstance().setScreenAndShow(parent);
     }
 

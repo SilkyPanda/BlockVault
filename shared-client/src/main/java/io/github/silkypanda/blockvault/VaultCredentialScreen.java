@@ -16,13 +16,15 @@ import net.minecraft.util.FormattedCharSequence;
 /** Per-account reveal, edit, copy, and delete controls. */
 final class VaultCredentialScreen extends Screen {
     private final VaultRow row;
+    private final Screen parent;
     private boolean showPassword;
     private EditBox passwordBox;
     private boolean invalidPassword;
 
-    VaultCredentialScreen(VaultRow row) {
+    VaultCredentialScreen(VaultRow row, Screen parent) {
         super(Component.translatable("blockvault.vault.account.title"));
         this.row = row;
+        this.parent = parent;
     }
 
     @Override
@@ -45,9 +47,9 @@ final class VaultCredentialScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.copyPassword(row); })
                 .bounds(x, top + 78, 94, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete"), button ->
-                        Minecraft.getInstance().setScreenAndShow(new VaultDeleteScreen(row, this)))
+                Minecraft.getInstance().setScreenAndShow(new VaultDeleteScreen(row, this)))
                 .bounds(x + 103, top + 78, 94, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { VaultRuntime.openVaultScreen(); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { Minecraft.getInstance().setScreenAndShow(parent); })
                 .bounds(x + 206, top + 78, 94, 20).build());
         setInitialFocus(passwordBox);
     }
@@ -71,7 +73,7 @@ final class VaultCredentialScreen extends Screen {
         invalidPassword = false;
         VaultRuntime.updatePassword(row, password);
         Arrays.fill(password, '\0');
-        VaultRuntime.openVaultScreen();
+        Minecraft.getInstance().setScreenAndShow(parent);
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
@@ -98,7 +100,7 @@ final class VaultCredentialScreen extends Screen {
     @Override
     public void onClose() {
         if (passwordBox != null) passwordBox.setValue("");
-        super.onClose();
+        Minecraft.getInstance().setScreenAndShow(parent);
     }
 
     @Override

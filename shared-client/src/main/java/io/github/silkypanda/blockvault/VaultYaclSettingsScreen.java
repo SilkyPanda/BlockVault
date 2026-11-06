@@ -79,14 +79,6 @@ final class VaultYaclSettingsScreen extends Screen {
         OptionGroup prompts = OptionGroup.createBuilder()
                 .name(Component.translatable("blockvault.config.group.cards"))
                 .description(description("blockvault.config.group.cards.description"))
-                .option(Option.<Integer>createBuilder()
-                        .name(Component.translatable("blockvault.config.option.duration"))
-                        .description(description("blockvault.settings.description.duration"))
-                        .binding(DEFAULTS.cardDurationSeconds(), () -> draft.duration, value -> draft.duration = value)
-                        .controller(option -> IntegerSliderControllerBuilder.create(option)
-                                .range(1, 60).step(1)
-                                .valueFormatter(value -> Component.translatable("blockvault.config.value.seconds", value)))
-                        .build())
                 .option(Option.<CardPosition>createBuilder()
                         .name(Component.translatable("blockvault.config.option.position"))
                         .description(description("blockvault.settings.description.position"))
@@ -137,8 +129,8 @@ final class VaultYaclSettingsScreen extends Screen {
         return ConfigCategory.createBuilder()
                 .name(Component.translatable("blockvault.config.category.data"))
                 .tooltip(Component.translatable("blockvault.config.category.data.description"))
-                .option(action("blockvault.config.action.vault", "blockvault.config.action.vault.description",
-                        () -> VaultRuntime.openVaultScreen()))
+                .option(screenAction("blockvault.config.action.vault", "blockvault.config.action.vault.description",
+                        screen -> VaultRuntime.openVaultScreen(screen)))
                 .option(screenAction("blockvault.config.action.backups", "blockvault.config.action.backups.description",
                         VaultRuntime::openBackupScreen))
                 .option(screenAction("blockvault.config.action.master", "blockvault.config.action.master.description",
@@ -158,14 +150,6 @@ final class VaultYaclSettingsScreen extends Screen {
                 .description(description("blockvault.settings.description." + descriptionKey))
                 .binding(defaultValue, getter::getAsBoolean, setter)
                 .controller(TickBoxControllerBuilder::create)
-                .build();
-    }
-
-    private static ButtonOption action(String name, String description, Runnable action) {
-        return ButtonOption.createBuilder()
-                .name(Component.translatable(name))
-                .description(description(description))
-                .action((screen, option) -> action.run())
                 .build();
     }
 
@@ -242,12 +226,12 @@ final class VaultYaclSettingsScreen extends Screen {
     }
 
     private enum GeneratorPreset {
-        DEFAULTS("defaults"), PICKY_SERVER("pickyServer"), MAX("max"), MEMORABLE("memorable");
+        BASIC("basic"), MEMORABLE("memorable");
         private final String id;
         GeneratorPreset(String id) { this.id = id; }
         private static GeneratorPreset from(String id) {
             for (GeneratorPreset value : values()) if (value.id.equals(id)) return value;
-            return PICKY_SERVER;
+            return BASIC;
         }
     }
 

@@ -84,10 +84,10 @@ final class BlockVaultConfig {
         String position = string(json, "cardPosition", defaults.cardPosition());
         if (!java.util.Set.of("top_left", "top_right", "bottom_left", "bottom_right").contains(position)) position = defaults.cardPosition();
         String generator = string(json, "generator", defaults.generator());
-        if (!java.util.Set.of("defaults", "pickyServer", "max", "memorable").contains(generator)) generator = defaults.generator();
+        if (!java.util.Set.of("basic", "memorable").contains(generator)) generator = defaults.generator();
         return new Settings(bool(json, "autofill", defaults.autofill()), bool(json, "passwordlessLogin", defaults.passwordlessLogin()), integer(json, "autofillDelayMillis", 200, 5000,
                 defaults.autofillDelayMillis()),
-                integer(json, "cardDurationSeconds", 1, 60, defaults.cardDurationSeconds()),
+                defaults.cardDurationSeconds(),
                 position, bool(json, "streamerMode", defaults.streamerMode()),
                 generator, bool(json, "scrubHistory", defaults.scrubHistory()),
                 bool(json, "trustDevice", defaults.trustDevice()));
@@ -134,18 +134,15 @@ final class BlockVaultConfig {
 
     /** Maps a stored generator preset name to its password policy (unknown names use the default). */
     static io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy generatorPolicy(String preset) {
-        return switch (preset) {
-            case "pickyServer" -> io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.pickyServer();
-            case "max" -> io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.max();
-            case "memorable" -> io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.memorable();
-            default -> io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.defaults();
-        };
+        return "memorable".equals(preset)
+                ? io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.memorable()
+                : io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.pickyServer();
     }
 
     record Settings(boolean autofill, boolean passwordlessLogin, int autofillDelayMillis, int cardDurationSeconds,
                     String cardPosition, boolean streamerMode, String generator, boolean scrubHistory,
                     boolean trustDevice) {
-        static Settings defaults() { return new Settings(true, true, 400, 5, "top_right", false, "pickyServer", true, true); }
+        static Settings defaults() { return new Settings(true, true, 400, 10, "top_right", false, "basic", true, true); }
         Settings withTrustDevice(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, value); }
         Settings withAutofill(boolean value) { return new Settings(value, passwordlessLogin, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
         Settings withPasswordlessLogin(boolean value) { return new Settings(autofill, value, autofillDelayMillis, cardDurationSeconds, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }

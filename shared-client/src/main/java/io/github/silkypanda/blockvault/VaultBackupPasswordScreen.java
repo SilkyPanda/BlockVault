@@ -83,6 +83,11 @@ final class VaultBackupPasswordScreen extends Screen {
 
     @Override public boolean isPauseScreen() { return false; }
 
+    @Override public void onClose() {
+        if (password != null) password.setValue("");
+        Minecraft.getInstance().setScreenAndShow(parent);
+    }
+
     @Override public void removed() {
         if (password != null) password.setValue("");
         super.removed();

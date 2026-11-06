@@ -52,7 +52,7 @@ final class VaultImportPreviewScreen extends Screen {
             busy = false;
             if (success) {
                 finished = true;
-                VaultRuntime.openVaultScreen();
+                VaultRuntime.openVaultScreen(parent);
             } else {
                 failed = true;
             }

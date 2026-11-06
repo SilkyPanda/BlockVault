@@ -117,6 +117,6 @@ final class VaultMasterPasswordScreen extends Screen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { clearFields(); super.onClose(); }
+    @Override public void onClose() { clearFields(); Minecraft.getInstance().setScreenAndShow(parent); }
     @Override public void removed() { clearFields(); super.removed(); }
 }

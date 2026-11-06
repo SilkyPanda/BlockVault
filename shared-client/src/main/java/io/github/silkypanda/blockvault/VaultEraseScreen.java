@@ -158,6 +158,6 @@ final class VaultEraseScreen extends Screen {
 
     @Override public void onClose() {
         if (password != null) password.setValue("");
-        super.onClose();
+        Minecraft.getInstance().setScreenAndShow(parent);
     }
 }

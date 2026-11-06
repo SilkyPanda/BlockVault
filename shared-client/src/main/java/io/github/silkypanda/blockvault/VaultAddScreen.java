@@ -82,7 +82,7 @@ final class VaultAddScreen extends Screen {
             errorKey = failure;
             if (failure == null) {
                 clearFields();
-                VaultRuntime.openVaultScreen();
+                VaultRuntime.openVaultScreen(parent instanceof VaultListScreen list ? list.parentScreen() : parent);
             }
         });
     }

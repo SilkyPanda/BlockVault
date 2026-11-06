@@ -176,5 +176,9 @@ final class VaultBackupDetailScreen extends Screen {
     }
     @Override public boolean isPauseScreen() { return false; }
 
+    @Override public void onClose() {
+        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+    }
+
     private record Entry(ServerEntry server, Account account) { }
 }

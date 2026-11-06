@@ -71,7 +71,7 @@ final class VaultTransferScreen extends Screen {
             VaultRuntime.exportVault(path, exported -> {
                 busy = false;
                 failed = exported == null;
-                exportedPath = exported == null ? null : exported.getFileName().toString();
+        exportedPath = exported == null ? null : exported.toAbsolutePath().normalize().toString();
             });
             return;
         }
@@ -95,7 +95,7 @@ final class VaultTransferScreen extends Screen {
         busy = false;
         failed = !success;
         failureKey = null;
-        if (success) VaultRuntime.openVaultScreen();
+        if (success) VaultRuntime.openVaultScreen(parent);
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
@@ -106,13 +106,13 @@ final class VaultTransferScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        graphics.centeredText(font, title, width / 2, height / 2 - 60, 0xffffffff);
+        graphics.centeredText(font, title, width / 2, height / 2 - 84, 0xffffffff);
         ScreenText.drawCenteredWrapped(graphics, font, Component.translatable(importing
                 ? "blockvault.transfer.import.help" : "blockvault.transfer.export.help"), width / 2,
-                height / 2 - 58, width - 32, 0xffc5c0cf, 11);
-        if (exportedPath != null) graphics.centeredText(font,
-                Component.translatable("blockvault.transfer.exported", exportedPath),
-                width / 2, height / 2 + 65, 0xff77dd88);
+                height / 2 - 66, width - 32, 0xffc5c0cf, 11);
+        if (exportedPath != null) ScreenText.drawCenteredWrapped(graphics, font,
+                Component.translatable("blockvault.transfer.exported", exportedPath), width / 2,
+                height / 2 + 65, width - 32, 0xff77dd88, 11);
         else if (busy) graphics.centeredText(font, Component.translatable("blockvault.transfer.working"),
                 width / 2, height / 2 + 65, 0xffaaaaaa);
         else if (failed) graphics.centeredText(font, Component.translatable(failureKey != null ? failureKey
@@ -124,7 +124,7 @@ final class VaultTransferScreen extends Screen {
 
     @Override public void onClose() {
         if (passwordBox != null) passwordBox.setValue("");
-        super.onClose();
+        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
     }
 
     @Override public void removed() {
