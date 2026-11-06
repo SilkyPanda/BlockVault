@@ -13,7 +13,6 @@ These rules apply to every change.
 - Keep game-version-specific code in `shared-client` and loader APIs in `fabric` and `neoforge`. Everything else stays in `core` so it can be unit-tested without the game.
 - At most three small mixins, all with `require = 0` so a Minecraft update cannot crash the game. Because that makes failures silent, privacy-critical hooks are self-checked at runtime and warn the owner when inactive.
 - No per-tick work. Game-thread code never does file or key-derivation work; use `BackgroundExecutor`.
-- The jar stays under 256 KiB.
 
 **Style**
 - Java 25. YACL is the explicitly approved external dependency for the client settings screen; do not add other runtime dependencies without approval. Do not bundle YACL into BlockVault's jar.

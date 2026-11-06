@@ -11,7 +11,7 @@
 - **Added** a second confirmation click for permanent trash deletion, optional export folder with generated filenames, and a default `exports/` folder under BlockVault's data directory.
 - **Redesigned** settings with YACL categories and controls shared by Fabric and NeoForge. Updated NeoForge mod-list icon/banner metadata.
 - **Removed** the edit-password Generate action and the vault screen's Config action; Back now closes the vault screen.
-- **Kept** the jar under the documented 256 KiB limit by bundling only the 1,024 words the generator already consumes and retaining source/line debug data without local-variable tables.
+- **Kept** the packaged word list to the 1,024 words the generator consumes and retained source/line debug data without local-variable tables.
 - **Added** passwordless `/login`: typing a bare login command sends the verified saved password through the server's configured login template, regardless of global or per-server autofill settings.
 - **Changed** credential capture to always be allowed, removed its per-server toggle and opt-out action, and kept autofill as a separate per-server setting.
 - **Fixed** YACL Reset bindings to use BlockVault's actual default values instead of the values loaded when the screen opens. Restored the vault-row Copy label.

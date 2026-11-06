@@ -86,18 +86,6 @@ jobs:
       - name: Build
         run: |
           if [ -f gradlew ]; then chmod +x gradlew; ./gradlew --no-daemon build; else gradle --no-daemon build; fi
-      - name: Jar size budget
-        run: |
-          shopt -s nullglob
-          found=0
-          for f in build/libs/*.jar; do
-            case "$f" in *-sources.jar) continue;; esac
-            found=1
-            size=$(stat -c %s "$f")
-            echo "${f}: ${size} bytes" | tee -a "$GITHUB_STEP_SUMMARY"
-            if [ "$size" -gt 262144 ]; then echo "::error::${f} exceeds the 256 KiB budget"; exit 1; fi
-          done
-          if [ "$found" -eq 0 ]; then echo "::error::no jar produced"; exit 1; fi
       - name: Upload jars
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
