@@ -1,4 +1,4 @@
-package io.github.silkypanda.blockvault.mixin;
+package io.github.silkypanda.blockvault;
 
 import net.minecraft.client.input.KeyEvent;
 
@@ -8,7 +8,7 @@ public final class ShiftState {
 
     private ShiftState() { }
 
-    static void track(KeyEvent event) { modifiers = event.modifiers(); }
+    public static void track(KeyEvent event) { modifiers = event.modifiers(); }
 
     public static boolean shiftDown() { return (modifiers & 1) != 0; }
 }

@@ -1,5 +1,6 @@
 package io.github.silkypanda.blockvault.mixin;
 
+import io.github.silkypanda.blockvault.ShiftState;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.input.KeyEvent;
 import org.spongepowered.asm.mixin.Mixin;
