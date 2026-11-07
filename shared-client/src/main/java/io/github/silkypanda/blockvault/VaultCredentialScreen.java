@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Per-account reveal, edit, copy, and delete controls. */
-final class VaultCredentialScreen extends Screen {
+final class VaultCredentialScreen extends Screen implements BlockVaultManagedScreen {
     private final VaultRow row;
     private final Screen parent;
     private boolean showPassword;

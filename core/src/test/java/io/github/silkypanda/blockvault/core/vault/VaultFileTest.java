@@ -12,7 +12,7 @@ final class VaultFileTest {
     void encodesAndParsesEncryptedPayload() throws Exception {
         byte[] key = new byte[32];
         Arrays.fill(key, (byte) 9);
-        VaultFile.Header header = new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, 210_000, new byte[16]);
+        VaultFile.Header header = new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, 210_000, new byte[16]);
         byte[] json = "{\"v\":1,\"servers\":[]}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         byte[] file = VaultFile.encode(header, new byte[60], key, json);
         VaultFile.Parsed parsed = VaultFile.parse(file);
@@ -29,7 +29,7 @@ final class VaultFileTest {
 
     @Test
     void encoderRejectsFilesThatParserWouldConsiderOversized() {
-        VaultFile.Header header = new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, 210_000, new byte[16]);
+        VaultFile.Header header = new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, 210_000, new byte[16]);
         int overhead = 28 + 2 + 60 + 12 + 4 + 16;
         assertThrows(IllegalArgumentException.class, () -> VaultFile.encode(header, new byte[60], new byte[32],
                 new byte[VaultFile.MAX_BYTES - overhead + 1]));
@@ -38,7 +38,7 @@ final class VaultFileTest {
     @Test
     void everySingleByteMutationIsRejectedOrFailsAuthentication() throws Exception {
         byte[] key = new byte[32];
-        byte[] source = VaultFile.encode(new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, 210_000, new byte[16]),
+        byte[] source = VaultFile.encode(new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, 210_000, new byte[16]),
                 new byte[60], key, "{\"v\":1,\"servers\":[]}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         for (int i = 0; i < source.length; i++) {
             byte[] changed = source.clone();
@@ -55,7 +55,7 @@ final class VaultFileTest {
 
     @Test
     void boundedFuzzMutationsFailOnlyWithControlledExceptions() throws Exception {
-        byte[] valid = VaultFile.encode(new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, 210_000, new byte[16]),
+        byte[] valid = VaultFile.encode(new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, 210_000, new byte[16]),
                 new byte[60], new byte[32], "{\"v\":1,\"servers\":[]}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         java.util.Random random = new java.util.Random(17);
         for (int n = 0; n < 5000; n++) {

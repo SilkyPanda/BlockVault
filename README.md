@@ -2,6 +2,8 @@
 
 BlockVault is a client-side password manager for Minecraft servers with login plugins. It stores server credentials in an encrypted local vault and does not connect to external services.
 
+**Alpha software:** do not use passwords you care about yet. Built-in prompt and result detection is English-only. Vault files are stored in the platform-specific BlockVault data folder listed below.
+
 Copyright © 2026 SilkyPanda. BlockVault is free software licensed under the GNU General Public License, version 3 only. See [LICENSE](LICENSE).
 
 ## Use
@@ -27,5 +29,9 @@ The project targets Java 25. Each loader and the pure-Java core has its own Grad
 - `core/`: vault storage, cryptography, password generation, detection, and session logic.
 - `shared-client/`: Minecraft screens, settings, hooks, and mixins.
 - `fabric/` and `neoforge/`: loader entry points and event integration.
+
+Fabric API is required on Fabric. YACL and Mod Menu are optional; settings remain available through the native fallback without YACL.
+
+Source code: [GitHub](https://github.com/SilkyPanda/BlockVault). BlockVault is GPL-3.0-only.
 
 Before treating behavior as verified, work through [the manual test checklist](TEST_CHECKLIST.md). Design and merge rules are in [DESIGN.md](DESIGN.md) and [CONFLICT_HANDLING.md](CONFLICT_HANDLING.md).

@@ -1,6 +1,7 @@
 # Status
 
-**Verification status:** Treat the whole current project as unverified. No build, test suite, or in-game checklist has been run against this working tree. See `TEST_CHECKLIST.md` and test each item from scratch.
+**Verification status:** The checklist records the user's reported in-game passes. A prior review reported that core compiled and all 113 then-existing tests passed; that predates this review work. Re-run core tests and both loader builds after these changes. The new in-game checks are in `TEST_CHECKLIST.md`.
 
 **Known gaps**
-- All loader behavior, screens, runtime hooks, and platform-specific file handling still need verification on both loaders.
+- Current review changes have not been built or tested on either loader, and no in-game verification has been done for them yet.
+- Built-in prompt and result detection is English-only.

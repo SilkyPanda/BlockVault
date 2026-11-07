@@ -13,7 +13,7 @@ import io.github.silkypanda.blockvault.core.session.CredentialPassword;
 import io.github.silkypanda.blockvault.core.validation.InputRules;
 
 /** Minimal masked screen for creating or unlocking the encrypted local vault. */
-final class VaultAccessScreen extends Screen {
+final class VaultAccessScreen extends Screen implements BlockVaultManagedScreen {
     private final boolean create;
     private final Screen parent;
     private EditBox password;
@@ -22,7 +22,6 @@ final class VaultAccessScreen extends Screen {
     private boolean busy;
     private boolean trustThisDevice = true;
     private String failureKey;
-    private final CapsLockHint capsLock = new CapsLockHint();
 
     VaultAccessScreen(boolean create, Screen parent) {
         super(Component.translatable(create ? "blockvault.vault.create.title" : "blockvault.vault.unlock.title"));
@@ -38,7 +37,7 @@ final class VaultAccessScreen extends Screen {
         password.setHint(Component.translatable("blockvault.vault.password"));
         password.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
         password.addFormatter(VaultAccessScreen::mask);
-        InputFilter.bind(password, InputRules::isMasterPasswordInput, capsLock::onValueChanged);
+            InputFilter.bind(password, InputRules::isMasterPasswordInput, null);
         addRenderableWidget(password);
         if (create) {
             confirmation = new EditBox(font, center - 100, height / 2 - 20, 200, 20,
@@ -46,7 +45,7 @@ final class VaultAccessScreen extends Screen {
             confirmation.setHint(Component.translatable("blockvault.vault.confirm"));
             confirmation.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
             confirmation.addFormatter(VaultAccessScreen::mask);
-            InputFilter.bind(confirmation, InputRules::isMasterPasswordInput, capsLock::onValueChanged);
+            InputFilter.bind(confirmation, InputRules::isMasterPasswordInput, null);
             addRenderableWidget(confirmation);
             trustThisDevice = BlockVaultConfig.current().trustDevice();
             addRenderableWidget(Button.builder(trustMessage(), button -> {
@@ -129,10 +128,6 @@ final class VaultAccessScreen extends Screen {
             graphics.centeredText(font, Component.translatable("blockvault.vault.trust.explanation"),
                     width / 2, height / 2 + 35, 0xffc3bfcc);
         }
-        if (capsLock.likelyOn()) {
-            graphics.centeredText(font, Component.translatable("blockvault.access.caps_lock"), width / 2,
-                    height / 2 - 64, 0xffffcc55);
-        }
         if (busy) {
             graphics.centeredText(font, Component.translatable(create ? "blockvault.access.creating"
                     : "blockvault.access.unlocking"), width / 2,
@@ -173,7 +168,6 @@ final class VaultAccessScreen extends Screen {
     private void clearFields() {
         if (password != null) password.setValue("");
         if (confirmation != null) confirmation.setValue("");
-        capsLock.reset();
     }
 
     private static FormattedCharSequence mask(String value, int cursor) {

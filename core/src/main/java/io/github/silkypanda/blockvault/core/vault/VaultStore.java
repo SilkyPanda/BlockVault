@@ -69,7 +69,6 @@ public final class VaultStore {
     public boolean exists() { return Files.isRegularFile(path("vault.bv")); }
 
     /** Returns the file key mode, or {@code null} before the first create. */
-    public KeyMode keyMode() { return header == null ? null : header.keyMode(); }
 
     /** Creates and unlocks a new vault. Master-password work runs on the caller's background thread. */
     public void create(char[] masterPassword) throws IOException {
@@ -80,7 +79,7 @@ public final class VaultStore {
         byte[] salt = SecureBytes.random(16);
         try {
             int iterations = calibratedKdfIterations();
-            header = new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, iterations, salt);
+            header = new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, iterations, salt);
             MasterPasswordKek kek = masterKek(masterPassword, salt, iterations, prefix(header));
             try { wrappedKey = kek.wrap(vaultKey = SecureBytes.random(32)); }
             finally { kek.clear(); }
@@ -652,7 +651,7 @@ public final class VaultStore {
         boolean committed = false;
         try {
             int iterations = calibratedKdfIterations();
-            final VaultFile.Header nextHeader = new VaultFile.Header(KeyMode.MASTER_PASSWORD, 1, 0, iterations, salt);
+            final VaultFile.Header nextHeader = new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, iterations, salt);
             MasterPasswordKek provider = masterKek(newPassword, salt, iterations, prefix(nextHeader));
             final byte[] nextWrapped;
             try { nextWrapped = provider.wrap(newKey); }
@@ -757,15 +756,15 @@ public final class VaultStore {
     private void rotateBackupsIfDue() throws IOException {
         Path current = path("vault.bv");
         if (!Files.isRegularFile(current)) return;
-        if (!fileHasBackupData(current)) return;
         Path newest = path("vault.bv.bak1");
         long now = System.currentTimeMillis();
         if (Files.isRegularFile(newest)) {
-            if (sameBackupContents(newest, current)) return;
             long age = now - Files.getLastModifiedTime(newest).toMillis();
             // A negative age means the clock moved backwards; do not let that suppress backups for days.
             if (age >= 0 && age < BACKUP_INTERVAL_MILLIS) return;
+            if (sameBackupContents(newest, current)) return;
         }
+        if (!fileHasBackupData(current)) return;
         rotateBackupsNow();
     }
 
@@ -1026,7 +1025,7 @@ public final class VaultStore {
 
     private static byte[] prefix(VaultFile.Header h) {
         java.nio.ByteBuffer bytes = java.nio.ByteBuffer.allocate(28).order(java.nio.ByteOrder.BIG_ENDIAN);
-        bytes.put(new byte[] {'B', 'V', 'L', 'T'}).put((byte) 1).put((byte) h.keyMode().id())
+        bytes.put(new byte[] {'B', 'V', 'L', 'T'}).put((byte) 1).put((byte) h.keyModeId())
                 .put((byte) h.kdfId()).put((byte) h.reserved()).putInt(h.iterations()).put(h.salt());
         return bytes.array();
     }

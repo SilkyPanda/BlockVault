@@ -6,7 +6,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Explicit second step before a credential is moved to the trash. */
-final class VaultDeleteScreen extends Screen {
+final class VaultDeleteScreen extends Screen implements BlockVaultManagedScreen {
     private final VaultRow row;
     private final Screen parent;
 

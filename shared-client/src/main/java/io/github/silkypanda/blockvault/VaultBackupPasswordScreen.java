@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Requests the older master password when a recovery point uses an earlier key. */
-final class VaultBackupPasswordScreen extends Screen {
+final class VaultBackupPasswordScreen extends Screen implements BlockVaultManagedScreen {
     private final BackupSummary backup;
     private final Screen parent;
     private EditBox password;

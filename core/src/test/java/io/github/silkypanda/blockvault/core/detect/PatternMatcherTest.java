@@ -22,6 +22,10 @@ final class PatternMatcherTest {
         assertTrue(prompts.matchPrompt("hello there").isEmpty());
         assertTrue(prompts.matchPrompt("[Ad] Join our discord. /register for rewards").isEmpty());
         assertTrue(prompts.matchPrompt("<Steve> hey everyone use /register <password>").isEmpty());
+        assertTrue(prompts.matchPrompt("[Steve -> me] Please /login <password>").isEmpty());
+        assertTrue(prompts.matchPrompt("[Rank] Steve » please /register <password>").isEmpty());
+        assertTrue(prompts.matchPrompt("Steve: Use /login <password>").isEmpty());
+        assertEquals(PromptKind.REGISTER, prompts.matchPrompt("Use /register to claim rewards").orElseThrow());
         assertTrue(prompts.matchPrompt("The word /login appears here as an example").isEmpty());
         assertEquals(ResultKind.SUCCESS, results.classify("Successfully registered!"));
         assertEquals(ResultKind.SUCCESS, results.classify(
@@ -40,7 +44,7 @@ final class PatternMatcherTest {
     }
 
     @Test
-    void distinguishesRegistrationRulesFailuresAndAlreadyLoggedInSuccess() throws Exception {
+    void distinguishesRegistrationRulesFailuresAndAlreadyLoggedInNeutralResult() throws Exception {
         ResultMatcher matcher = new ResultMatcher(pack());
         for (String rule : java.util.List.of("Invalid password: must contain a digit",
                 "Invalid password format", "Invalid password length, 8-16 characters",
@@ -48,7 +52,7 @@ final class PatternMatcherTest {
                 "Password is unsafe", "This password is too common")) {
             assertEquals(ResultKind.PASSWORD_RULE, matcher.classify(rule), rule);
         }
-        assertEquals(ResultKind.SUCCESS, matcher.classify("You are already logged in!"));
+        assertEquals(ResultKind.ALREADY_LOGGED_IN, matcher.classify("You are already logged in!"));
         for (String failure : java.util.List.of("Login failed",
                 "Incorrect login credentials", "Incorrect password")) {
             assertEquals(ResultKind.FAILURE, matcher.classify(failure), failure);

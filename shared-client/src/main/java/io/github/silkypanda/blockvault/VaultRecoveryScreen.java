@@ -11,7 +11,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Lists encrypted automatic and manual recovery points. */
-final class VaultRecoveryScreen extends Screen {
+final class VaultRecoveryScreen extends Screen implements BlockVaultManagedScreen {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
     private final Screen parent;

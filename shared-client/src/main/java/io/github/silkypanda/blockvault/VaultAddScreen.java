@@ -23,7 +23,6 @@ final class VaultAddScreen extends Screen {
     private boolean showPassword;
     private boolean busy;
     private String errorKey;
-    private final CapsLockHint capsLock = new CapsLockHint();
 
     VaultAddScreen(Screen parent) {
         super(Component.translatable("blockvault.add.title"));
@@ -39,7 +38,7 @@ final class VaultAddScreen extends Screen {
         passwordBox = box(left, top + 52, "blockvault.add.password", InputRules.SERVER_PASSWORD_MAX * 2);
         InputFilter.bind(hostBox, InputRules::isHostText, null);
         InputFilter.bind(userBox, InputRules::isUsernameText, null);
-        InputFilter.bind(passwordBox, InputRules::isServerPasswordInput, capsLock::onValueChanged);
+        InputFilter.bind(passwordBox, InputRules::isServerPasswordInput, null);
         passwordBox.addFormatter((value, cursor) -> FormattedCharSequence.forward(
                 showPassword ? value : "\u2022".repeat(value.length()), Style.EMPTY));
         addRenderableWidget(hostBox);
@@ -94,7 +93,6 @@ final class VaultAddScreen extends Screen {
 
     private void clearFields() {
         if (passwordBox != null) passwordBox.setValue("");
-        capsLock.reset();
     }
 
     @Override
@@ -102,10 +100,6 @@ final class VaultAddScreen extends Screen {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         int top = Math.max(40, height / 2 - 56);
         graphics.centeredText(font, title, width / 2, top - 22, 0xffffffff);
-        if (capsLock.likelyOn()) {
-            graphics.centeredText(font, Component.translatable("blockvault.access.caps_lock"), width / 2, top + 130,
-                    0xffffcc55);
-        }
         if (busy) {
             graphics.centeredText(font, Component.translatable("blockvault.transfer.working"), width / 2, top + 144,
                     0xffaaaaaa);

@@ -3,7 +3,7 @@
   "id": "blockvault",
   "version": "${version}",
   "name": "BlockVault",
-  "description": "Client-side password manager for servers with login/register plugins. Generates, encrypts and autofills per-server passwords.",
+  "description": "Alpha test: do not use passwords you care about yet. Built-in prompt and result detection is English-only. Stores encrypted data in your BlockVault data folder; see the README for its location.",
   "icon": "assets/blockvault/icon.png",
   "authors": ["SilkyPanda"],
   "contact": {

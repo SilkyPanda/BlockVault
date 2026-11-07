@@ -31,9 +31,12 @@ final class CredentialConfirmScreen extends Screen {
     private EditBox passwordBox;
     private EditBox emailBox;
     private boolean closing;
+    private boolean closeAnimating;
+    private long closeStartedAtNanos;
     private boolean registration;
     private boolean emailRequired;
     private boolean reveal;
+    private final long openedAtNanos = System.nanoTime();
     private int cardWidth;
     private int cardHeight;
     private float scale;
@@ -78,6 +81,12 @@ final class CredentialConfirmScreen extends Screen {
                 / (BASE_WIDTH * (double) baseHeight))));
         scale = Math.min(scale, Math.min((width - 16.0f) / BASE_WIDTH, (height - 16.0f) / baseHeight));
         if (scale <= 0) scale = 0.01f;
+        if (scale < 0.9f) {
+            baseHeight = emailRequired ? 252 : 218;
+            scale = Math.min(1.0f, (float) Math.min((width - 16.0f) / BASE_WIDTH,
+                    (height - 16.0f) / baseHeight));
+            if (scale <= 0) scale = 0.01f;
+        }
         cardWidth = Math.round(BASE_WIDTH * scale);
         cardHeight = Math.round(baseHeight * scale);
         cardX = switch (config.cardPosition()) {
@@ -122,24 +131,39 @@ final class CredentialConfirmScreen extends Screen {
         setInitialFocus(passwordBox);
     }
 
+    @Override
+    public void tick() {
+        super.tick();
+        if (closeAnimating && System.nanoTime() - closeStartedAtNanos >= 120_000_000L) {
+            closeAnimating = false;
+            finishClose();
+            Minecraft.getInstance().setScreenAndShow(null);
+        }
+    }
+
     private void initSaveButtons(boolean registration) {
         String actionKey = registration ? "blockvault.card.register"
                 : model.variant() == CardVariant.UPDATE ? "blockvault.card.update" : "blockvault.card.save";
         int pad = scaled(12);
         int gap = scaled(6);
+        boolean stacked = scale < 0.9f;
         int buttonY = cardY + scaled(emailRequired ? 108 : 84);
         int buttonWidth = (cardWidth - pad * 2 - gap) / 2;
         addButton(cardX + pad, buttonY, buttonWidth, actionKey, button -> accept(registration));
         addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.cancel", button -> onClose());
-        int utilityY = buttonY + scaled(24);
+        int utilityY = buttonY + scaled(stacked ? 48 : 24);
         int utilityCount = registration ? 3 : 2;
-        int utilityWidth = (cardWidth - pad * 2 - gap * (utilityCount - 1)) / utilityCount;
+        int utilityWidth = stacked ? (cardWidth - pad * 2 - gap) / 2
+                : (cardWidth - pad * 2 - gap * (utilityCount - 1)) / utilityCount;
         addButton(cardX + pad, utilityY, utilityWidth, "blockvault.card.reveal",
                 button -> { reveal = !reveal; });
         addButton(cardX + pad + utilityWidth + gap, utilityY, utilityWidth, "blockvault.card.copy",
                 button -> copyFromField());
         if (registration) {
-            addButton(cardX + pad + (utilityWidth + gap) * 2, utilityY, utilityWidth,
+            int regenerateY = stacked ? utilityY + scaled(24) : utilityY;
+            int regenerateX = stacked ? cardX + pad : cardX + pad + (utilityWidth + gap) * 2;
+            int regenerateWidth = stacked ? cardWidth - pad * 2 : utilityWidth;
+            addButton(regenerateX, regenerateY, regenerateWidth,
                     "blockvault.card.regenerate", button -> regenerate());
         }
     }
@@ -157,12 +181,15 @@ final class CredentialConfirmScreen extends Screen {
         int pad = scaled(12);
         int gap = scaled(4);
         int buttonY = cardY + scaled(84);
-        int buttonWidth = (cardWidth - pad * 2 - gap * 2) / 3;
+        boolean stacked = scale < 0.9f;
+        int buttonWidth = stacked ? cardWidth - pad * 2 : (cardWidth - pad * 2 - gap * 2) / 3;
+        int secondY = stacked ? buttonY + scaled(24) : buttonY;
+        int thirdY = stacked ? buttonY + scaled(48) : buttonY;
         addButton(cardX + pad, buttonY, buttonWidth, "blockvault.card.manual", button -> {
             session.dismissRejectedPrompt();
             onClose();
         });
-        addButton(cardX + pad + buttonWidth + gap, buttonY, buttonWidth, "blockvault.card.update", button -> {
+        addButton(stacked ? cardX + pad : cardX + pad + buttonWidth + gap, secondY, buttonWidth, "blockvault.card.update", button -> {
             if (!CredentialPassword.isValid(passwordBox.getValue().toCharArray())) {
                 VaultRuntime.showToast("blockvault.password.invalid");
                 return;
@@ -172,21 +199,23 @@ final class CredentialConfirmScreen extends Screen {
             session.updateRejectedPassword(password);
             onClose();
         });
-        addButton(cardX + pad + (buttonWidth + gap) * 2, buttonY, buttonWidth, "blockvault.card.forget", button -> {
+        addButton(stacked ? cardX + pad : cardX + pad + (buttonWidth + gap) * 2, thirdY, buttonWidth, "blockvault.card.forget", button -> {
             session.forgetRejectedCredential();
             onClose();
         });
-        int utilityWidth = (cardWidth - pad * 2 - gap) / 2;
-        addButton(cardX + pad, buttonY + scaled(24), utilityWidth, "blockvault.card.reveal",
+        int utilityWidth = stacked ? cardWidth - pad * 2 : (cardWidth - pad * 2 - gap) / 2;
+        int utilityY = stacked ? buttonY + scaled(72) : buttonY + scaled(24);
+        addButton(cardX + pad, utilityY, utilityWidth, "blockvault.card.reveal",
                 button -> { reveal = !reveal; });
-        addButton(cardX + pad + utilityWidth + gap, buttonY + scaled(24), utilityWidth,
+        addButton(stacked ? cardX + pad : cardX + pad + utilityWidth + gap,
+                stacked ? utilityY + scaled(24) : utilityY, utilityWidth,
                 "blockvault.card.cancel", button -> onClose());
     }
 
     private void initPendingLoginButtons() {
         int pad = scaled(12);
         int gap = scaled(6);
-        int y = cardY + scaled(84);
+        int y = cardY + scaled(scale < 0.9f ? 108 : 84);
         int buttonWidth = (cardWidth - pad * 2 - gap) / 2;
         addButton(cardX + pad, y, buttonWidth, "blockvault.card.pending_login", button -> tryPendingLogin());
         addButton(cardX + pad + buttonWidth + gap, y, buttonWidth, "blockvault.card.cancel", button -> onClose());
@@ -236,6 +265,7 @@ final class CredentialConfirmScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
+        if (inputGraceActive() || closeAnimating || !openingFinished()) return true;
         if (ScreenText.isEnter(event)) {
             if (model.variant() == CardVariant.PENDING_LOGIN) { tryPendingLogin(); return true; }
             if (model.variant() == CardVariant.REJECTED) {
@@ -255,12 +285,26 @@ final class CredentialConfirmScreen extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xf20d0c12);
-        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + scaled(2), 0xff9b72ff);
+        float progress = animationProgress();
+        int slide = Math.round(scaled(24) * (1 - progress));
+        if (closeAnimating) slide = Math.round(scaled(24) * (System.nanoTime() - closeStartedAtNanos) / 120_000_000f);
+        int drawX = cardX + (BlockVaultConfig.current().cardPosition().endsWith("left") ? -slide : slide);
+        int drawY = cardY + (BlockVaultConfig.current().cardPosition().startsWith("bottom") ? slide : -slide);
+        int alpha = Math.round((closeAnimating ? 255 * (1 - (System.nanoTime() - closeStartedAtNanos) / 120_000_000f)
+                : 255 * progress));
+        graphics.fill(drawX + scaled(2), drawY + scaled(3), drawX + cardWidth + scaled(2),
+                drawY + cardHeight + scaled(3), withAlpha(CredentialCardTheme.SHADOW, alpha));
+        graphics.fill(drawX, drawY, drawX + cardWidth, drawY + cardHeight,
+                withAlpha(CredentialCardTheme.BORDER, alpha));
+        graphics.fill(drawX + scaled(1), drawY + scaled(1), drawX + cardWidth - scaled(1),
+                drawY + cardHeight - scaled(1), withAlpha(CredentialCardTheme.PANEL, alpha));
+        graphics.fill(drawX + scaled(1), drawY + scaled(1), drawX + scaled(4),
+                drawY + cardHeight - scaled(1), withAlpha(CredentialCardTheme.accent(model.variant()), alpha));
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (inputGraceActive() || closeAnimating || !openingFinished()) return true;
         if (event.x() < cardX || event.x() >= cardX + cardWidth
                 || event.y() < cardY || event.y() >= cardY + cardHeight) {
             // Keep the only copy of manually entered credentials on screen until the owner chooses an action.
@@ -269,24 +313,58 @@ final class CredentialConfirmScreen extends Screen {
         return super.mouseClicked(event, doubleClick);
     }
 
+    private boolean inputGraceActive() { return System.nanoTime() - openedAtNanos < 250_000_000L; }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        if (closeAnimating || !openingFinished()) return;
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         int pad = scaled(12);
-        graphics.text(font, promptTitle(), cardX + pad, cardY + scaled(8), 0xffffffff);
+        Component status = Component.translatable(CredentialCardTheme.statusKey(model.variant()));
+        int chipWidth = font.width(status) + scaled(12);
+        int chipX = cardX + cardWidth - scaled(12) - chipWidth;
+        Component heading = Component.literal(ScreenText.clip(font, promptTitle().getString(),
+                Math.max(1, chipX - cardX - pad - scaled(8))));
+        graphics.text(font, heading, cardX + pad, cardY + scaled(8), 0xffffffff);
+        graphics.fill(chipX, cardY + scaled(7), chipX + chipWidth, cardY + scaled(21),
+                CredentialCardTheme.accent(model.variant()));
+        graphics.centeredText(font, status, chipX + chipWidth / 2, cardY + scaled(10), 0xff17131d);
         String identity = BlockVaultConfig.current().streamerMode()
                 ? model.username() : model.username() + " · " + model.host();
         identity = ScreenText.clip(font, identity, cardWidth - pad * 2);
-        graphics.text(font, Component.literal(identity), cardX + pad, cardY + scaled(26), 0xffb2adbe);
+        graphics.text(font, Component.literal(identity), cardX + pad, cardY + scaled(26), CredentialCardTheme.MUTED);
+        graphics.text(font, Component.translatable("blockvault.card.keyboard_hint"), cardX + pad,
+                cardY + cardHeight - scaled(12), CredentialCardTheme.MUTED);
     }
 
     private int scaled(int value) { return Math.max(1, Math.round(value * scale)); }
+
+    private boolean animationsEnabled() { return BlockVaultConfig.current().cardAnimations(); }
+    private boolean openingFinished() { return !animationsEnabled() || System.nanoTime() - openedAtNanos >= 200_000_000L; }
+    private float animationProgress() {
+        if (!animationsEnabled()) return 1;
+        float elapsed = Math.min(1, (System.nanoTime() - openedAtNanos) / 200_000_000f);
+        float remaining = 1 - elapsed;
+        return 1 - remaining * remaining * remaining;
+    }
+    private static int withAlpha(int color, int alpha) {
+        return (Math.max(0, Math.min(255, alpha * (color >>> 24) / 255)) << 24) | (color & 0x00ffffff);
+    }
 
     @Override public boolean isPauseScreen() { return false; }
 
     @Override
     public void onClose() {
         if (closing) return;
+        if (animationsEnabled() && openingFinished()) {
+            closeAnimating = true;
+            closeStartedAtNanos = System.nanoTime();
+            wipePassword();
+            if (passwordBox != null) passwordBox.setValue("");
+            if (emailBox != null) emailBox.setValue("");
+            model.clearPassword();
+            return;
+        }
         finishClose();
         super.onClose();
     }

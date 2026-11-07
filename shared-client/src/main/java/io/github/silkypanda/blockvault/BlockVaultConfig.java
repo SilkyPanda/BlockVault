@@ -89,7 +89,8 @@ final class BlockVaultConfig {
                 defaults.autofillDelayMillis()),
                 position, bool(json, "streamerMode", defaults.streamerMode()),
                 generator, bool(json, "scrubHistory", defaults.scrubHistory()),
-                bool(json, "trustDevice", defaults.trustDevice()));
+                bool(json, "trustDevice", defaults.trustDevice()),
+                bool(json, "cardAnimations", defaults.cardAnimations()));
     }
 
     private static void write(Path path, Settings settings) throws Exception {
@@ -103,6 +104,7 @@ final class BlockVaultConfig {
         json.addProperty("generator", settings.generator());
         json.addProperty("scrubHistory", settings.scrubHistory());
         json.addProperty("trustDevice", settings.trustDevice());
+        json.addProperty("cardAnimations", settings.cardAnimations());
         Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
         try {
             Files.writeString(temporary, json.toString(), java.nio.file.StandardOpenOption.CREATE,
@@ -139,15 +141,16 @@ final class BlockVaultConfig {
 
     record Settings(boolean autofill, boolean passwordlessLogin, int autofillDelayMillis,
                     String cardPosition, boolean streamerMode, String generator, boolean scrubHistory,
-                    boolean trustDevice) {
-        static Settings defaults() { return new Settings(true, true, 400, "top_right", false, "basic", true, true); }
-        Settings withTrustDevice(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, generator, scrubHistory, value); }
-        Settings withAutofill(boolean value) { return new Settings(value, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withPasswordlessLogin(boolean value) { return new Settings(autofill, value, autofillDelayMillis, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withAutofillDelayMillis(int value) { return new Settings(autofill, passwordlessLogin, value, cardPosition, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withCardPosition(String value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, value, streamerMode, generator, scrubHistory, trustDevice); }
-        Settings withStreamerMode(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, value, generator, scrubHistory, trustDevice); }
-        Settings withGenerator(String value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, value, scrubHistory, trustDevice); }
-        Settings withScrubHistory(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, generator, value, trustDevice); }
+                    boolean trustDevice, boolean cardAnimations) {
+        static Settings defaults() { return new Settings(true, true, 400, "top_right", false, "basic", true, true, true); }
+        Settings withTrustDevice(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, generator, scrubHistory, value, cardAnimations); }
+        Settings withCardAnimations(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, generator, scrubHistory, trustDevice, value); }
+        Settings withAutofill(boolean value) { return new Settings(value, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, generator, scrubHistory, trustDevice, cardAnimations); }
+        Settings withPasswordlessLogin(boolean value) { return new Settings(autofill, value, autofillDelayMillis, cardPosition, streamerMode, generator, scrubHistory, trustDevice, cardAnimations); }
+        Settings withAutofillDelayMillis(int value) { return new Settings(autofill, passwordlessLogin, value, cardPosition, streamerMode, generator, scrubHistory, trustDevice, cardAnimations); }
+        Settings withCardPosition(String value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, value, streamerMode, generator, scrubHistory, trustDevice, cardAnimations); }
+        Settings withStreamerMode(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, value, generator, scrubHistory, trustDevice, cardAnimations); }
+        Settings withGenerator(String value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, value, scrubHistory, trustDevice, cardAnimations); }
+        Settings withScrubHistory(boolean value) { return new Settings(autofill, passwordlessLogin, autofillDelayMillis, cardPosition, streamerMode, generator, value, trustDevice, cardAnimations); }
     }
 }

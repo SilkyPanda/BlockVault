@@ -17,7 +17,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Requests the password that encrypted a selected backup before recovering a damaged or missing vault. */
-final class VaultBackupRecoveryScreen extends Screen {
+final class VaultBackupRecoveryScreen extends Screen implements BlockVaultManagedScreen {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
     private final BackupSummary backup;

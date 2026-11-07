@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Explicit warning and confirmation before erasing all BlockVault data. */
-final class VaultEraseScreen extends Screen {
+final class VaultEraseScreen extends Screen implements BlockVaultManagedScreen {
     private final Screen parent;
     private Button eraseButton;
     private Button cancelButton;

@@ -17,7 +17,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** YACL settings screen for BlockVault's non-secret client preferences. */
-final class VaultYaclSettingsScreen extends Screen {
+final class VaultYaclSettingsScreen extends Screen implements BlockVaultManagedScreen {
     private static final BlockVaultConfig.Settings DEFAULTS = BlockVaultConfig.Settings.defaults();
     private final Screen parent;
     private boolean loadRequested;
@@ -88,6 +88,8 @@ final class VaultYaclSettingsScreen extends Screen {
                                 .enumClass(CardPosition.class)
                                 .valueFormatter(value -> Component.translatable("blockvault.config.position." + value.id)))
                         .build())
+                .option(boolOption("blockvault.config.option.animations", "animations", DEFAULTS.cardAnimations(),
+                        () -> draft.animations, value -> draft.animations = value))
                 .build();
         return ConfigCategory.createBuilder()
                 .name(Component.translatable("blockvault.config.category.login"))
@@ -196,6 +198,7 @@ final class VaultYaclSettingsScreen extends Screen {
         private boolean streamer;
         private GeneratorPreset generator;
         private boolean scrubHistory;
+        private boolean animations;
         private UnlockPolicy unlockPolicy;
 
         private Draft(BlockVaultConfig.Settings settings) {
@@ -206,12 +209,13 @@ final class VaultYaclSettingsScreen extends Screen {
             streamer = settings.streamerMode();
             generator = GeneratorPreset.from(settings.generator());
             scrubHistory = settings.scrubHistory();
+            animations = settings.cardAnimations();
             unlockPolicy = settings.trustDevice() ? UnlockPolicy.TRUST : UnlockPolicy.ASK;
         }
 
         private BlockVaultConfig.Settings toSettings() {
             return new BlockVaultConfig.Settings(autofill, passwordless, delay, position.id, streamer,
-                    generator.id, scrubHistory, unlockPolicy == UnlockPolicy.TRUST);
+                    generator.id, scrubHistory, unlockPolicy == UnlockPolicy.TRUST, animations);
         }
     }
 

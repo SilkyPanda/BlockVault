@@ -20,6 +20,7 @@ public final class ResultMatcher {
     private static final Pattern ALNUM = Pattern.compile("(?i)(?<!non-)(?<!non )(?<!non)(?:alphanumeric"
             + "|letters\\s+and\\s+(?:numbers|digits)\\s+only|only\\s+(?:letters|alphanumeric))");
     private static final Pattern NEGATED_SUCCESS = Pattern.compile("(?i)\\b(?:un\\s*successful(?:ly)?|unsuccessful(?:ly)?|not\\s+successful(?:ly)?)\\b");
+    private static final Pattern ALREADY_LOGGED_IN = Pattern.compile("(?i)\\balready\\s+logged\\s+in\\b");
     private static final Pattern PASSWORD_RULE_REJECTION = Pattern.compile("(?i)(?:\\binvalid\\s+password\\s+(?:format|length)\\b|\\b(?:password|passphrase)\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|not\\s+secure|too\\s+common|too\\s+simple|invalid\\s+(?:format|length)|must\\s+contain|needs?\\s+(?:a|one))\\b|\\bchosen\\s+password\\b.{0,100}\\b(?:weak|unsafe|not\\s+safe|isn't\\s+safe|is\\s+not\\s+safe|common)\\b|\\binvalid\\s+password\\b.{0,100}\\bmust\\s+contain\\b)");
     private final PatternPack pack;
 
@@ -28,6 +29,7 @@ public final class ResultMatcher {
     /** Success takes precedence over incidental constraints in verbose success messages. */
     public ResultKind classify(String plain) {
         String text = PromptMatcher.clean(plain);
+        if (ALREADY_LOGGED_IN.matcher(text).find()) return ResultKind.ALREADY_LOGGED_IN;
         if (NEGATED_SUCCESS.matcher(text).find()) return ResultKind.FAILURE;
         if (PromptMatcher.matches(pack.result(ResultKind.SUCCESS), text)) return ResultKind.SUCCESS;
         if (PromptMatcher.matches(pack.result(ResultKind.PASSWORD_RULE), text)

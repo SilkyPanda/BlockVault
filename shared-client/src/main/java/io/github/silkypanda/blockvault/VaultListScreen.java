@@ -12,7 +12,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Searchable list of saved server accounts with per-server controls. */
-final class VaultListScreen extends Screen {
+final class VaultListScreen extends Screen implements BlockVaultManagedScreen {
     private static final int PAGE_SIZE = 6;
     private static final int ROW_TEXT_INSET = 8;
     private List<VaultRow> rows;

@@ -8,7 +8,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Selects a validated built-in login command template for one server. */
-final class VaultTemplateScreen extends Screen {
+final class VaultTemplateScreen extends Screen implements BlockVaultManagedScreen {
     private static final List<Map.Entry<String, String>> LABELS = List.of(
             Map.entry("auto", "blockvault.template.auto"),
             Map.entry("authme", "blockvault.template.authme"),

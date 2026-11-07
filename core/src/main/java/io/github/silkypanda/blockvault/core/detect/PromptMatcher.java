@@ -12,6 +12,9 @@ public final class PromptMatcher {
     /** Legacy colour codes, including the 14-character "section-x" RGB form, compiled once. */
     private static final Pattern COLOR_CODES = Pattern.compile("(?i)\u00a7x(?:\u00a7[0-9a-f]){6}|\u00a7[0-9A-FK-OR]");
     private static final Pattern PLAYER_CHAT = Pattern.compile("(?i)^\\s*<[A-Za-z0-9_]{1,16}>\\s*");
+    private static final Pattern WHISPER_CHAT = Pattern.compile("(?i)^\\s*\\[[A-Za-z0-9_]{1,16}\\s*->\\s*(?:me|you)]\\s*");
+    private static final Pattern PREFIXED_CHAT = Pattern.compile("(?i)^\\s*(?:\\[[^\\]\\r\\n]{1,32}\\]\\s*)?[A-Za-z0-9_]{1,16}\\s*(?:»|>)\\s*");
+    private static final Pattern COLON_CHAT = Pattern.compile("(?i)^\\s*(?!login\\b|register\\b|password\\b|please\\b|use\\b|enter\\b|type\\b|server\\b|error\\b)[A-Za-z0-9_]{1,16}:\\s+");
     private static final Pattern DIRECTIVE = Pattern.compile("(?i)\\b(?:please|must|need\\s+to|use|enter|type|authenticate|log\\s+in|login|register)\\b");
     private static final Pattern PLACEHOLDER = Pattern.compile("\\s+<[^<>\\r\\n]{1,64}>");
     private final PatternPack pack;
@@ -29,7 +32,7 @@ public final class PromptMatcher {
     /** Returns all matching prompt kinds so session state can resolve messages mentioning both. */
     public Set<PromptKind> matchingPrompts(String plain) {
         String text = clean(plain);
-        if (PLAYER_CHAT.matcher(text).find()) return Set.of();
+        if (looksLikePlayerChat(text)) return Set.of();
         String lower = text.toLowerCase(Locale.ROOT);
         boolean candidate = text.indexOf('/') >= 0;
         for (String keyword : KEYWORDS) candidate |= lower.contains(keyword);
@@ -44,7 +47,7 @@ public final class PromptMatcher {
     /** Short aliases become capturable only when a directed server message spells out that command. */
     public Set<String> promptedShortCommands(String plain) {
         String text = clean(plain);
-        if (text.length() > 2048 || PLAYER_CHAT.matcher(text).find()) return Set.of();
+        if (text.length() > 2048 || looksLikePlayerChat(text)) return Set.of();
         java.util.HashSet<String> prompted = new java.util.HashSet<>();
         for (String group : java.util.List.of("login", "register", "changepassword", "unregister")) {
             for (String alias : pack.commandNames(group)) {
@@ -80,6 +83,11 @@ public final class PromptMatcher {
             }
         }
         return false;
+    }
+
+    private static boolean looksLikePlayerChat(String text) {
+        return PLAYER_CHAT.matcher(text).find() || WHISPER_CHAT.matcher(text).find()
+                || PREFIXED_CHAT.matcher(text).find() || COLON_CHAT.matcher(text).find();
     }
 
     /** Total matching time allowed for one message across all patterns. */

@@ -14,11 +14,10 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Changes the master password without exposing the current password to the UI thread after submission. */
-final class VaultMasterPasswordScreen extends Screen {
+final class VaultMasterPasswordScreen extends Screen implements BlockVaultManagedScreen {
     private final Screen parent;
     private EditBox current, next, confirm;
     private boolean busy, failed, mismatch, tooShort, tooLong, samePassword, invalidCharacters;
-    private final java.util.List<CapsLockHint> capsHints = new java.util.ArrayList<>();
 
     VaultMasterPasswordScreen(Screen parent) {
         super(Component.translatable("blockvault.master.change.title"));
@@ -26,7 +25,6 @@ final class VaultMasterPasswordScreen extends Screen {
     }
 
     @Override protected void init() {
-        capsHints.clear();
         int x = width / 2 - 120;
         int y = Math.max(34, height / 2 - 55);
         current = field(x, y, "blockvault.master.current");
@@ -44,9 +42,7 @@ final class VaultMasterPasswordScreen extends Screen {
         EditBox box = new EditBox(font, x, y, 240, 20, Component.translatable(key));
         box.setHint(Component.translatable(key));
         box.setMaxLength(InputRules.MASTER_PASSWORD_MAX * 2);
-        CapsLockHint hint = new CapsLockHint();
-        capsHints.add(hint);
-        InputFilter.bind(box, InputRules::isMasterPasswordInput, hint::onValueChanged);
+        InputFilter.bind(box, InputRules::isMasterPasswordInput, null);
         box.addFormatter((value, cursor) -> FormattedCharSequence.forward("\u2022".repeat(value.length()), Style.EMPTY));
         return box;
     }
@@ -85,15 +81,10 @@ final class VaultMasterPasswordScreen extends Screen {
 
     private void clearFields() {
         current.setValue(""); next.setValue(""); confirm.setValue("");
-        capsHints.forEach(CapsLockHint::reset);
     }
 
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        if (capsHints.stream().anyMatch(CapsLockHint::likelyOn)) {
-            graphics.centeredText(font, Component.translatable("blockvault.access.caps_lock"), width / 2,
-                    Math.max(22, height / 2 - 70), 0xffffcc55);
-        }
         if (failed || busy) graphics.centeredText(font, Component.translatable(busy ? "blockvault.master.working"
                 : failureKey()), width / 2,
                 Math.min(height - 20, height / 2 + 67), 0xffff7777);

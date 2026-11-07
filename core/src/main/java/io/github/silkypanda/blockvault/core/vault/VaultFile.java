@@ -12,6 +12,7 @@ public final class VaultFile {
     public static final int MAX_BYTES = 8 * 1024 * 1024;
     public static final int MIN_KDF_ITERATIONS = 210_000;
     public static final int MAX_KDF_ITERATIONS = 2_000_000;
+    public static final int MASTER_PASSWORD_KEY_MODE = 2;
     private static final byte[] MAGIC = "BVLT".getBytes(StandardCharsets.US_ASCII);
     private static final int PREFIX_BYTES = 28;
 
@@ -19,9 +20,9 @@ public final class VaultFile {
     }
 
     /** Header fields authenticated by the vault format. */
-    public record Header(KeyMode keyMode, int kdfId, int reserved, int iterations, byte[] salt) {
+    public record Header(int keyModeId, int kdfId, int reserved, int iterations, byte[] salt) {
         public Header {
-            if (keyMode != KeyMode.MASTER_PASSWORD || salt == null || salt.length != 16
+            if (keyModeId != MASTER_PASSWORD_KEY_MODE || salt == null || salt.length != 16
                     || kdfId != 1 || reserved != 0 || iterations < MIN_KDF_ITERATIONS
                     || iterations > MAX_KDF_ITERATIONS) {
                 throw new IllegalArgumentException("Invalid vault header");
@@ -89,12 +90,7 @@ public final class VaultFile {
         if (version != 1) {
             throw new UnsupportedVaultVersionException();
         }
-        KeyMode mode;
-        try {
-            mode = KeyMode.fromId(Byte.toUnsignedInt(input.get()));
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid vault key mode", e);
-        }
+        int keyModeId = Byte.toUnsignedInt(input.get());
         int kdfId = Byte.toUnsignedInt(input.get());
         int reserved = Byte.toUnsignedInt(input.get());
         int iterations = input.getInt();
@@ -103,7 +99,7 @@ public final class VaultFile {
         if (iterations < MIN_KDF_ITERATIONS || iterations > MAX_KDF_ITERATIONS || kdfId != 1 || reserved != 0) {
             throw new IllegalArgumentException("Invalid KDF header");
         }
-        Header header = new Header(mode, kdfId, reserved, iterations, salt);
+        Header header = new Header(keyModeId, kdfId, reserved, iterations, salt);
         int wrapLength = Short.toUnsignedInt(input.getShort());
         if (wrapLength > input.remaining() - 16 - 12 - 4) {
             throw new IllegalArgumentException("Invalid wrapped key length");
@@ -124,7 +120,7 @@ public final class VaultFile {
     }
 
     private static void putPrefix(ByteBuffer out, Header header) {
-        out.put(MAGIC).put((byte) 1).put((byte) header.keyMode().id()).put((byte) header.kdfId())
+        out.put(MAGIC).put((byte) 1).put((byte) header.keyModeId()).put((byte) header.kdfId())
                 .put((byte) header.reserved()).putInt(header.iterations()).put(header.salt());
     }
 }

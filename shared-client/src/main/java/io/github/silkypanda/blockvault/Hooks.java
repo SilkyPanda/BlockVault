@@ -5,6 +5,9 @@ import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.host.HostKey;
 import io.github.silkypanda.blockvault.core.session.LoginSession;
 import java.io.InputStream;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
@@ -19,6 +22,8 @@ public final class Hooks {
     private static final ThreadLocal<Boolean> SELF_SENT = ThreadLocal.withInitial(() -> false);
     private static final ThreadLocal<Boolean> HISTORY_SCRUBBED = ThreadLocal.withInitial(() -> false);
     private static final BackgroundExecutor SCHEDULER = BackgroundExecutor.scheduler();
+    private static final int MAX_QUEUED_JOIN_MESSAGES = 32;
+    private static final ArrayDeque<String> queuedJoinMessages = new ArrayDeque<>();
     private static volatile PatternPack patterns;
     private static volatile Set<String> sensitiveAliases = Set.of("login", "register", "reg", "changepassword", "changepass", "unregister");
     private static LoginSession session;
@@ -32,6 +37,8 @@ public final class Hooks {
     private static boolean warnedHistoryHook;
     private static boolean settingsLoaded;
     private static String queuedPrompt;
+    private static long connectionRevision;
+    private static boolean patternsLoading;
 
     private Hooks() { }
 
@@ -48,34 +55,55 @@ public final class Hooks {
             onDisconnect();
             return;
         }
-        VaultRuntime.deliverPendingTrustNotice();
         onDisconnect();
-        try {
-            patterns = loadPatterns();
-            sensitiveAliases = java.util.stream.Stream.of("login", "register", "changepassword", "unregister")
-                    .flatMap(kind -> patterns.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
-            environment = new McSessionEnv();
-            LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.pickyServer());
-            session = active;
-            sessionHost = host;
-            sessionUser = minecraft.getUser().getName();
-            sessionErrors = 0;
-            environment.attach(active);
-            active.onJoin(host, minecraft.getUser().getName());
-            BlockVaultConfig.load(settings -> {
-                if (session == active) {
-                    active.configure(settings.autofill(), settings.passwordlessLogin(), settings.autofillDelayMillis(),
-                            BlockVaultConfig.generatorPolicy(settings.generator()));
+        VaultRuntime.deliverPendingTrustNotice();
+        long revision = connectionRevision;
+        String mcUsername = minecraft.getUser().getName();
+        patternsLoading = true;
+        BackgroundExecutor.submit(() -> {
+            PatternPack loaded;
+            try { loaded = loadPatterns(); }
+            catch (Exception failure) {
+                BackgroundExecutor.onGameThread(() -> {
+                    if (connectionRevision != revision) return;
+                    LOGGER.warn("BlockVault could not initialize login detection");
+                    onDisconnect();
+                });
+                return null;
+            }
+            BackgroundExecutor.onGameThread(() -> {
+                Minecraft current = Minecraft.getInstance();
+                if (connectionRevision != revision || current.getCurrentServer() == null
+                        || !host.equals(HostKey.normalize(current.getCurrentServer().ip).orElse(null))
+                        || current.getUser() == null || !mcUsername.equals(current.getUser().getName())) return;
+                patternsLoading = false;
+                patterns = loaded;
+                sensitiveAliases = java.util.stream.Stream.of("login", "register", "changepassword", "unregister")
+                        .flatMap(kind -> patterns.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
+                environment = new McSessionEnv();
+                LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.pickyServer());
+                session = active;
+                sessionHost = host;
+                sessionUser = mcUsername;
+                sessionErrors = 0;
+                environment.attach(active);
+                active.onJoin(host, mcUsername);
+                List<String> earlyMessages = new ArrayList<>(queuedJoinMessages);
+                queuedJoinMessages.clear();
+                BlockVaultConfig.load(settings -> {
+                    if (session != active) return;
+                    configure(active, settings);
                     settingsLoaded = true;
+                    for (String early : earlyMessages) {
+                        if (active.isPromptMessage(early)) guard(active, () -> active.onSystemMessage(early));
+                    }
                     String queued = queuedPrompt;
                     queuedPrompt = null;
                     if (queued != null) guard(active, () -> active.onSystemMessage(queued));
-                }
+                });
             });
-        } catch (Exception failure) {
-            LOGGER.warn("BlockVault could not initialize login detection");
-            onDisconnect();
-        }
+            return null;
+        });
     }
 
     private static PatternPack loadPatterns() throws java.io.IOException {
@@ -95,6 +123,9 @@ public final class Hooks {
 
     /** Ends the active session and wipes its in-memory credentials. */
     public static void onDisconnect() {
+        connectionRevision++;
+        patternsLoading = false;
+        queuedJoinMessages.clear();
         if (session != null) session.onDisconnect();
         if (environment != null) environment.disconnect();
         VaultRuntime.clearWaiting();
@@ -106,15 +137,26 @@ public final class Hooks {
 
     static void applySettings(BlockVaultConfig.Settings settings) {
         LoginSession active = session;
-        if (active != null) active.configure(settings.autofill(), settings.passwordlessLogin(), settings.autofillDelayMillis(),
+        if (active != null) configure(active, settings);
+    }
+
+    private static void configure(LoginSession active, BlockVaultConfig.Settings settings) {
+        active.configure(settings.autofill(), settings.passwordlessLogin(), settings.autofillDelayMillis(),
                 BlockVaultConfig.generatorPolicy(settings.generator()));
     }
 
     /** Delivers plain system chat to the login detector. */
     public static void onSystemMessage(Component message) {
         LoginSession active = session;
-        if (active == null || message == null) return;
+        if (message == null) return;
         String plain = message.getString();
+        if (active == null) {
+            if (patternsLoading && plain.length() <= 2048) {
+                if (queuedJoinMessages.size() >= MAX_QUEUED_JOIN_MESSAGES) queuedJoinMessages.removeFirst();
+                queuedJoinMessages.addLast(plain);
+            }
+            return;
+        }
         if (!settingsLoaded) {
             if (plain.length() <= 2048 && active.isPromptMessage(plain)) queuedPrompt = plain;
             return;
@@ -135,7 +177,8 @@ public final class Hooks {
             int namespace = name.lastIndexOf(':');
             if (namespace >= 0) name = name.substring(namespace + 1);
             if (patterns != null && patterns.commandNames("login").contains(name)
-                    && active.wasShortAliasPrompted(name)) {
+                    && active.shouldInterceptBareLogin(name)
+                    && (name.equals("login") || active.wasShortAliasPrompted(name))) {
                 guard(active, () -> active.onOutgoingCommand(command));
                 return true;
             }

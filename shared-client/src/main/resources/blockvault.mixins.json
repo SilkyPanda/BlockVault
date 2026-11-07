@@ -2,11 +2,10 @@
   "required": false,
   "minVersion": "0.8",
   "package": "io.github.silkypanda.blockvault.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "client": [
     "ClientPacketListenerMixin",
-    "CommandHistoryMixin",
-    "KeyboardHandlerMixin"
+    "CommandHistoryMixin"
   ],
   "injectors": {
     "defaultRequire": 0

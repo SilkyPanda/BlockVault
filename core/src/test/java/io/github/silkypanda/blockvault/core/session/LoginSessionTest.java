@@ -130,6 +130,50 @@ final class LoginSessionTest {
     }
 
     @Test
+    void bareLoginIsHeldAndForwardedOnlyAfterCheckingForAVerifiedCredential() throws Exception {
+        FakeEnv env = new FakeEnv();
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        assertTrue(session.shouldInterceptBareLogin("login"));
+        session.onOutgoingCommand("login");
+        assertEquals(List.of("login"), env.commands);
+        assertEquals(SessionState.UNKNOWN, session.state());
+
+        env.commands.clear();
+        env.credential("saved-secret");
+        session.onDisconnect();
+        session.onJoin("example.org:25565", "Alex");
+        session.onOutgoingCommand("login");
+        assertEquals(List.of("login saved-secret"), env.commands);
+    }
+
+    @Test
+    void alreadyLoggedInAfterManualLoginDoesNotOfferTheTypedPassword() throws Exception {
+        FakeEnv env = new FakeEnv();
+        env.credential("correct-secret");
+        LoginSession session = session(env, new FakeScheduler());
+        session.onJoin("example.org:25565", "Alex");
+        session.onOutgoingCommand("login mistyped-secret");
+        session.onSystemMessage("You are already logged in!");
+        assertEquals(SessionState.UNKNOWN, session.state());
+        assertNull(env.card);
+        assertEquals(0, env.verified);
+        assertEquals(0, env.savedVerified);
+    }
+
+    @Test
+    void ignoresLoginPromptsAfterThirtySecondListeningWindow() throws Exception {
+        FakeEnv env = new FakeEnv();
+        FakeScheduler clock = new FakeScheduler();
+        LoginSession session = session(env, clock);
+        session.onJoin("example.org:25565", "Alex");
+        clock.advance(30_001);
+        session.onSystemMessage("Please login with /login <password>");
+        assertNull(env.card);
+        assertTrue(env.commands.isEmpty());
+    }
+
+    @Test
     void timeoutAndDebouncePreventRepeatedAutofill() throws Exception {
         FakeEnv env = new FakeEnv();
         env.credential("secret");

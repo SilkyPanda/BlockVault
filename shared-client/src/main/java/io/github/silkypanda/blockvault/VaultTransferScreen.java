@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Imports an encrypted file or exports an encrypted copy to a chosen folder. */
-final class VaultTransferScreen extends Screen {
+final class VaultTransferScreen extends Screen implements BlockVaultManagedScreen {
     private final Screen parent;
     private final boolean importing;
     private EditBox pathBox;

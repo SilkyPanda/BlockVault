@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 public final class LoginSession {
     private static final long DEBOUNCE_MILLIS = 1500;
     private static final long RESULT_TIMEOUT_MILLIS = 5_000;
-    private static final long PROMPT_LISTENING_MILLIS = 20_000;
+    private static final long PROMPT_LISTENING_MILLIS = 30_000;
     /** Server text is untrusted and unbounded; only this many characters are ever matched. */
     private static final int MAX_MESSAGE_CHARS = 2048;
     /** Used when a server rejects a password but its message gives no usable numbers. */
@@ -114,12 +114,14 @@ public final class LoginSession {
                 handlePrompt(selected, plain);
             }), () -> safely(() -> abandonPrompt(token)));
         }
-        ResultKind result = results.classify(plain);
-        if (result != ResultKind.NONE) {
-            promptedShortAliases.clear();
-            consumedShortAliases.clear();
-            shortAliasPromptAt = Long.MIN_VALUE;
-            onResult(result, plain);
+        if (state == SessionState.SENT) {
+            ResultKind result = results.classify(plain);
+            if (result != ResultKind.NONE) {
+                promptedShortAliases.clear();
+                consumedShortAliases.clear();
+                shortAliasPromptAt = Long.MIN_VALUE;
+                onResult(result, plain);
+            }
         }
     }
 
@@ -140,6 +142,7 @@ public final class LoginSession {
         String[] words = matcher.group(2) == null ? new String[0] : matcher.group(2).trim().split("\\s+");
         if (words.length == 0 || words[0].isEmpty()) {
             if (!contains("login", command) || !passwordlessLogin) return;
+            String passThrough = matcher.group(1);
             // A bare login is an explicit request, independent of the automatic-login switches.
             if (state == SessionState.SENT) return;
             cancelTimer();
@@ -158,7 +161,7 @@ public final class LoginSession {
                 if (account == null || !account.isValidForUse() || account.status() != Account.Status.VERIFIED) {
                     action = Action.NONE;
                     state = SessionState.UNKNOWN;
-                    env.toast("blockvault.toast.no_saved_login");
+                    env.sendCommand(passThrough);
                     return;
                 }
                 template = saved.template();
@@ -202,6 +205,11 @@ public final class LoginSession {
                 action = Action.NONE;
             }
         });
+    }
+
+    /** Whether a bare login command should be held while checking for a verified saved credential. */
+    public boolean shouldInterceptBareLogin(String command) {
+        return passwordlessLogin && command != null && contains("login", command.toLowerCase(Locale.ROOT));
     }
 
     /** Confirms the visible registration card; pending data is persisted before command transmission. */
@@ -479,7 +487,13 @@ public final class LoginSession {
     }
 
     private void onResult(ResultKind result, String plain) {
-        if (result == ResultKind.SUCCESS) {
+        if (result == ResultKind.ALREADY_LOGGED_IN) {
+            cancelTimer();
+            wipePending();
+            action = Action.NONE;
+            attempted = false;
+            state = SessionState.UNKNOWN;
+        } else if (result == ResultKind.SUCCESS) {
             if (state == SessionState.SENT && action != Action.NONE) {
                 cancelTimer();
                 Action completed = action;

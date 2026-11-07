@@ -39,7 +39,7 @@ Use Fabric and NeoForge for UI checks. For server behavior, use a test account a
 
 ### Login detection and results
 
-- [ ] Short aliases `/l`, `/log`, and `/reg` previously failed. Test them one at a time on a server whose login prompt explicitly shows them, within 20 seconds of joining:
+- [ ] Short aliases `/l`, `/log`, and `/reg` previously failed. Test them one at a time on a server whose login prompt explicitly shows them, within 30 seconds of joining:
   1. Wait for `/l <password>`, then type `/l test-value`. Confirm BlockVault captures/handles it as a login command.
   2. Repeat with `/log <password>` and `/log test-value`.
   3. Repeat with `/reg <password>` and `/reg test-value`.
@@ -48,7 +48,16 @@ Use Fabric and NeoForge for UI checks. For server behavior, use a test account a
 - [How to get pending account?] With a pending account, confirm no password is sent until **Try login** is selected. Success should verify it; rejection should leave it recoverable.
 - [Divide this in multiple tests and tell me what to do exactly.] Exercise wrong-password, already-logged-in, registration success/failure, and timeout messages. “Already logged in” must not mark a correct password as rejected.
 - [Step by step guide.] Add a valid custom rule to `patterns.json`, reconnect, and confirm it works. Add a malformed rule and confirm it is ignored without breaking built-in rules.
-- [How to test each?] Trigger prompts as action-bar and system messages; both should work. Player chat must not trigger credential actions. A prompt after the 20-second join window should be ignored.
+- [How to test each?] Trigger prompts as action-bar and system messages; both should work. Player chat must not trigger credential actions. A prompt after the 30-second join window should be ignored.
+- [ ] Test chat-shaped prompt spoofs as system messages: `<Steve>`, `[Steve -> me]`, `[Rank] Steve »`, and `Steve:` followed by login/register instructions must not open a card. A plain server line such as `Use /register to claim rewards` should still be detected.
+- [ ] With a verified saved account and passwordless login enabled, type bare `/login`. Confirm only the credentialed command reaches the server. Repeat without a verified saved account and confirm bare `/login` passes through unchanged.
+- [ ] Type `/login wrong-value` while already logged in. Confirm BlockVault does not offer to save that value.
+
+### Card and settings changes
+
+- [ ] Check native settings at Auto GUI scale on a 1920×1080 display and in a small window. Confirm settings and action labels remain visible, then change Autofill delay by dragging and verify it saves on release.
+- [ ] Toggle Card animations off and on in both YACL and native settings. Confirm the preference persists, motion is absent when off, and cards still require an explicit close when idle.
+- [ ] Open each credential card in a narrow window. Confirm controls stack without clipped labels and keyboard input during the first 250 ms does not confirm an action.
 
 ### Backups, erase, files, and privacy
 

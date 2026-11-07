@@ -15,7 +15,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Shows backup metadata and lets the player reveal credentials in an unlocked backup. */
-final class VaultBackupDetailScreen extends Screen {
+final class VaultBackupDetailScreen extends Screen implements BlockVaultManagedScreen {
     private static final int PAGE_SIZE = 5;
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());

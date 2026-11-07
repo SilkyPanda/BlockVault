@@ -169,8 +169,11 @@ public final class VaultRuntime implements VaultAccess {
                     closeAccessScreen();
                     toast("blockvault.toast.unlocked");
                     if (create && trustReady[0]) showTrustedDeviceNotice();
-                    if (showImportAfterAccess) Minecraft.getInstance().setScreenAndShow(
-                            new VaultTransferScreen(vaultReturnScreen, true));
+                    if (showImportAfterAccess) {
+                        net.minecraft.client.gui.screens.Screen parent = vaultReturnScreen;
+                        vaultReturnScreen = null;
+                        Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(parent, true));
+                    }
                     else if (showVaultAfterUnlock) BackgroundExecutor.submit(() -> {
                         showVaultRows(vaultReturnScreen);
                         return null;
@@ -224,6 +227,7 @@ public final class VaultRuntime implements VaultAccess {
     /** Allows a dismissed access screen to be requested again on the next vault operation. */
     public static void accessScreenClosed() {
         accessScreenOpen = false;
+        vaultReturnScreen = null;
         openVaultAfterAccess = false;
         openImportAfterAccess = false;
         List<Waiting> dropped = new ArrayList<>(WAITING);
@@ -336,7 +340,7 @@ public final class VaultRuntime implements VaultAccess {
             String completed = failureKey;
             BackgroundExecutor.onGameThread(() -> {
                 result.accept(completed);
-                if (completed == null) showVaultRows(vaultReturnScreen);
+                    if (completed == null) showVaultRows(vaultReturnScreen);
             });
             return null;
         }));
@@ -949,6 +953,7 @@ public final class VaultRuntime implements VaultAccess {
         List<VaultRow> rows = vaultRows();
         BackgroundExecutor.onGameThread(() -> {
             Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows, parent));
+            if (vaultReturnScreen == parent) vaultReturnScreen = null;
         });
     }
 
@@ -999,14 +1004,7 @@ public final class VaultRuntime implements VaultAccess {
     private static void closeBlockVaultScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         net.minecraft.client.gui.screens.Screen screen = minecraft.gui.screen();
-        if (screen != null && (screen instanceof VaultListScreen || screen instanceof VaultCredentialScreen
-                || screen instanceof VaultTemplateScreen || screen instanceof VaultDeleteScreen
-                || screen instanceof VaultTransferScreen || screen instanceof VaultNativeSettingsScreen
-                || screen.getClass().getName().equals("io.github.silkypanda.blockvault.VaultYaclSettingsScreen")
-                || screen instanceof VaultRecoveryScreen || screen instanceof VaultBackupDetailScreen
-                || screen instanceof VaultBackupRecoveryScreen || screen instanceof VaultMasterPasswordScreen
-                || screen instanceof VaultBackupPasswordScreen || screen instanceof VaultEraseScreen
-                || screen instanceof VaultAccessScreen)) {
+        if (screen instanceof BlockVaultManagedScreen) {
             minecraft.setScreenAndShow(null);
         }
     }
