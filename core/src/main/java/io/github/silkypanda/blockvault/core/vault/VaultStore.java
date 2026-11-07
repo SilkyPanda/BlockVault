@@ -68,8 +68,6 @@ public final class VaultStore {
     /** Returns whether a vault file exists. */
     public boolean exists() { return Files.isRegularFile(path("vault.bv")); }
 
-    /** Returns the file key mode, or {@code null} before the first create. */
-
     /** Creates and unlocks a new vault. Master-password work runs on the caller's background thread. */
     public void create(char[] masterPassword) throws IOException {
         if (exists()) throw new IllegalStateException("Vault already exists");
