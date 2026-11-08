@@ -160,7 +160,7 @@ final class CredentialConfirmScreen extends Screen {
         if (closeAnimating && System.nanoTime() - closeStartedAtNanos >= 120_000_000L) {
             closeAnimating = false;
             finishClose();
-            Minecraft.getInstance().setScreen(null);
+            Minecraft.getInstance().gui.setScreen(null);
         }
     }
 
