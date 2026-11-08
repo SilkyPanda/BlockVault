@@ -14,8 +14,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Lets the owner save a login they already have (server address, username and password). */
-final class VaultAddScreen extends Screen {
-    private final Screen parent;
+final class VaultAddScreen extends BlockVaultScreen {
     private EditBox hostBox;
     private EditBox userBox;
     private EditBox passwordBox;
@@ -25,14 +24,13 @@ final class VaultAddScreen extends Screen {
     private String errorKey;
 
     VaultAddScreen(Screen parent) {
-        super(Component.translatable("blockvault.add.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.add.title"), parent);
     }
 
     @Override
     protected void init() {
         int left = width / 2 - 120;
-        int top = Math.max(40, height / 2 - 56);
+        int top = Math.max(40, centeredVerticalTop(112));
         hostBox = box(left, top, "blockvault.add.host", 255);
         userBox = box(left, top + 26, "blockvault.add.username", 64);
         passwordBox = box(left, top + 52, "blockvault.add.password", InputRules.SERVER_PASSWORD_MAX * 2);
@@ -66,7 +64,7 @@ final class VaultAddScreen extends Screen {
     }
 
     private void generate() {
-        char[] generated = PasswordGenerator.generate(BlockVaultConfig.generatorPolicy(BlockVaultConfig.current().generator()));
+        char[] generated = PasswordGenerator.generate(io.github.silkypanda.blockvault.core.session.SessionPreferences.generatorPolicy(BlockVaultConfig.current().generator()));
         try { passwordBox.setValue(new String(generated)); }
         finally { Arrays.fill(generated, '\0'); }
     }
@@ -98,7 +96,7 @@ final class VaultAddScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        int top = Math.max(40, height / 2 - 56);
+        int top = Math.max(40, centeredVerticalTop(112));
         graphics.centeredText(font, title, width / 2, top - 22, 0xffffffff);
         if (busy) {
             graphics.centeredText(font, Component.translatable("blockvault.transfer.working"), width / 2, top + 144,
@@ -113,7 +111,7 @@ final class VaultAddScreen extends Screen {
     @Override
     public void onClose() {
         clearFields();
-        Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 
     @Override

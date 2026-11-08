@@ -7,16 +7,14 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Explicit warning and confirmation before erasing all BlockVault data. */
-final class VaultEraseScreen extends Screen implements BlockVaultManagedScreen {
-    private final Screen parent;
+final class VaultEraseScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private Button eraseButton;
     private Button cancelButton;
     private boolean busy;
     private String failureKey;
 
     VaultEraseScreen(Screen parent) {
-        super(Component.translatable("blockvault.data.erase.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.data.erase.title"), parent);
     }
 
     @Override
@@ -29,7 +27,7 @@ final class VaultEraseScreen extends Screen implements BlockVaultManagedScreen {
         eraseButton.active = !busy;
         addRenderableWidget(eraseButton);
         cancelButton = Button.builder(Component.translatable("blockvault.vault.back"),
-                        button -> Minecraft.getInstance().setScreenAndShow(parent))
+                        button -> returnToParent())
                 .bounds(center + 28, top + 108, 92, 20).build();
         addRenderableWidget(cancelButton);
     }
@@ -54,7 +52,7 @@ final class VaultEraseScreen extends Screen implements BlockVaultManagedScreen {
             busy = false;
             if (failure == null) {
                 if (Minecraft.getInstance().gui.screen() == this) {
-                    Minecraft.getInstance().setScreenAndShow(parent);
+                    returnToParent();
                     VaultRuntime.showToast("blockvault.data.erase.success");
                 }
             } else {
@@ -71,14 +69,11 @@ final class VaultEraseScreen extends Screen implements BlockVaultManagedScreen {
         int top = Math.max(18, height / 2 - 120);
         graphics.centeredText(font, title, center, top, 0xffff7777);
         int warningY = top + 24;
-        warningY = ScreenText.drawCenteredWrapped(graphics, font,
-                Component.translatable("blockvault.data.erase.warning1"), center, warningY,
+        warningY = drawCenteredWrapped(graphics, Component.translatable("blockvault.data.erase.warning1"), center, warningY,
                 width - 32, 0xffffffff, 10);
-        warningY = ScreenText.drawCenteredWrapped(graphics, font,
-                Component.translatable("blockvault.data.erase.warning2"), center, warningY,
+        warningY = drawCenteredWrapped(graphics, Component.translatable("blockvault.data.erase.warning2"), center, warningY,
                 width - 32, 0xffffffff, 10);
-        warningY = ScreenText.drawCenteredWrapped(graphics, font,
-                Component.translatable("blockvault.data.erase.warning3"), center, warningY,
+        warningY = drawCenteredWrapped(graphics, Component.translatable("blockvault.data.erase.warning3"), center, warningY,
                 width - 32, 0xffffcc66, 10);
         if (busy || failureKey != null) graphics.centeredText(font,
                 Component.translatable(busy ? "blockvault.data.erase.working" : failureKey), center, top + 192,
@@ -88,6 +83,6 @@ final class VaultEraseScreen extends Screen implements BlockVaultManagedScreen {
     @Override public boolean isPauseScreen() { return false; }
 
     @Override public void onClose() {
-        Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 }

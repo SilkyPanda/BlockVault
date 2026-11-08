@@ -4,6 +4,8 @@ import io.github.silkypanda.blockvault.core.detect.PatternPack;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import io.github.silkypanda.blockvault.core.host.HostKey;
 import io.github.silkypanda.blockvault.core.session.LoginSession;
+import io.github.silkypanda.blockvault.core.session.CommandPolicy;
+import io.github.silkypanda.blockvault.core.session.SessionPreferences;
 import java.io.InputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -23,22 +25,7 @@ public final class Hooks {
     private static final ThreadLocal<Boolean> HISTORY_SCRUBBED = ThreadLocal.withInitial(() -> false);
     private static final BackgroundExecutor SCHEDULER = BackgroundExecutor.scheduler();
     private static final int MAX_QUEUED_JOIN_MESSAGES = 32;
-    private static final ArrayDeque<String> queuedJoinMessages = new ArrayDeque<>();
-    private static volatile PatternPack patterns;
-    private static volatile Set<String> sensitiveAliases = Set.of("login", "register", "reg", "changepassword", "changepass", "unregister");
-    private static LoginSession session;
-    private static McSessionEnv environment;
-    /** Set by the outgoing-command mixin; used to detect that the mixin is really applied. */
-    private static volatile boolean commandHookSeen;
-    private static boolean warnedCommandHook;
-    private static String sessionHost;
-    private static String sessionUser;
-    private static int sessionErrors;
-    private static boolean warnedHistoryHook;
-    private static boolean settingsLoaded;
-    private static String queuedPrompt;
-    private static long connectionRevision;
-    private static boolean patternsLoading;
+    private static final SessionState STATE = new SessionState();
 
     private Hooks() { }
 
@@ -57,15 +44,15 @@ public final class Hooks {
         }
         onDisconnect();
         VaultRuntime.deliverPendingTrustNotice();
-        long revision = connectionRevision;
+        long revision = STATE.connectionRevision;
         String mcUsername = minecraft.getUser().getName();
-        patternsLoading = true;
+        STATE.patternsLoading = true;
         BackgroundExecutor.submit(() -> {
             PatternPack loaded;
             try { loaded = loadPatterns(); }
             catch (Exception failure) {
                 BackgroundExecutor.onGameThread(() -> {
-                    if (connectionRevision != revision) return;
+                    if (STATE.connectionRevision != revision) return;
                     LOGGER.warn("BlockVault could not initialize login detection");
                     onDisconnect();
                 });
@@ -73,32 +60,32 @@ public final class Hooks {
             }
             BackgroundExecutor.onGameThread(() -> {
                 Minecraft current = Minecraft.getInstance();
-                if (connectionRevision != revision || current.getCurrentServer() == null
+                if (STATE.connectionRevision != revision || current.getCurrentServer() == null
                         || !host.equals(HostKey.normalize(current.getCurrentServer().ip).orElse(null))
                         || current.getUser() == null || !mcUsername.equals(current.getUser().getName())) return;
-                patternsLoading = false;
-                patterns = loaded;
-                sensitiveAliases = java.util.stream.Stream.of("login", "register", "changepassword", "unregister")
-                        .flatMap(kind -> patterns.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
-                environment = new McSessionEnv();
-                LoginSession active = new LoginSession(environment, SCHEDULER, patterns, PasswordGenerator.Policy.pickyServer());
-                session = active;
-                sessionHost = host;
-                sessionUser = mcUsername;
-                sessionErrors = 0;
-                environment.attach(active);
+                STATE.patternsLoading = false;
+                STATE.patterns = loaded;
+                STATE.sensitiveAliases = java.util.stream.Stream.of("login", "register", "changepassword", "unregister")
+                        .flatMap(kind -> STATE.patterns.commandNames(kind).stream()).collect(Collectors.toUnmodifiableSet());
+                STATE.environment = new McSessionEnv();
+                LoginSession active = new LoginSession(STATE.environment, SCHEDULER, STATE.patterns, PasswordGenerator.Policy.pickyServer());
+                STATE.session = active;
+                STATE.sessionHost = host;
+                STATE.sessionUser = mcUsername;
+                STATE.sessionErrors = 0;
+                STATE.environment.attach(active);
                 active.onJoin(host, mcUsername);
-                List<String> earlyMessages = new ArrayList<>(queuedJoinMessages);
-                queuedJoinMessages.clear();
+                List<String> earlyMessages = new ArrayList<>(STATE.queuedJoinMessages);
+                STATE.queuedJoinMessages.clear();
                 BlockVaultConfig.load(settings -> {
-                    if (session != active) return;
+                    if (STATE.session != active) return;
                     configure(active, settings);
-                    settingsLoaded = true;
+                    STATE.settingsLoaded = true;
                     for (String early : earlyMessages) {
                         if (active.isPromptMessage(early)) guard(active, () -> active.onSystemMessage(early));
                     }
-                    String queued = queuedPrompt;
-                    queuedPrompt = null;
+                    String queued = STATE.queuedPrompt;
+                    STATE.queuedPrompt = null;
                     if (queued != null) guard(active, () -> active.onSystemMessage(queued));
                 });
             });
@@ -115,50 +102,51 @@ public final class Hooks {
 
     static boolean isSensitiveAlias(String command) {
         String normalized = command.toLowerCase(java.util.Locale.ROOT);
-        if (!sensitiveAliases.contains(normalized)) return false;
+        if (!STATE.sensitiveAliases.contains(normalized)) return false;
         if (normalized.length() > 3) return true;
-        LoginSession active = session;
-        return active != null && active.wasShortAliasPrompted(normalized);
+        LoginSession active = STATE.session;
+        return CommandPolicy.isSensitiveAlias(normalized, STATE.sensitiveAliases,
+                active != null && active.wasShortAliasPrompted(normalized));
     }
 
     /** Ends the active session and wipes its in-memory credentials. */
     public static void onDisconnect() {
-        connectionRevision++;
-        patternsLoading = false;
-        queuedJoinMessages.clear();
-        if (session != null) session.onDisconnect();
-        if (environment != null) environment.disconnect();
+        STATE.connectionRevision++;
+        STATE.patternsLoading = false;
+        STATE.queuedJoinMessages.clear();
+        if (STATE.session != null) STATE.session.onDisconnect();
+        if (STATE.environment != null) STATE.environment.disconnect();
         VaultRuntime.clearWaiting();
-        session = null;
-        environment = null;
-        settingsLoaded = false;
-        queuedPrompt = null;
+        STATE.session = null;
+        STATE.environment = null;
+        STATE.settingsLoaded = false;
+        STATE.queuedPrompt = null;
     }
 
     static void applySettings(BlockVaultConfig.Settings settings) {
-        LoginSession active = session;
+        LoginSession active = STATE.session;
         if (active != null) configure(active, settings);
     }
 
     private static void configure(LoginSession active, BlockVaultConfig.Settings settings) {
-        active.configure(settings.autofill(), settings.passwordlessLogin(), settings.autofillDelayMillis(),
-                BlockVaultConfig.generatorPolicy(settings.generator()));
+        SessionPreferences.apply(active, settings.autofill(), settings.passwordlessLogin(),
+                settings.autofillDelayMillis(), settings.generator());
     }
 
     /** Delivers plain system chat to the login detector. */
     public static void onSystemMessage(Component message) {
-        LoginSession active = session;
+        LoginSession active = STATE.session;
         if (message == null) return;
         String plain = message.getString();
         if (active == null) {
-            if (patternsLoading && plain.length() <= 2048) {
-                if (queuedJoinMessages.size() >= MAX_QUEUED_JOIN_MESSAGES) queuedJoinMessages.removeFirst();
-                queuedJoinMessages.addLast(plain);
+            if (STATE.patternsLoading && plain.length() <= 2048) {
+                if (STATE.queuedJoinMessages.size() >= MAX_QUEUED_JOIN_MESSAGES) STATE.queuedJoinMessages.removeFirst();
+                STATE.queuedJoinMessages.addLast(plain);
             }
             return;
         }
-        if (!settingsLoaded) {
-            if (plain.length() <= 2048 && active.isPromptMessage(plain)) queuedPrompt = plain;
+        if (!STATE.settingsLoaded) {
+            if (plain.length() <= 2048 && active.isPromptMessage(plain)) STATE.queuedPrompt = plain;
             return;
         }
         guard(active, () -> active.onSystemMessage(plain));
@@ -166,22 +154,18 @@ public final class Hooks {
 
     /** Captures an outgoing command without logging or retaining it outside the session. */
     public static boolean onOutgoingCommand(String command) {
-        commandHookSeen = true;
+        STATE.commandHookSeen = true;
         if (Boolean.TRUE.equals(SELF_SENT.get())) return false;
         checkHistoryScrubbing(command);
-        LoginSession active = session;
+        LoginSession active = STATE.session;
         if (active == null) return false;
-        String normalized = command == null ? "" : command.strip();
-        if (normalized.matches("(?i)/?(?:[a-z0-9_]+:)?[a-z0-9_]+\\s*")) {
-            String name = normalized.replaceFirst("^/", "").strip().toLowerCase(java.util.Locale.ROOT);
-            int namespace = name.lastIndexOf(':');
-            if (namespace >= 0) name = name.substring(namespace + 1);
-            if (patterns != null && patterns.commandNames("login").contains(name)
-                    && active.shouldInterceptBareLogin(name)
-                    && (name.equals("login") || active.wasShortAliasPrompted(name))) {
-                guard(active, () -> active.onOutgoingCommand(command));
-                return true;
-            }
+        String name = CommandPolicy.bareCommandName(command);
+        if (name != null && STATE.patterns != null && STATE.patterns.commandNames("login").contains(name)
+                && active.shouldInterceptBareLogin(name)
+                && CommandPolicy.shouldHoldBareLogin(command, STATE.patterns.commandNames("login"), true,
+                name.equals("login") || active.wasShortAliasPrompted(name))) {
+            guard(active, () -> active.onOutgoingCommand(command));
+            return true;
         }
         guard(active, () -> active.onOutgoingCommand(command));
         return false;
@@ -195,15 +179,15 @@ public final class Hooks {
      * the mixin is not applied (for example after a Minecraft update), so the owner is warned once.
      */
     private static void checkHistoryScrubbing(String command) {
-        if (warnedHistoryHook || !SensitiveCommands.isSensitive(command)) return;
+        if (STATE.warnedHistoryHook || !SensitiveCommands.isSensitive(command)) return;
         boolean scrubbed = HISTORY_SCRUBBED.get();
         HISTORY_SCRUBBED.remove();
         if (!scrubbed) warnOnce(false);
     }
 
     private static void warnOnce(boolean commandHook) {
-        if (commandHook ? warnedCommandHook : warnedHistoryHook) return;
-        if (commandHook) warnedCommandHook = true; else warnedHistoryHook = true;
+        if (commandHook ? STATE.warnedCommandHook : STATE.warnedHistoryHook) return;
+        if (commandHook) STATE.warnedCommandHook = true; else STATE.warnedHistoryHook = true;
         LOGGER.warn("BlockVault's {} hook is not active in this Minecraft version", commandHook ? "command" : "history");
         VaultRuntime.showToast(commandHook ? "blockvault.toast.hooks_inactive.commands"
                 : "blockvault.toast.hooks_inactive.history");
@@ -213,14 +197,14 @@ public final class Hooks {
         try { operation.run(); }
         catch (RuntimeException failure) {
             LOGGER.warn("BlockVault hit an input error ({})", failure.getClass().getSimpleName());
-            if (session != active) return;
+            if (STATE.session != active) return;
             active.onDisconnect();
             // One bad message must not end login handling: start the session over, and only give up after repeats.
-            if (++sessionErrors >= 3) {
+            if (++STATE.sessionErrors >= 3) {
                 LOGGER.warn("BlockVault stopped login handling for this connection after repeated errors");
-                session = null;
+                STATE.session = null;
             } else {
-                active.onJoin(sessionHost, sessionUser);
+                active.onJoin(STATE.sessionHost, STATE.sessionUser);
             }
         }
     }
@@ -232,14 +216,34 @@ public final class Hooks {
             ClientPacketListener connection = minecraft.getConnection();
             if (connection == null) return;
             SELF_SENT.set(true);
-            commandHookSeen = false;
+            STATE.commandHookSeen = false;
             try { connection.sendCommand(commandWithoutSlash); }
             finally { SELF_SENT.remove(); }
             // The command mixin runs at the start of sendCommand, so it must have run by now.
-            if (!commandHookSeen) warnOnce(true);
+            if (!STATE.commandHookSeen) warnOnce(true);
         };
         if (minecraft.isSameThread()) send.run();
         else minecraft.execute(send);
+    }
+
+    /** Mutable state shared by loader callbacks and the game-thread login hooks. */
+    private static final class SessionState {
+        final ArrayDeque<String> queuedJoinMessages = new ArrayDeque<>();
+        volatile PatternPack patterns;
+        volatile Set<String> sensitiveAliases = Set.of("login", "register", "reg", "changepassword", "changepass", "unregister");
+        LoginSession session;
+        McSessionEnv environment;
+        /** Set by the outgoing-command mixin; used to detect that the mixin is really applied. */
+        volatile boolean commandHookSeen;
+        boolean warnedCommandHook;
+        String sessionHost;
+        String sessionUser;
+        int sessionErrors;
+        boolean warnedHistoryHook;
+        boolean settingsLoaded;
+        String queuedPrompt;
+        long connectionRevision;
+        boolean patternsLoading;
     }
 
 }

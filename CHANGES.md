@@ -51,6 +51,13 @@
 - Updated `STATUS.md`, `TEST_CHECKLIST.md`, README, and review notes to distinguish reported manual passes from outstanding checks.
 - Core CI runs `cleanTest test`, reports discovered test totals, and fails if no test cases are discovered.
 
+### Internal structure
+
+- Split vault import lifecycle, backup rotation, trusted-device key file handling, and low-level file operations out of `VaultStore`; retained its public API.
+- Added a shared parent-aware screen base and centralized optional YACL screen loading.
+- Grouped hook session state and moved command/settings decisions into core with unit tests.
+- Added `ARCHITECTURE.md` with module, data-flow, thread-ownership, persistence, and code-navigation notes.
+
 ## Earlier development history (release version not specified)
 
 ### Vault and recovery

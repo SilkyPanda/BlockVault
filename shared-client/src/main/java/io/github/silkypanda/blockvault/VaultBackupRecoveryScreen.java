@@ -17,19 +17,17 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Requests the password that encrypted a selected backup before recovering a damaged or missing vault. */
-final class VaultBackupRecoveryScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultBackupRecoveryScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
     private final BackupSummary backup;
-    private final Screen parent;
     private EditBox password;
     private boolean busy;
     private String failureKey;
 
     VaultBackupRecoveryScreen(BackupSummary backup, Screen parent) {
-        super(Component.translatable("blockvault.backup.recovery.title"));
+        super(Component.translatable("blockvault.backup.recovery.title"), parent);
         this.backup = backup;
-        this.parent = parent;
     }
 
     @Override protected void init() {
@@ -44,7 +42,7 @@ final class VaultBackupRecoveryScreen extends Screen implements BlockVaultManage
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.recovery.restore"), button -> restore())
                 .bounds(center - 120, height / 2 + 24, 116, 20).build()).active = !busy;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button ->
-                Minecraft.getInstance().setScreenAndShow(parent))
+                returnToParent())
                 .bounds(center + 4, height / 2 + 24, 116, 20).build());
         setInitialFocus(password);
     }
@@ -82,6 +80,6 @@ final class VaultBackupRecoveryScreen extends Screen implements BlockVaultManage
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { if (password != null) password.setValue(""); Minecraft.getInstance().setScreenAndShow(parent); }
+    @Override public void onClose() { if (password != null) password.setValue(""); returnToParent(); }
     @Override public void removed() { if (password != null) password.setValue(""); super.removed(); }
 }

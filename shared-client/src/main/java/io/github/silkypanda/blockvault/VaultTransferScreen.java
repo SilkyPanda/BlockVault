@@ -13,8 +13,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Imports an encrypted file or exports an encrypted copy to a chosen folder. */
-final class VaultTransferScreen extends Screen implements BlockVaultManagedScreen {
-    private final Screen parent;
+final class VaultTransferScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private final boolean importing;
     private EditBox pathBox;
     private EditBox passwordBox;
@@ -24,8 +23,7 @@ final class VaultTransferScreen extends Screen implements BlockVaultManagedScree
     private Button copyExportFolder;
 
     VaultTransferScreen(Screen parent, boolean importing) {
-        super(Component.translatable(importing ? "blockvault.transfer.import.title" : "blockvault.transfer.export.title"));
-        this.parent = parent;
+        super(Component.translatable(importing ? "blockvault.transfer.import.title" : "blockvault.transfer.export.title"), parent);
         this.importing = importing;
     }
 
@@ -52,7 +50,7 @@ final class VaultTransferScreen extends Screen implements BlockVaultManagedScree
                         ? "blockvault.transfer.import" : "blockvault.transfer.export"), button -> transfer())
                 .bounds(left, height / 2 + 36, 144, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"),
-                button -> net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent))
+                button -> returnToParent())
                 .bounds(left + 156, height / 2 + 36, 144, 20).build());
         copyExportFolder = Button.builder(Component.translatable("blockvault.transfer.copy_folder"), button -> {
             if (exportedPath != null) {
@@ -121,10 +119,10 @@ final class VaultTransferScreen extends Screen implements BlockVaultManagedScree
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, height / 2 - 84, 0xffffffff);
-        ScreenText.drawCenteredWrapped(graphics, font, Component.translatable(importing
+        drawCenteredWrapped(graphics, Component.translatable(importing
                 ? "blockvault.transfer.import.help" : "blockvault.transfer.export.help"), width / 2,
                 height / 2 - 66, width - 32, 0xffc5c0cf, 11);
-        if (exportedPath != null) ScreenText.drawCenteredWrapped(graphics, font,
+        if (exportedPath != null) drawCenteredWrapped(graphics,
                 Component.translatable("blockvault.transfer.exported", exportedPath), width / 2,
                 height / 2 + 65, width - 32, 0xff77dd88, 11);
         else if (busy) graphics.centeredText(font, Component.translatable("blockvault.transfer.working"),
@@ -138,7 +136,7 @@ final class VaultTransferScreen extends Screen implements BlockVaultManagedScree
 
     @Override public void onClose() {
         if (passwordBox != null) passwordBox.setValue("");
-        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 
     @Override public void removed() {

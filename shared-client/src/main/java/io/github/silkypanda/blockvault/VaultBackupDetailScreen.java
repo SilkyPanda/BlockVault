@@ -15,13 +15,12 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Shows backup metadata and lets the player reveal credentials in an unlocked backup. */
-final class VaultBackupDetailScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultBackupDetailScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private static final int PAGE_SIZE = 5;
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
     private final BackupSummary backup;
     private final Vault contents;
-    private final Screen parent;
     private final char[] restorePassword;
     private final List<Entry> entries = new ArrayList<>();
     private final List<char[]> revealed = new ArrayList<>();
@@ -37,10 +36,9 @@ final class VaultBackupDetailScreen extends Screen implements BlockVaultManagedS
     }
 
     VaultBackupDetailScreen(BackupSummary backup, Vault contents, Screen parent, char[] restorePassword) {
-        super(Component.translatable("blockvault.backup.details.title"));
+        super(Component.translatable("blockvault.backup.details.title"), parent);
         this.backup = backup;
         this.contents = contents;
-        this.parent = parent;
         this.restorePassword = restorePassword == null ? null : restorePassword.clone();
         for (ServerEntry server : contents.servers()) {
             for (Account account : server.accounts()) {
@@ -86,7 +84,7 @@ final class VaultBackupDetailScreen extends Screen implements BlockVaultManagedS
                 })
                 .bounds(center + 1, controlsY, 125, 20).build()).active = !busy;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> {
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+                returnToParent();
             })
                 .bounds(center + 132, controlsY, 92, 20).build());
     }
@@ -117,7 +115,7 @@ final class VaultBackupDetailScreen extends Screen implements BlockVaultManagedS
             busy = false;
             if (success) {
                 clearContents();
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+                returnToParent();
                 if (parent instanceof VaultRecoveryScreen recovery) recovery.refreshBackups();
             } else {
                 confirmRestore = false;
@@ -140,7 +138,7 @@ final class VaultBackupDetailScreen extends Screen implements BlockVaultManagedS
                         busy = false;
                         if (deleted) {
                             clearContents();
-                            net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+                            returnToParent();
                             if (parent instanceof VaultRecoveryScreen recovery) recovery.refreshBackups();
                         } else {
                             deleteFailed = true;
@@ -204,7 +202,7 @@ final class VaultBackupDetailScreen extends Screen implements BlockVaultManagedS
     @Override public boolean isPauseScreen() { return false; }
 
     @Override public void onClose() {
-        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 
     private record Entry(ServerEntry server, Account account) { }

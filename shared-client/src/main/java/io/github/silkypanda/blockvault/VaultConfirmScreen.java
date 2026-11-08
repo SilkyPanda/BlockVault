@@ -7,8 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Full-screen confirmation step for destructive or overwriting actions. */
-final class VaultConfirmScreen extends Screen {
-    private final Screen parent;
+final class VaultConfirmScreen extends BlockVaultScreen {
     private final String messageKey;
     private final String confirmKey;
     private final Runnable confirmed;
@@ -20,8 +19,7 @@ final class VaultConfirmScreen extends Screen {
 
     VaultConfirmScreen(Screen parent, String titleKey, String messageKey, String confirmKey,
                        Runnable confirmed, Runnable cancelled) {
-        super(Component.translatable(titleKey));
-        this.parent = parent;
+        super(Component.translatable(titleKey), parent);
         this.messageKey = messageKey;
         this.confirmKey = confirmKey;
         this.confirmed = confirmed;
@@ -34,7 +32,7 @@ final class VaultConfirmScreen extends Screen {
         int left = (width - buttonWidth * 2 - 8) / 2;
         int y = height / 2 + 30;
         addRenderableWidget(Button.builder(Component.translatable(confirmKey), button -> {
-            Minecraft.getInstance().setScreenAndShow(parent);
+            returnToParent();
             confirmed.run();
         }).bounds(left, y, buttonWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.card.cancel"), button -> onClose())
@@ -45,13 +43,13 @@ final class VaultConfirmScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, height / 2 - 42, 0xffffffff);
-        ScreenText.drawCenteredWrapped(graphics, font, Component.translatable(messageKey), width / 2,
+        drawCenteredWrapped(graphics, Component.translatable(messageKey), width / 2,
                 height / 2 - 22, width - 40, 0xffffcc66, 10);
     }
 
     @Override public boolean isPauseScreen() { return false; }
     @Override public void onClose() {
-        Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
         cancelled.run();
     }
 }

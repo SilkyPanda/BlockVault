@@ -6,14 +6,12 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Explicit second step before a credential is moved to the trash. */
-final class VaultDeleteScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultDeleteScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private final VaultRow row;
-    private final Screen parent;
 
     VaultDeleteScreen(VaultRow row, Screen parent) {
-        super(Component.translatable("blockvault.vault.delete.title"));
+        super(Component.translatable("blockvault.vault.delete.title"), parent);
         this.row = row;
-        this.parent = parent;
     }
 
     @Override
@@ -21,10 +19,10 @@ final class VaultDeleteScreen extends Screen implements BlockVaultManagedScreen 
         int x = width / 2 - 110;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.delete.confirm"), button -> {
             VaultRuntime.deleteAccount(row);
-            net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+            returnToParent();
         }).bounds(x, height / 2 + 18, 104, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.card.cancel"), button ->
-                        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent))
+                        returnToParent())
                 .bounds(x + 116, height / 2 + 18, 104, 20).build());
     }
 
@@ -42,6 +40,6 @@ final class VaultDeleteScreen extends Screen implements BlockVaultManagedScreen 
     @Override public boolean isPauseScreen() { return false; }
 
     @Override public void onClose() {
-        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 }

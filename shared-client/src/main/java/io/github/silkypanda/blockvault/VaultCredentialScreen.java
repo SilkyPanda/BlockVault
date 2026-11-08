@@ -14,17 +14,15 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Per-account reveal, edit, copy, and delete controls. */
-final class VaultCredentialScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultCredentialScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private final VaultRow row;
-    private final Screen parent;
     private boolean showPassword;
     private EditBox passwordBox;
     private boolean invalidPassword;
 
     VaultCredentialScreen(VaultRow row, Screen parent) {
-        super(Component.translatable("blockvault.vault.account.title"));
+        super(Component.translatable("blockvault.vault.account.title"), parent);
         this.row = row;
-        this.parent = parent;
     }
 
     @Override
@@ -47,7 +45,7 @@ final class VaultCredentialScreen extends Screen implements BlockVaultManagedScr
                 .bounds(x + 154, top + 52, actionWidth, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.copy"), button -> { VaultRuntime.copyPassword(row); })
                 .bounds(x, top + 78, actionWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { Minecraft.getInstance().setScreenAndShow(parent); })
+        addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> { returnToParent(); })
                 .bounds(x + 154, top + 78, actionWidth, 20).build());
         setInitialFocus(passwordBox);
     }
@@ -71,7 +69,7 @@ final class VaultCredentialScreen extends Screen implements BlockVaultManagedScr
         invalidPassword = false;
         VaultRuntime.updatePassword(row, password);
         Arrays.fill(password, '\0');
-        Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
@@ -98,7 +96,7 @@ final class VaultCredentialScreen extends Screen implements BlockVaultManagedScr
     @Override
     public void onClose() {
         if (passwordBox != null) passwordBox.setValue("");
-        Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 
     @Override

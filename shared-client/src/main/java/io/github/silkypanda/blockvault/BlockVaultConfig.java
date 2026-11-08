@@ -132,13 +132,6 @@ final class BlockVaultConfig {
         catch (RuntimeException ignored) { return fallback; }
     }
 
-    /** Maps a stored generator preset name to its password policy (unknown names use the default). */
-    static io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy generatorPolicy(String preset) {
-        return "memorable".equals(preset)
-                ? io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.memorable()
-                : io.github.silkypanda.blockvault.core.gen.PasswordGenerator.Policy.pickyServer();
-    }
-
     record Settings(boolean autofill, boolean passwordlessLogin, int autofillDelayMillis,
                     String cardPosition, boolean streamerMode, String generator, boolean scrubHistory,
                     boolean trustDevice, boolean cardAnimations) {

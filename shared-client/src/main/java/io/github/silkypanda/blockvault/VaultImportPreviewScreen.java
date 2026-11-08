@@ -8,9 +8,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Shows what an import file would add or change, and asks for confirmation before anything is merged. */
-final class VaultImportPreviewScreen extends Screen {
+final class VaultImportPreviewScreen extends BlockVaultScreen {
     private static final int MAX_LINES = 9;
-    private final Screen parent;
     private final ImportPreview preview;
     private boolean busy;
     private boolean failed;
@@ -18,8 +17,7 @@ final class VaultImportPreviewScreen extends Screen {
     private int page;
 
     VaultImportPreviewScreen(Screen parent, ImportPreview preview) {
-        super(Component.translatable("blockvault.import.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.import.title"), parent);
         this.preview = preview;
     }
 
@@ -114,7 +112,7 @@ final class VaultImportPreviewScreen extends Screen {
     @Override
     public void onClose() {
         if (!finished) VaultRuntime.discardImport();
-        Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 
     @Override

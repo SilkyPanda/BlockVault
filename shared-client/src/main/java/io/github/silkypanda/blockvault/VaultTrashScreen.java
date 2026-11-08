@@ -9,9 +9,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Deleted entries can be restored, deleted for good, or expire after 60 days. */
-final class VaultTrashScreen extends Screen {
+final class VaultTrashScreen extends BlockVaultScreen {
     private static final int ROWS_PER_PAGE = 5;
-    private final Screen parent;
     private List<TrashRow> rows;
     private final List<Button> restoreButtons = new ArrayList<>();
     private final List<Button> deleteButtons = new ArrayList<>();
@@ -25,8 +24,7 @@ final class VaultTrashScreen extends Screen {
     private int contentWidth;
 
     VaultTrashScreen(Screen parent, List<TrashRow> rows) {
-        super(Component.translatable("blockvault.trash.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.trash.title"), parent);
         this.rows = List.copyOf(rows);
     }
 
@@ -126,7 +124,7 @@ final class VaultTrashScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, 12, 0xffffffff);
-        ScreenText.drawCenteredWrapped(graphics, font, Component.translatable("blockvault.trash.note"), width / 2,
+        drawCenteredWrapped(graphics, Component.translatable("blockvault.trash.note"), width / 2,
                 25, width - 24, 0xffaaaaaa, 10);
         boolean streamer = BlockVaultConfig.current().streamerMode();
         long now = System.currentTimeMillis();
@@ -154,7 +152,7 @@ final class VaultTrashScreen extends Screen {
     public void onClose() {
         // Back goes to the vault list with fresh rows.
         if (parent instanceof VaultListScreen) VaultRuntime.openVaultScreen(((VaultListScreen) parent).parentScreen());
-        else Minecraft.getInstance().setScreenAndShow(parent);
+        else returnToParent();
     }
 
     @Override public boolean isPauseScreen() { return false; }

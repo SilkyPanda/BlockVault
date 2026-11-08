@@ -1,4 +1,4 @@
 package io.github.silkypanda.blockvault;
 
-/** Marker for screens owned by BlockVault, including the optional YACL screen. */
+/** Marks BlockVault screens that participate in deferred access-screen replacement. */
 interface BlockVaultManagedScreen { }

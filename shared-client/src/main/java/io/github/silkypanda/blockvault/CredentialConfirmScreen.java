@@ -193,7 +193,7 @@ final class CredentialConfirmScreen extends Screen {
 
     private void regenerate() {
         char[] next = PasswordGenerator.generate(model.policy() != null
-                ? model.policy() : BlockVaultConfig.generatorPolicy(BlockVaultConfig.current().generator()));
+                ? model.policy() : io.github.silkypanda.blockvault.core.session.SessionPreferences.generatorPolicy(BlockVaultConfig.current().generator()));
         wipePassword();
         password = next;
         passwordBox.setValue(new String(password));

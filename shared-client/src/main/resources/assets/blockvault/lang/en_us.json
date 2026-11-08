@@ -134,7 +134,6 @@
   "blockvault.template.auto": "Auto-detect from prompt",
   "blockvault.template.current": "%s (selected)",
   "blockvault.toast.send_failed": "Could not send the login command. Check the selected template.",
-  "blockvault.toast.no_saved_login": "BlockVault has no verified saved login for this account.",
   "blockvault.toast.email_invalid": "Enter a valid email address.",
   "blockvault.vault.unlock.wrong_password": "Incorrect master password.",
   "blockvault.vault.unlock.corrupt": "The vault file is damaged or cannot be authenticated. The file was not changed.",

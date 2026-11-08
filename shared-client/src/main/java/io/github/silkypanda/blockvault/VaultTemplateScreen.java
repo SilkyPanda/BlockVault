@@ -8,7 +8,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Selects a validated built-in login command template for one server. */
-final class VaultTemplateScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultTemplateScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private static final List<Map.Entry<String, String>> LABELS = List.of(
             Map.entry("auto", "blockvault.template.auto"),
             Map.entry("authme", "blockvault.template.authme"),
@@ -16,12 +16,10 @@ final class VaultTemplateScreen extends Screen implements BlockVaultManagedScree
             Map.entry("nlogin", "blockvault.template.nlogin"),
             Map.entry("loginsecurity", "blockvault.template.loginsecurity"));
     private final VaultRow row;
-    private final Screen parent;
 
     VaultTemplateScreen(VaultRow row, Screen parent) {
-        super(Component.translatable("blockvault.template.title"));
+        super(Component.translatable("blockvault.template.title"), parent);
         this.row = row;
-        this.parent = parent;
     }
 
     @Override
@@ -35,12 +33,12 @@ final class VaultTemplateScreen extends Screen implements BlockVaultManagedScree
                     : Component.translatable(template.getValue());
             addRenderableWidget(Button.builder(label, button -> {
                 VaultRuntime.updateServerTemplate(row, template.getKey());
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+                returnToParent();
             }).bounds(x, y, 280, 20).build());
             y += 25;
         }
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button ->
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent))
+                returnToParent())
                 .bounds(x, y, 280, 20).build());
     }
 
@@ -56,6 +54,6 @@ final class VaultTemplateScreen extends Screen implements BlockVaultManagedScree
     @Override public boolean isPauseScreen() { return false; }
 
     @Override public void onClose() {
-        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 }

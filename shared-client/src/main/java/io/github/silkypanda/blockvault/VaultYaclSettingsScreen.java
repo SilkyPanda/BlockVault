@@ -17,14 +17,12 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** YACL settings screen for BlockVault's non-secret client preferences. */
-final class VaultYaclSettingsScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultYaclSettingsScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private static final BlockVaultConfig.Settings DEFAULTS = BlockVaultConfig.Settings.defaults();
-    private final Screen parent;
     private boolean loadRequested;
 
     VaultYaclSettingsScreen(Screen parent) {
-        super(Component.translatable("blockvault.settings.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.settings.title"), parent);
     }
 
     @Override

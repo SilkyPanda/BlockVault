@@ -82,6 +82,6 @@ final class VaultScreenNavigation {
 
     void closeManagedScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.gui.screen() instanceof BlockVaultManagedScreen) minecraft.setScreenAndShow(null);
+        if (BlockVaultScreen.isBlockVaultScreen(minecraft.gui.screen())) minecraft.setScreenAndShow(null);
     }
 }

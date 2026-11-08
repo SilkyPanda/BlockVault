@@ -11,15 +11,13 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /** Native settings and vault-management fallback used when YACL is not installed. */
-final class VaultNativeSettingsScreen extends Screen implements BlockVaultManagedScreen {
-    private final Screen parent;
+final class VaultNativeSettingsScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private BlockVaultConfig.Settings settings = BlockVaultConfig.Settings.defaults();
     private boolean loaded;
     private int hintY = -1;
 
     VaultNativeSettingsScreen(Screen parent) {
-        super(Component.translatable("blockvault.settings.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.settings.title"), parent);
     }
 
     @Override
@@ -84,7 +82,7 @@ final class VaultNativeSettingsScreen extends Screen implements BlockVaultManage
         addAction(left + buttonWidth + gap, actionY + rowStep * 2, buttonWidth, rowHeight, "blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
                 () -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(this)));
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button ->
-                Minecraft.getInstance().setScreenAndShow(parent)).bounds(left, actionY + rowStep * 3, contentWidth, rowHeight).build());
+                returnToParent()).bounds(left, actionY + rowStep * 3, contentWidth, rowHeight).build());
         int backBottom = actionY + rowStep * 3 + rowHeight;
         hintY = backBottom <= height - 20 ? height - 10 : -1;
     }
@@ -188,5 +186,5 @@ final class VaultNativeSettingsScreen extends Screen implements BlockVaultManage
 
     @Override public boolean isPauseScreen() { return false; }
 
-    @Override public void onClose() { Minecraft.getInstance().setScreenAndShow(parent); }
+    @Override public void onClose() { returnToParent(); }
 }

@@ -14,14 +14,12 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Changes the master password without exposing the current password to the UI thread after submission. */
-final class VaultMasterPasswordScreen extends Screen implements BlockVaultManagedScreen {
-    private final Screen parent;
+final class VaultMasterPasswordScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private EditBox current, next, confirm;
     private boolean busy, failed, mismatch, tooShort, tooLong, samePassword, invalidCharacters;
 
     VaultMasterPasswordScreen(Screen parent) {
-        super(Component.translatable("blockvault.master.change.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.master.change.title"), parent);
     }
 
     @Override protected void init() {
@@ -34,7 +32,7 @@ final class VaultMasterPasswordScreen extends Screen implements BlockVaultManage
         addRenderableWidget(Button.builder(Component.translatable("blockvault.master.change"), button -> submit())
                 .bounds(x, y + 82, 116, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"),
-                button -> Minecraft.getInstance().setScreenAndShow(parent)).bounds(x + 124, y + 82, 116, 20).build());
+                button -> returnToParent()).bounds(x + 124, y + 82, 116, 20).build());
         setInitialFocus(current);
     }
 
@@ -69,10 +67,10 @@ final class VaultMasterPasswordScreen extends Screen implements BlockVaultManage
         VaultRuntime.changeMasterPassword(oldPassword, newPassword, failure -> {
             Arrays.fill(oldPassword, '\0'); Arrays.fill(newPassword, '\0');
             busy = false; failed = failure != null;
-            if (failure == null) Minecraft.getInstance().setScreenAndShow(parent);
+            if (failure == null) returnToParent();
             else if ("blockvault.master.change.backups_failed".equals(failure)
                     || "blockvault.master.change.trust_failed".equals(failure)) {
-                Minecraft.getInstance().setScreenAndShow(parent);
+                returnToParent();
                 VaultRuntime.showToast(failure);
             }
             else statusKey = failure;
@@ -108,6 +106,6 @@ final class VaultMasterPasswordScreen extends Screen implements BlockVaultManage
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { clearFields(); Minecraft.getInstance().setScreenAndShow(parent); }
+    @Override public void onClose() { clearFields(); returnToParent(); }
     @Override public void removed() { clearFields(); super.removed(); }
 }

@@ -137,12 +137,7 @@ public final class VaultRuntime implements VaultAccess {
 
     /** Creates the settings screen for loader-provided config-screen entrypoints. */
     public static Screen createSettingsScreen(Screen parent) {
-        try {
-            Class<?> yaclScreen = Class.forName("io.github.silkypanda.blockvault.VaultYaclSettingsScreen");
-            return (Screen) yaclScreen.getDeclaredConstructor(Screen.class).newInstance(parent);
-        } catch (ReflectiveOperationException | LinkageError unavailable) {
-            return new VaultNativeSettingsScreen(parent);
-        }
+        return VaultSettingsScreenFactory.create(parent);
     }
 
     static void revealPassword(VaultRow row, Consumer<char[]> result) { runtime().accounts.revealPassword(row, result); }

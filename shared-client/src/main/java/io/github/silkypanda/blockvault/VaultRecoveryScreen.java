@@ -11,10 +11,9 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Lists encrypted automatic and manual recovery points. */
-final class VaultRecoveryScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultRecoveryScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
-    private final Screen parent;
     private final boolean recoveryMode;
     private List<BackupSummary> backups = List.of();
     private int page;
@@ -29,8 +28,7 @@ final class VaultRecoveryScreen extends Screen implements BlockVaultManagedScree
     }
 
     VaultRecoveryScreen(Screen parent, boolean recoveryMode) {
-        super(Component.translatable("blockvault.backup.title"));
-        this.parent = parent;
+        super(Component.translatable("blockvault.backup.title"), parent);
         this.recoveryMode = recoveryMode;
     }
 
@@ -63,7 +61,7 @@ final class VaultRecoveryScreen extends Screen implements BlockVaultManagedScree
         if (!recoveryMode) addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.manual.create"), button -> createManual())
                 .bounds(center - 150, height - 30, 148, 20).build()).active = !busy;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button -> {
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent);
+                returnToParent();
             })
                 .bounds(center + 2, height - 30, 148, 20).build());
         if (!loadingStarted) {
@@ -138,7 +136,7 @@ final class VaultRecoveryScreen extends Screen implements BlockVaultManagedScree
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.centeredText(font, title, width / 2, 14, 0xffffffff);
-        ScreenText.drawCenteredWrapped(graphics, font, Component.translatable(recoveryMode
+        drawCenteredWrapped(graphics, Component.translatable(recoveryMode
                 ? "blockvault.backup.recovery.help" : "blockvault.backup.help"), width / 2,
                 31, width - 24, 0xffc5c0cf, 10);
         graphics.centeredText(font, Component.translatable("blockvault.backup.page", Math.min(page + 1, totalPages()), totalPages()),
@@ -155,5 +153,5 @@ final class VaultRecoveryScreen extends Screen implements BlockVaultManagedScree
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { net.minecraft.client.Minecraft.getInstance().setScreenAndShow(parent); }
+    @Override public void onClose() { returnToParent(); }
 }

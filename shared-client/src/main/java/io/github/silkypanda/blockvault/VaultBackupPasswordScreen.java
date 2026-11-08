@@ -14,17 +14,15 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /** Requests the older master password when a recovery point uses an earlier key. */
-final class VaultBackupPasswordScreen extends Screen implements BlockVaultManagedScreen {
+final class VaultBackupPasswordScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private final BackupSummary backup;
-    private final Screen parent;
     private EditBox password;
     private boolean busy;
     private String statusKey;
 
     VaultBackupPasswordScreen(BackupSummary backup, Screen parent) {
-        super(Component.translatable("blockvault.backup.older_password.title"));
+        super(Component.translatable("blockvault.backup.older_password.title"), parent);
         this.backup = backup;
-        this.parent = parent;
     }
 
     @Override protected void init() {
@@ -39,7 +37,7 @@ final class VaultBackupPasswordScreen extends Screen implements BlockVaultManage
         addRenderableWidget(Button.builder(Component.translatable("blockvault.backup.older_password.inspect"), button -> inspect())
                 .bounds(x, height / 2 + 12, 150, 20).build()).active = !busy;
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button ->
-                Minecraft.getInstance().setScreenAndShow(parent)).bounds(x + 158, height / 2 + 12, 82, 20).build());
+                returnToParent()).bounds(x + 158, height / 2 + 12, 82, 20).build());
         setInitialFocus(password);
     }
 
@@ -85,7 +83,7 @@ final class VaultBackupPasswordScreen extends Screen implements BlockVaultManage
 
     @Override public void onClose() {
         if (password != null) password.setValue("");
-        Minecraft.getInstance().setScreenAndShow(parent);
+        returnToParent();
     }
 
     @Override public void removed() {
