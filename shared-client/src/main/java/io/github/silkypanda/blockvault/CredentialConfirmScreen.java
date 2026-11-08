@@ -363,7 +363,7 @@ final class CredentialConfirmScreen extends Screen {
         if (resultMode && cardResult != null) {
             int color = resultAccent(cardResult);
             int shake = cardResult == CardResult.FAILURE
-                    ? Math.round((float) Math.sin((System.nanoTime() - resultStartedAtNanos) / 16_000_000.0)
+                    ? (int) Math.round((float) Math.sin((System.nanoTime() - resultStartedAtNanos) / 16_000_000.0)
                     * 3 * Math.exp(-(System.nanoTime() - resultStartedAtNanos) / 250_000_000.0)) : 0;
             ScreenText.drawCenteredWrapped(graphics, font,
                     Component.translatable(cardResultTranslation(cardResult, false)), cardX + cardWidth / 2 + shake,
