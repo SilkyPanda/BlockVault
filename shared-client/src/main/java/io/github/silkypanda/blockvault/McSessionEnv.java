@@ -1,6 +1,7 @@
 package io.github.silkypanda.blockvault;
 
 import io.github.silkypanda.blockvault.core.session.LoginSession;
+import io.github.silkypanda.blockvault.core.session.CardResult;
 import io.github.silkypanda.blockvault.core.session.PromptModel;
 import io.github.silkypanda.blockvault.core.session.Scheduler;
 import io.github.silkypanda.blockvault.core.session.SessionEnv;
@@ -20,6 +21,7 @@ final class McSessionEnv implements SessionEnv {
     private LoginSession session;
     private boolean showing;
     private PromptModel waitingModel;
+    private CredentialConfirmScreen activeCard;
     private Scheduler.Handle waitHandle;
 
     void attach(LoginSession value) { session = value; }
@@ -37,6 +39,13 @@ final class McSessionEnv implements SessionEnv {
             return;
         }
         show(model);
+    }
+
+    @Override
+    public void cardResult(CardResult result) {
+        BackgroundExecutor.onGameThread(() -> {
+            if (activeCard != null) activeCard.setCardResult(result);
+        });
     }
 
     @Override
@@ -67,7 +76,8 @@ final class McSessionEnv implements SessionEnv {
 
     private void display(PromptModel model) {
         waitingModel = null;
-        Minecraft.getInstance().setScreenAndShow(new CredentialConfirmScreen(model, session, this::showNext));
+        activeCard = new CredentialConfirmScreen(model, session, this::showNext);
+        Minecraft.getInstance().setScreenAndShow(activeCard);
     }
 
     private void pollForFreeScreen() {
@@ -82,6 +92,7 @@ final class McSessionEnv implements SessionEnv {
 
     private void showNext() {
         showing = false;
+        activeCard = null;
         if (session != null && (session.state() == SessionState.SENT
                 || session.state() == SessionState.UNKNOWN)) {
             PromptModel stale;

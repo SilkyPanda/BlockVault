@@ -228,12 +228,17 @@ public final class LoginSession {
         // Close the prompt race while the pending credential is persisted. Repeated
         // registration messages must not queue a second card before send() runs.
         state = SessionState.SENT;
+        env.cardResult(CardResult.SAVING);
         int token = generation;
         char[] staged = pending.clone();
         env.vault().savePending(host, username, staged, saved -> safely(() -> {
             Arrays.fill(staged, '\0');
             if (token != generation || state != SessionState.SENT || action != Action.REGISTER) return;
-            if (!saved) { wipePending(); state = SessionState.UNKNOWN; return; }
+            if (!saved) {
+                wipePending(); state = SessionState.UNKNOWN;
+                env.cardResult(CardResult.FAILURE);
+                return;
+            }
             send(true, email, token);
         }));
     }
@@ -243,8 +248,10 @@ public final class LoginSession {
         if (host == null || state != SessionState.CONFIRMED) return;
         if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
         char[] staged = password.clone();
-        try { env.vault().saveVerified(host, username, staged); }
-        finally { Arrays.fill(staged, '\0'); }
+        env.vault().saveVerified(host, username, staged, saved -> safely(() -> {
+            Arrays.fill(staged, '\0');
+            env.cardResult(saved ? CardResult.SUCCESS : CardResult.FAILURE);
+        }));
     }
 
     /** Sends a saved pending password only after the owner confirms the login card. */
@@ -254,12 +261,17 @@ public final class LoginSession {
         replacePending(password);
         action = Action.AUTOFILL;
         state = SessionState.SENT;
+        env.cardResult(CardResult.SAVING);
         int token = generation;
         char[] staged = pending.clone();
         env.vault().savePending(host, username, staged, saved -> safely(() -> {
             Arrays.fill(staged, '\0');
             if (token != generation || state != SessionState.SENT || action != Action.AUTOFILL) return;
-            if (!saved) { wipePending(); action = Action.NONE; state = SessionState.UNKNOWN; return; }
+            if (!saved) {
+                wipePending(); action = Action.NONE; state = SessionState.UNKNOWN;
+                env.cardResult(CardResult.FAILURE);
+                return;
+            }
             send(false, null, token);
         }));
     }
@@ -269,16 +281,24 @@ public final class LoginSession {
         if (host == null || state != SessionState.REJECTED) return;
         if (!CredentialPassword.isValid(password)) { env.toast("blockvault.toast.password_invalid"); return; }
         char[] staged = password.clone();
-        try { env.vault().saveVerified(host, username, staged); }
-        finally { Arrays.fill(staged, '\0'); }
-        state = SessionState.CONFIRMED;
+        env.vault().saveVerified(host, username, staged, saved -> safely(() -> {
+            Arrays.fill(staged, '\0');
+            if (saved) state = SessionState.CONFIRMED;
+            env.cardResult(saved ? CardResult.SUCCESS : CardResult.FAILURE);
+        }));
     }
 
     /** Removes a rejected credential after an explicit user confirmation. */
     public void forgetRejectedCredential() {
+        forgetRejectedCredential(ignored -> { });
+    }
+
+    public void forgetRejectedCredential(java.util.function.Consumer<Boolean> result) {
         if (host == null || state != SessionState.REJECTED) return;
-        env.vault().delete(host, username);
-        state = SessionState.CONFIRMED;
+        env.vault().delete(host, username, deleted -> safely(() -> {
+            if (deleted) state = SessionState.CONFIRMED;
+            result.accept(deleted);
+        }));
     }
 
     /** Dismisses a rejected-password prompt without changing the vault. */
@@ -459,6 +479,7 @@ public final class LoginSession {
             state = SessionState.UNKNOWN;
             action = Action.NONE;
             wipePending();
+            env.cardResult(CardResult.FAILURE);
             env.toast("blockvault.toast.send_failed");
             return;
         } finally {
@@ -473,14 +494,17 @@ public final class LoginSession {
             state = SessionState.UNKNOWN;
             action = Action.NONE;
             wipePending();
+            env.cardResult(CardResult.FAILURE);
             env.toast("blockvault.toast.send_failed");
             return;
         }
+        env.cardResult(CardResult.SENDING);
         timer = scheduler.schedule(RESULT_TIMEOUT_MILLIS, () -> {
             if (token == generation && state == SessionState.SENT) {
                 state = SessionState.UNKNOWN;
                 wipePending();
                 action = Action.NONE;
+                env.cardResult(CardResult.TIMEOUT);
                 env.toast("blockvault.toast.result_timeout");
             }
         });
@@ -493,6 +517,7 @@ public final class LoginSession {
             action = Action.NONE;
             attempted = false;
             state = SessionState.UNKNOWN;
+            env.cardResult(CardResult.ALREADY_LOGGED_IN);
         } else if (result == ResultKind.SUCCESS) {
             if (state == SessionState.SENT && action != Action.NONE) {
                 cancelTimer();
@@ -520,16 +545,18 @@ public final class LoginSession {
                     return;
                 } else {
                     env.vault().markVerified(host, username);
-                    if (completed == Action.REGISTER) env.toast("blockvault.toast.saved");
-                    else if (completed == Action.AUTOFILL) env.chatMessage("blockvault.chat.autologin_success");
+                    if (completed == Action.AUTOFILL) env.chatMessage("blockvault.chat.autologin_success");
                     else if (completed == Action.PASSWORDLESS) env.chatMessage("blockvault.chat.passwordless_login_success");
                 }
+                if (completed == Action.REGISTER || completed == Action.AUTOFILL
+                        || completed == Action.PASSWORDLESS) env.cardResult(CardResult.SUCCESS);
                 state = SessionState.CONFIRMED;
                 wipePending();
                 action = Action.NONE;
             }
         } else if (result == ResultKind.FAILURE && state == SessionState.SENT) {
             cancelTimer();
+            env.cardResult(CardResult.FAILURE);
             if (action == Action.REGISTER) {
                 // The pending credential is kept: the server may have accepted it and a misread message must
                 // never cost the owner the only copy of a generated password.
@@ -545,6 +572,7 @@ public final class LoginSession {
             action = Action.NONE;
         } else if (result == ResultKind.PASSWORD_RULE && state == SessionState.SENT && action == Action.REGISTER) {
             cancelTimer();
+            env.cardResult(CardResult.FAILURE);
             // The server explicitly rejected this password. Do not leave it as a PENDING
             // account where the next visit could offer the rejected value again.
             env.vault().delete(host, username);

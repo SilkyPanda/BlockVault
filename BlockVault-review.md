@@ -123,10 +123,10 @@ Implementation status is recorded by item. Cards remain until the owner dismisse
 - Libraries such as owo-lib or ModernUI are bigger than the problem. Check their 26.3 support on both loaders before even considering them. YACL is configuration only and cannot help here.
 - What you need is about a hundred lines of your own helper code and a few texture files.
 
-**Implemented:** layered panel shadow and border, per-card accent colors, status chip, clipped identity/title, keyboard hint, responsive stacked actions, shared card-theme colors, and optional-on-by-default enter/exit motion with an Animations toggle in YACL and native settings. The panel still uses vanilla rectangles rather than a 9-slice texture. No Minecraft player head or server icon is shown.
+**Implemented:** nine-slice panel with shadow and border, per-card accent colors, status chip, clipped identity/title, keyboard hint, responsive stacked actions, shared card-theme colors, and a subtle accent-strip animation with an Animations toggle in YACL and native settings. The panel stays fixed to avoid screen transition flicker. No Minecraft player head or server icon is shown.
 
 **Look**
-1. **9-slice sprite panel:** Not implemented; layered vanilla rectangles provide border and shadow.
+1. **9-slice sprite panel:** Implemented with `assets/blockvault/textures/gui/sprites/credential_card.png` and nine-slice metadata.
 2. **Identity:** Partly implemented; username and host are shown. No head or server icon.
 3. **Status chip:** Implemented with both text and color.
 4. **Button hierarchy and icons:** Partly implemented; labels remain text buttons, and actions retain vanilla button styling.
@@ -136,9 +136,9 @@ Implementation status is recorded by item. Cards remain until the owner dismisse
 
 **Animation**
 1. **Timing:** Implemented with elapsed nanoseconds.
-2. **Enter/exit motion:** Implemented, approximately 200 ms ease-out and 120 ms exit slide/fade. Password buffers are wiped as closing starts.
-3. **Input during motion:** Widgets are shown after entrance settles and input is ignored during motion; N8 adds 250 ms grace.
-4. **Result display:** Not implemented. Your choice allows an explicit Save/Register/Update/Login action to close the card; no result animation is added.
+2. **Enter/exit motion:** Partly implemented. The accent strip expands on entry and retracts on close (200 ms / 120 ms); the panel itself does not slide or fade. Password buffers are wiped as closing starts.
+3. **Input during motion:** The screen remains fully rendered while the accent animates; input is ignored during the 200 ms entrance and the 250 ms N8 grace period.
+4. **Result display:** Implemented progress, success, failure, timeout, and already-logged-in states. The card stays open until you use Close or Esc; submitting an action shows its result instead of dismissing the card.
 5. **Micro-feedback:** Not implemented; Copy, Reveal, and Regenerate retain their current behavior.
 6. **Sound:** Not implemented.
 7. **Animations toggle:** Implemented and enabled by default. Reduced-motion preference integration is not implemented.

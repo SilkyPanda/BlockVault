@@ -19,6 +19,16 @@ public interface VaultAccess {
     void markVerified(String host, String username);
     /** Moves an account to the trash (owner-confirmed removal or a successful /unregister). */
     void delete(String host, String username);
+    /** Moves an account to trash and reports whether the operation completed. */
+    default void delete(String host, String username, Consumer<Boolean> result) {
+        delete(host, username);
+        result.accept(true);
+    }
     /** Saves a manually captured credential after successful authentication. */
     void saveVerified(String host, String username, char[] password);
+    /** Saves a manually captured credential and reports whether it completed. */
+    default void saveVerified(String host, String username, char[] password, Consumer<Boolean> result) {
+        saveVerified(host, username, password);
+        result.accept(true);
+    }
 }

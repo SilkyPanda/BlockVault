@@ -4,9 +4,6 @@ import io.github.silkypanda.blockvault.core.session.CardVariant;
 
 /** Shared colors and spacing for the credential prompt card. */
 final class CredentialCardTheme {
-    static final int SHADOW = 0x99000000;
-    static final int BORDER = 0xff393342;
-    static final int PANEL = 0xf20d0c12;
     static final int MUTED = 0xffb2adbe;
     static final int REGISTER = 0xff62c99b;
     static final int UPDATE = 0xffffc45e;

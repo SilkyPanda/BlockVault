@@ -126,6 +126,20 @@ public final class VaultRuntime implements VaultAccess {
     }
 
     @Override
+    public void delete(String host, String username, Consumer<Boolean> result) {
+        withVault(() -> {
+            Vault current = store.vault();
+            ServerEntry server = findServer(current, host);
+            if (server != null) {
+                Vault next = VaultTrash.trashAccount(current, server.id(), username, System.currentTimeMillis());
+                if (next != current) saveVault(next);
+            }
+            BackgroundExecutor.onGameThread(() -> result.accept(true));
+        }, () -> BackgroundExecutor.onGameThread(() -> result.accept(false)),
+                () -> BackgroundExecutor.onGameThread(() -> result.accept(false)));
+    }
+
+    @Override
     public void saveVerified(String host, String username, char[] password) {
         char[] copy = password.clone();
         withVault(() -> {
@@ -135,6 +149,23 @@ public final class VaultRuntime implements VaultAccess {
                         System.currentTimeMillis(), old == null ? null : withoutPrevious(old)));
             } finally { Arrays.fill(copy, '\0'); }
         });
+    }
+
+    @Override
+    public void saveVerified(String host, String username, char[] password, Consumer<Boolean> result) {
+        char[] copy = password.clone();
+        java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean();
+        Consumer<Boolean> finish = saved -> {
+            if (!completed.compareAndSet(false, true)) return;
+            Arrays.fill(copy, '\0');
+            BackgroundExecutor.onGameThread(() -> result.accept(saved));
+        };
+        withVault(() -> {
+            changeAccount(host, username, old -> new Account(username, copy, Account.Status.VERIFIED,
+                    old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
+                    System.currentTimeMillis(), old == null ? null : withoutPrevious(old)));
+            finish.accept(true);
+        }, () -> finish.accept(false), () -> finish.accept(false));
     }
 
     /** Creates or unlocks a master-password vault, then resumes operations waiting on it. */

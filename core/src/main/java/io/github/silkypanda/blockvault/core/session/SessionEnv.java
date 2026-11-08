@@ -6,6 +6,8 @@ public interface SessionEnv {
     void sendCommand(String commandWithoutSlash);
     /** Opens or queues a save card. */
     void showSavePrompt(PromptModel model);
+    /** Reports progress or an outcome to the active credential card, if any. */
+    default void cardResult(CardResult result) { }
     /** Shows a localized toast key. */
     void toast(String translationKey);
     /** Adds a localized client-only status message to chat. */
