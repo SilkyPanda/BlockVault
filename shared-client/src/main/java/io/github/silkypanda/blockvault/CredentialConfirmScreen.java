@@ -28,7 +28,7 @@ final class CredentialConfirmScreen extends Screen {
     private static final int BASE_HEIGHT = 150;
     private static final int EMAIL_HEIGHT = 174;
     private static final Identifier PANEL_SPRITE = Identifier.fromNamespaceAndPath(
-            "blockvault", "gui/sprites/credential_card");
+            "blockvault", "credential_card");
     private final PromptModel model;
     private final LoginSession session;
     private final Runnable closed;
