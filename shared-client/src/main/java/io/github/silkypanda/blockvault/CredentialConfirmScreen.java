@@ -310,9 +310,11 @@ final class CredentialConfirmScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
+        // Result cards require the explicit Close button. In particular, do not let Enter
+        // fall through to a stale text-field/button focus and submit the old credential.
+        if (closing || resultMode) return true;
         if (inputGraceActive() || closeAnimating || !openingFinished()) return true;
         if (ScreenText.isEnter(event)) {
-            if (resultMode) { onClose(); return true; }
             if (model.variant() == CardVariant.PENDING_LOGIN) { tryPendingLogin(); return true; }
             if (model.variant() == CardVariant.REJECTED) {
                 if (!CredentialPassword.isValid(passwordBox.getValue().toCharArray())) {
@@ -334,9 +336,12 @@ final class CredentialConfirmScreen extends Screen {
         float progress = closeAnimating ? accentProgress() : animationProgress();
         int panelY = cardY;
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL_SPRITE, cardX, panelY, cardWidth, cardHeight, progress);
-        int accentWidth = Math.max(scaled(1), Math.round(cardWidth * progress));
-        graphics.fill(cardX + scaled(1), panelY + scaled(1), cardX + scaled(1) + accentWidth,
-                panelY + scaled(3), CredentialCardTheme.accent(model.variant()));
+        int lineInset = Math.min(scaled(10), Math.max(1, (cardWidth - scaled(2)) / 2));
+        int lineWidth = Math.max(1, cardWidth - lineInset * 2);
+        int accentWidth = Math.max(1, Math.round(lineWidth * progress));
+        graphics.fill(cardX + lineInset, panelY + scaled(2),
+                cardX + lineInset + accentWidth, panelY + scaled(4),
+                CredentialCardTheme.accent(model.variant()));
     }
 
     @Override
@@ -372,10 +377,12 @@ final class CredentialConfirmScreen extends Screen {
         graphics.centeredText(font, status, chipX + chipWidth / 2, cardY + scaled(10), 0xff17131d);
         String identity = BlockVaultConfig.current().streamerMode()
                 ? model.username() : model.username() + " · " + model.host();
-        int logoSize = scaled(20);
         int identityX = cardX + pad;
-        drawServerLogo(graphics, identityX, cardY + scaled(25), logoSize);
-        identityX += logoSize + scaled(5);
+        if (!BlockVaultConfig.current().streamerMode()) {
+            int logoSize = scaled(20);
+            drawServerLogo(graphics, identityX, cardY + scaled(25), logoSize);
+            identityX += logoSize + scaled(5);
+        }
         identity = ScreenText.clip(font, identity, cardX + cardWidth - pad - identityX);
         graphics.text(font, Component.literal(identity), identityX, cardY + scaled(26), CredentialCardTheme.MUTED);
         if (resultMode && cardResult != null) {

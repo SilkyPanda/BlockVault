@@ -116,29 +116,29 @@ The format changed without a version bump, and `ServerEntry.autofill` and `templ
 
 ## 5. Card redesign
 
-Implementation status is recorded by item. Cards remain until the owner dismisses them; an explicit action may close its card, per your choice. No timer auto-closes cards.
+Implementation status is recorded by item. Cards do not auto-close on a timer. They remain until dismissed, except successful registration closes its card without a confirmation message.
 
 **Short answer on libraries: don't add one.** Reasons:
 - The card is one small screen. A UI framework would add a dependency that must track every Minecraft 26.x rendering change on both loaders.
 - Libraries such as owo-lib or ModernUI are bigger than the problem. Check their 26.3 support on both loaders before even considering them. YACL is configuration only and cannot help here.
 - What you need is about a hundred lines of your own helper code and a few texture files.
 
-**Implemented:** nine-slice panel with shadow and border, per-card accent colors, status chip, clipped identity/title, keyboard hint, responsive stacked actions, shared card-theme colors, and a subtle accent-strip animation with an Animations toggle in YACL and native settings. The panel stays fixed to avoid screen transition flicker. No Minecraft player head or server icon is shown.
+**Implemented (in-game verification pending):** nine-slice panel with shadow and border, per-card accent colors, status chip, clipped identity/title, current server favicon (server initial fallback; both hidden with the Hide server address setting), responsive stacked actions, shared card-theme colors, and an Animations toggle in YACL and native settings. The panel fades in/out and the top accent line expands/retracts; the line is inset to follow the rounded panel edge. Card transitions use the GUI screen setter directly to avoid the synchronous render used by `setScreenAndShow`. The keyboard hint was removed. Result cards consume Enter rather than resubmitting the credential, and the Close button remains available. Successful registration closes without a success confirmation; other result cards stay open until dismissed.
 
 **Look**
 1. **9-slice sprite panel:** Implemented with `assets/blockvault/textures/gui/sprites/credential_card.png` and nine-slice metadata.
-2. **Identity:** Partly implemented; username and host are shown. No head or server icon.
+2. **Identity:** Implemented; username and host are shown with the current server favicon when available, and a server initial as fallback. Hide server address also hides the favicon/initial.
 3. **Status chip:** Implemented with both text and color.
 4. **Button hierarchy and icons:** Partly implemented; labels remain text buttons, and actions retain vanilla button styling.
 5. **Theme constants:** Partly implemented in `CredentialCardTheme` for color; dimensions and durations remain in the screen.
 6. **Vanilla layout widgets:** Not implemented. Narrow cards stack controls and keep normal text size.
-7. **Keyboard hints:** Implemented.
+7. **Keyboard hints:** Removed from the card. Enter still submits an active credential form; result cards consume Enter to prevent resubmission. Close the result card with its button or Esc.
 
 **Animation**
 1. **Timing:** Implemented with elapsed nanoseconds.
-2. **Enter/exit motion:** Partly implemented. The accent strip expands on entry and retracts on close (200 ms / 120 ms); the panel itself does not slide or fade. Password buffers are wiped as closing starts.
-3. **Input during motion:** The screen remains fully rendered while the accent animates; input is ignored during the 200 ms entrance and the 250 ms N8 grace period.
-4. **Result display:** Implemented progress, success, failure, timeout, and already-logged-in states. The card stays open until you use Close or Esc; submitting an action shows its result instead of dismissing the card.
+2. **Enter/exit motion:** Partly implemented. The panel fades and the inset accent line expands on entry and retracts on close (200 ms / 120 ms); text and controls do not fade with the panel. Password buffers are wiped as closing starts. Direct GUI screen changes replace `setScreenAndShow` for card open/close to avoid its synchronous render step.
+3. **Input during motion:** The panel and accent animate; text and controls appear immediately. Input is ignored during the 200 ms entrance and the 250 ms N8 grace period. Result cards consume Enter.
+4. **Result display:** Implemented progress, success, failure, timeout, and already-logged-in states. Result cards stay open until Close or Esc; Enter is consumed. Successful registration closes without showing a confirmation message.
 5. **Micro-feedback:** Not implemented; Copy, Reveal, and Regenerate retain their current behavior.
 6. **Sound:** Not implemented.
 7. **Animations toggle:** Implemented and enabled by default. Reduced-motion preference integration is not implemented.
