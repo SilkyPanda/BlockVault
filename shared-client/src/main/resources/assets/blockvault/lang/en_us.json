@@ -36,7 +36,6 @@
   "blockvault.card.status.rejected": "REJECTED",
   "blockvault.card.status.save": "SAVE LOGIN",
   "blockvault.card.status.pending": "CONFIRM LOGIN",
-  "blockvault.card.keyboard_hint": "Enter to confirm · Esc to close",
   "blockvault.card.close": "Close",
   "blockvault.card.result.saving.chip": "SAVING",
   "blockvault.card.result.saving.message": "Saving this credential to the encrypted vault…",

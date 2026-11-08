@@ -9,8 +9,11 @@ import io.github.silkypanda.blockvault.core.session.PromptModel;
 import io.github.silkypanda.blockvault.core.session.SessionState;
 import io.github.silkypanda.blockvault.core.gen.PasswordGenerator;
 import java.util.Arrays;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -21,6 +24,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
+import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.multiplayer.ServerData;
 
 /** Vanilla credential card shared by save, update, registration, and rejection prompts. */
 final class CredentialConfirmScreen extends Screen {
@@ -29,6 +34,9 @@ final class CredentialConfirmScreen extends Screen {
     private static final int EMAIL_HEIGHT = 174;
     private static final Identifier PANEL_SPRITE = Identifier.fromNamespaceAndPath(
             "blockvault", "credential_card");
+    private static final Identifier SERVER_ICON_TEXTURE = Identifier.fromNamespaceAndPath(
+            "blockvault", "active_server_icon");
+    private static byte[] cachedServerIcon;
     private final PromptModel model;
     private final LoginSession session;
     private final Runnable closed;
@@ -152,7 +160,7 @@ final class CredentialConfirmScreen extends Screen {
         if (closeAnimating && System.nanoTime() - closeStartedAtNanos >= 120_000_000L) {
             closeAnimating = false;
             finishClose();
-            Minecraft.getInstance().setScreenAndShow(null);
+            Minecraft.getInstance().setScreen(null);
         }
     }
 
@@ -193,6 +201,12 @@ final class CredentialConfirmScreen extends Screen {
 
     void setCardResult(CardResult result) {
         if (closing || closeAnimating) return;
+        // The successful register response is enough feedback; close the credential form
+        // with its normal exit motion instead of showing a second confirmation message.
+        if (registration && result == CardResult.SUCCESS) {
+            onClose();
+            return;
+        }
         cardResult = result;
         resultMode = true;
         resultStartedAtNanos = System.nanoTime();
@@ -317,10 +331,12 @@ final class CredentialConfirmScreen extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL_SPRITE, cardX, cardY, cardWidth, cardHeight);
-        int accentWidth = Math.max(scaled(1), Math.round(scaled(3) * accentProgress()));
-        graphics.fill(cardX + scaled(1), cardY + scaled(1), cardX + scaled(1) + accentWidth,
-                cardY + cardHeight - scaled(1), CredentialCardTheme.accent(model.variant()));
+        float progress = closeAnimating ? accentProgress() : animationProgress();
+        int panelY = cardY;
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL_SPRITE, cardX, panelY, cardWidth, cardHeight, progress);
+        int accentWidth = Math.max(scaled(1), Math.round(cardWidth * progress));
+        graphics.fill(cardX + scaled(1), panelY + scaled(1), cardX + scaled(1) + accentWidth,
+                panelY + scaled(3), CredentialCardTheme.accent(model.variant()));
     }
 
     @Override
@@ -356,10 +372,12 @@ final class CredentialConfirmScreen extends Screen {
         graphics.centeredText(font, status, chipX + chipWidth / 2, cardY + scaled(10), 0xff17131d);
         String identity = BlockVaultConfig.current().streamerMode()
                 ? model.username() : model.username() + " · " + model.host();
-        identity = ScreenText.clip(font, identity, cardWidth - pad * 2);
-        graphics.text(font, Component.literal(identity), cardX + pad, cardY + scaled(26), CredentialCardTheme.MUTED);
-        if (!resultMode) graphics.text(font, Component.translatable("blockvault.card.keyboard_hint"),
-                cardX + pad, cardY + cardHeight - scaled(12), CredentialCardTheme.MUTED);
+        int logoSize = scaled(20);
+        int identityX = cardX + pad;
+        drawServerLogo(graphics, identityX, cardY + scaled(25), logoSize);
+        identityX += logoSize + scaled(5);
+        identity = ScreenText.clip(font, identity, cardX + cardWidth - pad - identityX);
+        graphics.text(font, Component.literal(identity), identityX, cardY + scaled(26), CredentialCardTheme.MUTED);
         if (resultMode && cardResult != null) {
             int color = resultAccent(cardResult);
             int shake = cardResult == CardResult.FAILURE
@@ -385,6 +403,29 @@ final class CredentialConfirmScreen extends Screen {
         if (!animationsEnabled()) return 1;
         if (closeAnimating) return Math.max(0, 1 - (System.nanoTime() - closeStartedAtNanos) / 120_000_000f);
         return animationProgress();
+    }
+
+    private void drawServerLogo(GuiGraphicsExtractor graphics, int x, int y, int size) {
+        ServerData server = Minecraft.getInstance().getCurrentServer();
+        byte[] icon = server == null ? null : server.getIconBytes();
+        if (icon != null && icon.length > 0) {
+            try {
+                if (!Arrays.equals(cachedServerIcon, icon)) {
+                    NativeImage image = NativeImage.read(new ByteArrayInputStream(icon));
+                    Minecraft.getInstance().getTextureManager().register(SERVER_ICON_TEXTURE,
+                            new DynamicTexture(() -> "BlockVault server icon", image));
+                    cachedServerIcon = icon.clone();
+                }
+                graphics.blit(RenderPipelines.GUI_TEXTURED, SERVER_ICON_TEXTURE, x, y, 0, 0,
+                        size, size, 64, 64, 64, 64);
+                return;
+            } catch (IOException | RuntimeException ignored) {
+                cachedServerIcon = null;
+            }
+        }
+        graphics.fill(x, y, x + size, y + size, CredentialCardTheme.accent(model.variant()));
+        String mark = model.host().isBlank() ? "?" : model.host().substring(0, 1).toUpperCase(java.util.Locale.ROOT);
+        graphics.centeredText(font, mark, x + size / 2, y + (size - font.lineHeight) / 2, 0xffffffff);
     }
 
     private static String cardResultTranslation(CardResult result, boolean chip) {

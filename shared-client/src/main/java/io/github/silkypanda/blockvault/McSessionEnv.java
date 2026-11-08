@@ -77,7 +77,7 @@ final class McSessionEnv implements SessionEnv {
     private void display(PromptModel model) {
         waitingModel = null;
         activeCard = new CredentialConfirmScreen(model, session, this::showNext);
-        Minecraft.getInstance().setScreenAndShow(activeCard);
+        Minecraft.getInstance().setScreen(activeCard);
     }
 
     private void pollForFreeScreen() {
@@ -94,7 +94,7 @@ final class McSessionEnv implements SessionEnv {
         showing = false;
         activeCard = null;
         if (session != null && (session.state() == SessionState.SENT
-                || session.state() == SessionState.UNKNOWN)) {
+                || session.state() == SessionState.UNKNOWN || session.state() == SessionState.CONFIRMED)) {
             PromptModel stale;
             while ((stale = queuedPrompts.poll()) != null) stale.clearPassword();
             return;

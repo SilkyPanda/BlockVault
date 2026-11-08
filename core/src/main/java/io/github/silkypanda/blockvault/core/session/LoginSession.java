@@ -80,6 +80,19 @@ public final class LoginSession {
     public void onSystemMessage(String message) {
         if (host == null || state == SessionState.CONFIRMED || message == null) return;
         String plain = message.length() > MAX_MESSAGE_CHARS ? message.substring(0, MAX_MESSAGE_CHARS) : message;
+        // A response to a command we just sent must be handled before prompt matching.
+        // Some servers echo registration/login language in their success response; treating
+        // that same line as a fresh prompt can enqueue a second credential card.
+        if (state == SessionState.SENT) {
+            ResultKind result = results.classify(plain);
+            if (result != ResultKind.NONE) {
+                promptedShortAliases.clear();
+                consumedShortAliases.clear();
+                shortAliasPromptAt = Long.MIN_VALUE;
+                onResult(result, plain);
+                return;
+            }
+        }
         boolean listenForPrompts = scheduler.nowMillis() <= promptListeningUntil;
         java.util.Set<String> explicitShortAliases = listenForPrompts
                 ? prompts.promptedShortCommands(plain) : java.util.Set.of();
@@ -113,15 +126,6 @@ public final class LoginSession {
                         ? PromptKind.LOGIN : PromptKind.REGISTER;
                 handlePrompt(selected, plain);
             }), () -> safely(() -> abandonPrompt(token)));
-        }
-        if (state == SessionState.SENT) {
-            ResultKind result = results.classify(plain);
-            if (result != ResultKind.NONE) {
-                promptedShortAliases.clear();
-                consumedShortAliases.clear();
-                shortAliasPromptAt = Long.MIN_VALUE;
-                onResult(result, plain);
-            }
         }
     }
 
