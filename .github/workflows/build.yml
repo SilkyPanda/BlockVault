@@ -49,7 +49,31 @@ jobs:
           gradle-version: ${{ steps.gradle.outputs.version }}
       - name: Test
         run: |
-          if [ -f gradlew ]; then chmod +x gradlew; ./gradlew --no-daemon test; else gradle --no-daemon test; fi
+          if [ -f gradlew ]; then chmod +x gradlew; ./gradlew --no-daemon cleanTest test --console=plain; else gradle --no-daemon cleanTest test --console=plain; fi
+      - name: Confirm tests were discovered
+        if: success()
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          reports = glob.glob('build/test-results/test/TEST-*.xml')
+          totals = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+          for report in reports:
+              root = ET.parse(report).getroot()
+              for key in totals:
+                  totals[key] += int(root.attrib.get(key, 0))
+
+          if totals['tests'] == 0:
+              raise SystemExit('Core unit test task succeeded but discovered zero tests.')
+
+          line = (f"Core unit tests: {totals['tests']} discovered; "
+                  f"{totals['failures']} failures, {totals['errors']} errors, "
+                  f"{totals['skipped']} skipped.")
+          print(line)
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write(line + '\n')
+          PY
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
