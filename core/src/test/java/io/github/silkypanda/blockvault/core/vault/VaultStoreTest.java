@@ -54,23 +54,20 @@ final class VaultStoreTest {
         VaultStore first = VaultStore.open(directory);
         first.create("correcthorse".toCharArray());
         Account verified = new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
-                1, 10, 2, null);
-        Vault initial = new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"),
-                true, "auto", List.of(verified))));
+                1, 10, 2);
+        Vault initial = new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), List.of(verified))));
         first.save(initial);
         first.reload();
         VaultStore stale = VaultStore.open(directory);
         stale.unlock("correcthorse".toCharArray());
 
         Account pending = new Account("Alex", "new-pass".toCharArray(), Account.Status.PENDING,
-                1, 20, 2, null);
-        first.saveExplicit(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"),
-                true, "auto", List.of(pending)))));
+                1, 20, 2);
+        first.saveExplicit(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), List.of(pending)))));
         Account rollback = new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
-                1, 10, 2, null);
+                1, 10, 2);
         first.reload();
-        first.saveExplicit(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"),
-                true, "auto", List.of(rollback)))));
+        first.saveExplicit(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), List.of(rollback)))));
         assertEquals("old-pass", new String(first.vault().servers().getFirst().accounts().getFirst().password()));
 
         first.reload();
@@ -83,9 +80,8 @@ final class VaultStoreTest {
     void backupRotationSkipsIdenticalSnapshotsAndRestoreReplacesVaultContents() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("correcthorse".toCharArray());
-        ServerEntry before = new ServerEntry("one", "one", List.of("one.example"), true,
-                "auto", List.of(new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
-                1, 1, 1, null)));
+        ServerEntry before = new ServerEntry("one", "one", List.of("one.example"), List.of(new Account("Alex", "old-pass".toCharArray(), Account.Status.VERIFIED,
+                1, 1, 1)));
         store.save(new Vault(Vault.VERSION, List.of(before)));
         Path backup1 = directory.resolve("vault.bv.bak1");
         assertTrue(Files.notExists(backup1));
@@ -99,8 +95,7 @@ final class VaultStoreTest {
         store.save(store.vault());
         assertTrue(Files.notExists(directory.resolve("vault.bv.bak2")));
         assertEquals(1, store.backups().stream().filter(backup -> !backup.manual()).count());
-        ServerEntry after = new ServerEntry("two", "two", List.of("two.example"), true,
-                "auto", List.of());
+        ServerEntry after = new ServerEntry("two", "two", List.of("two.example"), List.of());
         store.save(new Vault(Vault.VERSION, List.of(after)));
         store.save(store.vault());
         assertArrayEquals(first, Files.readAllBytes(directory.resolve("vault.bv.bak2")));
@@ -126,9 +121,8 @@ final class VaultStoreTest {
         VaultStore store = VaultStore.open(directory);
         store.create("correcthorse".toCharArray());
         Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
-                10, 20, 30, null);
-        ServerEntry server = new ServerEntry("id", "Example", List.of("example.org:25565"), true,
-                "auto", List.of(account));
+                10, 20, 30);
+        ServerEntry server = new ServerEntry("id", "Example", List.of("example.org:25565"), List.of(account));
         store.save(new Vault(Vault.VERSION, List.of(server)));
 
         store.createManualBackup();
@@ -152,8 +146,8 @@ final class VaultStoreTest {
         VaultStore store = VaultStore.open(directory);
         store.create("correcthorse".toCharArray());
         Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
-                10, 20, 30, null);
-        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("id", "Example", List.of("example.org"), true, "auto", List.of(account)))));
+                10, 20, 30);
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("id", "Example", List.of("example.org"), List.of(account)))));
         store.createManualBackup();
         BackupSummary selected = store.backups().stream().filter(BackupSummary::manual).findFirst().orElseThrow();
         Files.writeString(directory.resolve("vault.bv"), "damaged");
@@ -170,8 +164,8 @@ final class VaultStoreTest {
         VaultStore store = VaultStore.open(directory);
         store.create("oldpassword".toCharArray());
         Account account = new Account("Alex", "backup-secret".toCharArray(), Account.Status.VERIFIED,
-                1, 1, 1, null);
-        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), true, "auto", List.of(account)))));
+                1, 1, 1);
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), List.of(account)))));
         store.createManualBackup();
         store.changeMasterPassword("oldpassword".toCharArray(), "newpassword".toCharArray());
 
@@ -190,8 +184,8 @@ final class VaultStoreTest {
         VaultStore store = VaultStore.open(directory);
         store.create("oldpassword".toCharArray());
         Account account = new Account("Alex", "retained-secret".toCharArray(), Account.Status.VERIFIED,
-                1, 1, 1, null);
-        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), true, "auto", List.of(account)))));
+                1, 1, 1);
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), List.of(account)))));
         assertThrows(WrongMasterPasswordException.class,
                 () -> store.changeMasterPassword("incorrect".toCharArray(), "newpassword".toCharArray()));
         assertThrows(IllegalArgumentException.class,
@@ -204,8 +198,8 @@ final class VaultStoreTest {
         assertEquals("retained-secret", new String(store.vault().servers().get(0).accounts().get(0).password()),
                 "passwords must remain live immediately after rotating the master password");
         List<ServerEntry> afterRotation = new java.util.ArrayList<>(store.vault().servers());
-        afterRotation.add(new ServerEntry("two", "two", List.of("two.example"), true, "auto",
-                List.of(new Account("Sam", "second-secret".toCharArray(), Account.Status.VERIFIED, 2, 2, 2, null))));
+        afterRotation.add(new ServerEntry("two", "two", List.of("two.example"),
+                List.of(new Account("Sam", "second-secret".toCharArray(), Account.Status.VERIFIED, 2, 2, 2))));
         store.save(new Vault(Vault.VERSION, afterRotation));
         assertTrue(!java.util.Arrays.equals(oldKeyFile, Files.readAllBytes(directory.resolve("vault.bv.trust"))),
                 "the vault key must change with the password");
@@ -270,8 +264,7 @@ final class VaultStoreTest {
     void oneUnreadableBackupDoesNotStopTheOthersFromBeingReencrypted() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("oldpassword".toCharArray());
-        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), true,
-                "auto", List.of(new Account("Alex", "s".toCharArray(), Account.Status.VERIFIED, 1, 1, 1, null))))));
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), List.of(new Account("Alex", "s".toCharArray(), Account.Status.VERIFIED, 1, 1, 1))))));
         store.createManualBackup();
         store.createManualBackup();
         Files.writeString(directory.resolve("vault.bv.manual1"), "not a vault");
@@ -289,9 +282,8 @@ final class VaultStoreTest {
         VaultStore store = VaultStore.open(directory);
         store.create("correcthorse".toCharArray());
         long day = 24L * 60 * 60 * 1000;
-        Vault base = new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), true,
-                "auto", List.of(new Account("Alex", "a".toCharArray(), Account.Status.VERIFIED, 1, 1, 1, null),
-                        new Account("Sam", "b".toCharArray(), Account.Status.VERIFIED, 1, 1, 1, null)))));
+        Vault base = new Vault(Vault.VERSION, List.of(new ServerEntry("one", "one", List.of("one.example"), List.of(new Account("Alex", "a".toCharArray(), Account.Status.VERIFIED, 1, 1, 1),
+                        new Account("Sam", "b".toCharArray(), Account.Status.VERIFIED, 1, 1, 1)))));
         long now = System.currentTimeMillis();
         Vault withTrash = VaultTrash.trashAccount(VaultTrash.trashAccount(base, "one", "Alex", now - 61 * day),
                 "one", "Sam", now - 1 * day);
@@ -310,18 +302,17 @@ final class VaultStoreTest {
         VaultStore other = VaultStore.open(otherDirectory);
         other.create("otherpassword".toCharArray());
         other.save(new Vault(Vault.VERSION, List.of(
-                new ServerEntry("a", "Alpha", List.of("alpha.example:25565"), true, "auto", List.of(
-                        new Account("Alex", "newer".toCharArray(), Account.Status.VERIFIED, 1, 500, 0, null),
-                        new Account("Sam", "added".toCharArray(), Account.Status.VERIFIED, 1, 500, 0, null))),
-                new ServerEntry("b", "Beta", List.of("beta.example:25565"), true, "auto", List.of(
-                        new Account("Kim", "k".toCharArray(), Account.Status.VERIFIED, 1, 500, 0, null))))));
+                new ServerEntry("a", "Alpha", List.of("alpha.example:25565"), List.of(
+                        new Account("Alex", "newer".toCharArray(), Account.Status.VERIFIED, 1, 500, 0),
+                        new Account("Sam", "added".toCharArray(), Account.Status.VERIFIED, 1, 500, 0))),
+                new ServerEntry("b", "Beta", List.of("beta.example:25565"), List.of(
+                        new Account("Kim", "k".toCharArray(), Account.Status.VERIFIED, 1, 500, 0))))));
         Path exported = directory.resolve("vault.bv.export");
         other.exportEncrypted(exported);
 
         VaultStore store = VaultStore.open(directory.resolve("mine"));
         store.create("mypassword".toCharArray());
-        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("a2", "Alpha", List.of("alpha.example:25565"),
-                true, "auto", List.of(new Account("Alex", "older".toCharArray(), Account.Status.VERIFIED, 1, 100, 0, null))))));
+        store.save(new Vault(Vault.VERSION, List.of(new ServerEntry("a2", "Alpha", List.of("alpha.example:25565"), List.of(new Account("Alex", "older".toCharArray(), Account.Status.VERIFIED, 1, 100, 0))))));
         // exports must live inside the data directory of the exporting store
         Path copy = directory.resolve("mine").resolve("incoming.bv");
         Files.copy(exported, copy);
@@ -361,9 +352,9 @@ final class VaultStoreTest {
     void manualBackupRemainsAnUnmodifiedSnapshotAfterLiveAccountChanges() throws Exception {
         VaultStore store = VaultStore.open(directory);
         store.create("purgepassword".toCharArray());
-        ServerEntry server = new ServerEntry("s", "S", List.of("s.example:25565"), true, "auto", List.of(
-                new Account("Alex", "gone".toCharArray(), Account.Status.VERIFIED, 1, 1, 0, null),
-                new Account("Sam", "stay".toCharArray(), Account.Status.VERIFIED, 1, 1, 0, null)));
+        ServerEntry server = new ServerEntry("s", "S", List.of("s.example:25565"), List.of(
+                new Account("Alex", "gone".toCharArray(), Account.Status.VERIFIED, 1, 1, 0),
+                new Account("Sam", "stay".toCharArray(), Account.Status.VERIFIED, 1, 1, 0)));
         store.save(new Vault(Vault.VERSION, List.of(server)));
         store.createManualBackup();
         store.save(new Vault(Vault.VERSION, List.of(server.withAccounts(List.of(server.accounts().get(1))))));

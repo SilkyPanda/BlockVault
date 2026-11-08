@@ -35,38 +35,38 @@ final class VaultScreenNavigation {
     void requestAccessScreen(boolean create) {
         if (accessScreenOpen) return;
         accessScreenOpen = true;
-        BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(
+        BackgroundExecutor.onGameThread(() -> ScreenSwitcher.show(
                 new VaultAccessScreen(create, vaultReturnScreen)));
     }
 
     void openBackupScreen(Screen parent) {
-        BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultRecoveryScreen(parent)));
+        BackgroundExecutor.onGameThread(() -> ScreenSwitcher.show(new VaultRecoveryScreen(parent)));
     }
 
     void openRecoveryScreen(Screen parent) {
-        BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultRecoveryScreen(parent, true)));
+        BackgroundExecutor.onGameThread(() -> ScreenSwitcher.show(new VaultRecoveryScreen(parent, true)));
     }
 
     void openMasterPasswordScreen(Screen parent) {
-        BackgroundExecutor.onGameThread(() -> Minecraft.getInstance().setScreenAndShow(new VaultMasterPasswordScreen(parent)));
+        BackgroundExecutor.onGameThread(() -> ScreenSwitcher.show(new VaultMasterPasswordScreen(parent)));
     }
 
     void openImportScreen(Screen parent) {
-        Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(parent, true));
+        ScreenSwitcher.show(new VaultTransferScreen(parent, true));
     }
 
     void openTrashScreen(Screen parent, List<TrashRow> rows) {
-        Minecraft.getInstance().setScreenAndShow(new VaultTrashScreen(parent, rows));
+        ScreenSwitcher.show(new VaultTrashScreen(parent, rows));
     }
 
     void openRestoreConflict(Screen parent, Runnable overwrite) {
-        Minecraft.getInstance().setScreenAndShow(new VaultConfirmScreen(parent,
+        ScreenSwitcher.show(new VaultConfirmScreen(parent,
                 "blockvault.trash.restore.conflict.title", "blockvault.trash.restore.conflict.message",
                 "blockvault.trash.restore.overwrite", overwrite));
     }
 
     void showVaultRows(List<VaultRow> rows, Screen parent) {
-        Minecraft.getInstance().setScreenAndShow(new VaultListScreen(rows, parent));
+        ScreenSwitcher.show(new VaultListScreen(rows, parent));
         clearReturnScreenIf(parent);
     }
 
@@ -76,12 +76,14 @@ final class VaultScreenNavigation {
     }
 
     void closeAccessScreen() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.gui.screen() instanceof VaultAccessScreen) minecraft.setScreenAndShow(null);
+        Screen current = Minecraft.getInstance().gui.screen();
+        if (current instanceof VaultAccessScreen) ScreenSwitcher.show(null);
     }
 
+    /** Leaves a BlockVault screen after locking by going back to the screen that opened it. */
     void closeManagedScreen() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (BlockVaultScreen.isBlockVaultScreen(minecraft.gui.screen())) minecraft.setScreenAndShow(null);
+        Screen current = Minecraft.getInstance().gui.screen();
+        if (current instanceof BlockVaultScreen own) ScreenSwitcher.show(own.parentScreen());
+        else if (BlockVaultScreen.isBlockVaultScreen(current)) ScreenSwitcher.show(null);
     }
 }

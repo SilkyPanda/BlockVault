@@ -12,7 +12,10 @@ public final class VaultFile {
     public static final int MAX_BYTES = 8 * 1024 * 1024;
     public static final int MIN_KDF_ITERATIONS = 210_000;
     public static final int MAX_KDF_ITERATIONS = 2_000_000;
-    public static final int MASTER_PASSWORD_KEY_MODE = 2;
+    // Fixed wire values of the container prefix (the vault is always master-password protected, PBKDF2-HMAC-SHA512).
+    private static final int FORMAT_VERSION = 1;
+    private static final int KEY_MODE_MASTER_PASSWORD = 2;
+    private static final int KDF_PBKDF2_HMAC_SHA512 = 1;
     private static final byte[] MAGIC = "BVLT".getBytes(StandardCharsets.US_ASCII);
     private static final int PREFIX_BYTES = 28;
 
@@ -20,10 +23,9 @@ public final class VaultFile {
     }
 
     /** Header fields authenticated by the vault format. */
-    public record Header(int keyModeId, int kdfId, int reserved, int iterations, byte[] salt) {
+    public record Header(int iterations, byte[] salt) {
         public Header {
-            if (keyModeId != MASTER_PASSWORD_KEY_MODE || salt == null || salt.length != 16
-                    || kdfId != 1 || reserved != 0 || iterations < MIN_KDF_ITERATIONS
+            if (salt == null || salt.length != 16 || iterations < MIN_KDF_ITERATIONS
                     || iterations > MAX_KDF_ITERATIONS) {
                 throw new IllegalArgumentException("Invalid vault header");
             }
@@ -87,19 +89,19 @@ public final class VaultFile {
             throw new IllegalArgumentException("Invalid vault magic");
         }
         int version = Byte.toUnsignedInt(input.get());
-        if (version != 1) {
+        if (version != FORMAT_VERSION) {
             throw new UnsupportedVaultVersionException();
         }
-        int keyModeId = Byte.toUnsignedInt(input.get());
+        int keyMode = Byte.toUnsignedInt(input.get());
         int kdfId = Byte.toUnsignedInt(input.get());
         int reserved = Byte.toUnsignedInt(input.get());
         int iterations = input.getInt();
         byte[] salt = new byte[16];
         input.get(salt);
-        if (iterations < MIN_KDF_ITERATIONS || iterations > MAX_KDF_ITERATIONS || kdfId != 1 || reserved != 0) {
-            throw new IllegalArgumentException("Invalid KDF header");
+        if (keyMode != KEY_MODE_MASTER_PASSWORD || kdfId != KDF_PBKDF2_HMAC_SHA512 || reserved != 0) {
+            throw new IllegalArgumentException("Invalid vault header");
         }
-        Header header = new Header(keyModeId, kdfId, reserved, iterations, salt);
+        Header header = new Header(iterations, salt);
         int wrapLength = Short.toUnsignedInt(input.getShort());
         if (wrapLength > input.remaining() - 16 - 12 - 4) {
             throw new IllegalArgumentException("Invalid wrapped key length");
@@ -119,8 +121,15 @@ public final class VaultFile {
         return new Parsed(header, wrapped, nonce, ciphertext, aad);
     }
 
+    /** Returns the authenticated container prefix (magic, format fields, iterations, salt) for the header. */
+    public static byte[] prefix(Header header) {
+        ByteBuffer bytes = ByteBuffer.allocate(PREFIX_BYTES).order(ByteOrder.BIG_ENDIAN);
+        putPrefix(bytes, header);
+        return bytes.array();
+    }
+
     private static void putPrefix(ByteBuffer out, Header header) {
-        out.put(MAGIC).put((byte) 1).put((byte) header.keyModeId()).put((byte) header.kdfId())
-                .put((byte) header.reserved()).putInt(header.iterations()).put(header.salt());
+        out.put(MAGIC).put((byte) FORMAT_VERSION).put((byte) KEY_MODE_MASTER_PASSWORD)
+                .put((byte) KDF_PBKDF2_HMAC_SHA512).put((byte) 0).putInt(header.iterations()).put(header.salt());
     }
 }

@@ -417,10 +417,10 @@ final class LoginSessionTest {
         void credential(String secret) { credential = new SavedCredential(account(secret, Account.Status.VERIFIED), true, null, false); }
         void pendingCredential(String secret) { credential = new SavedCredential(account(secret, Account.Status.PENDING), true, null, false); }
         private static Account account(String secret, Account.Status status) {
-            return new Account("Alex", secret.toCharArray(), status, 0, 0, 0, null);
+            return new Account("Alex", secret.toCharArray(), status, 0, 0, 0);
         }
         private static Account account(char[] secret, Account.Status status) {
-            return new Account("Alex", secret, status, 0, 0, 0, null);
+            return new Account("Alex", secret, status, 0, 0, 0);
         }
     }
 

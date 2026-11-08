@@ -1,37 +1,82 @@
 # BlockVault
 
-BlockVault is a client-side password manager for Minecraft servers with login plugins. It stores server credentials in an encrypted local vault and does not connect to external services.
+BlockVault is a client-side password manager mod for Minecraft servers that use login plugins (AuthMe-style `/register` and `/login`). It keeps one unique, generated password per server in an encrypted local vault and fills it in for you when the server asks. It never connects to any external service.
 
-**Alpha software:** do not use passwords you care about yet. Built-in prompt and result detection is English-only. Vault files are stored in the platform-specific BlockVault data folder listed below.
+Runs on **Minecraft 26.3** with **Fabric** or **NeoForge** (Java 25).
 
-Copyright © 2026 SilkyPanda. BlockVault is free software licensed under the GNU General Public License, version 3 only. See [LICENSE](LICENSE).
+> ## ⚠️ Alpha: please read first
+>
+> **Do not use BlockVault as your daily driver yet. Keep your own copy of your passwords** (write them down or store them in a real password manager) so you can never be locked out of an account.
+>
+> BlockVault was coded mainly by Codex (OpenAI). I have tested the code and its features myself, but it is **not complete enough for a public release** and needs human contributors to test it and fix what is broken.
+>
+> **If you find a bug or have an improvement, please [open an issue](https://github.com/SilkyPanda/BlockVault/issues) or a pull request.** Reports from real servers are the most useful thing you can send.
 
-## Use
+## What it does
 
-- Open or lock the vault from Mod Menu on Fabric or the mod config screen.
-- On a recognized register prompt, review the generated password and confirm before BlockVault sends it. Verified saved logins can autofill on later joins. Pending logins require confirmation.
-- Manage saved accounts, server login settings, backups, import/export, and vault security from the vault and settings screens. YACL is optional; a native settings screen is used when it is unavailable.
-- When enabled, bare `/login` sends the verified saved password to the connected server. This is a client-side shortcut for the server's `/login` command.
-- Add extra prompt, result, or command-name rules in `patterns.json` in BlockVault's data folder. Follow the JSON structure in `core/src/main/resources/assets/blockvault/patterns/default.json`; custom rules are appended to the built-ins, and invalid entries are skipped. The file is read when a server connection starts, so reconnect after editing it.
+- **Registers for you.** When a server asks you to register, BlockVault generates a strong password, shows it on a card, and sends it only after you confirm.
+- **Logs in for you.** Saved, verified logins are filled in automatically on later joins. Typing a bare `/login` also sends the saved password (this can be switched off).
+- **Encrypted vault.** Passwords are stored in a local file encrypted with AES-256-GCM. The key comes from your master password (PBKDF2-HMAC-SHA512).
+- **Safety nets.** Deleted accounts go to a 60-day trash, automatic backups are kept, and the vault can be exported and imported (always with a preview first).
+- **Privacy options.** A streamer mode hides server and account names, and typed login commands can be kept out of your chat history.
 
-## Data and security
+## Install
 
-Vault data is stored outside the game directory: `%LOCALAPPDATA%/BlockVault` on Windows, `~/Library/Application Support/BlockVault` on macOS, and `$XDG_DATA_HOME/blockvault` or `~/.local/share/blockvault` on Linux. Set the Java property `blockvault.dataDir` to use another location.
+You need Minecraft 26.3 and one of:
 
-During vault creation, choose whether to trust this device. When enabled, BlockVault stores the vault key locally so it can unlock without asking for the master password. Anyone with access to your computer account and BlockVault data can then unlock it. BlockVault has no cloud sync or inactivity auto-lock. Passwords sent to a server go only to the Minecraft server you are connected to.
+| Loader | Also needed | Optional |
+|---|---|---|
+| Fabric (Loader 0.19.5 or newer) | Fabric API | Mod Menu, YACL |
+| NeoForge | none | YACL |
 
-Custom prompt detection is based on server messages and can be spoofed. Review generated or edited credentials before sending them. Copied passwords remain on the clipboard.
+Put the BlockVault jar in your `mods` folder. Without YACL, BlockVault shows its own simpler settings screen. With YACL installed, it uses YACL's.
 
-## Contributing
+## Using it
 
-The project targets Java 25. Each loader and the pure-Java core has its own Gradle wrapper. Run `./gradlew build` in `fabric/` and `neoforge/`, and `./gradlew test` in `core/`.
+1. Open the settings from Mod Menu (Fabric) or the mod list (NeoForge), then open the vault. The first time, you create a master password (8 to 256 characters) and choose whether to trust this device (see below).
+2. Join a server with a login plugin. On a register prompt, review the generated password on the card and confirm it. On a login prompt, BlockVault fills in the saved password.
+3. Manage saved accounts, per-account autofill and command format, the trash, backups, import/export and the master password from the vault and settings screens.
 
-- `core/`: vault storage, cryptography, password generation, detection, and session logic.
-- `shared-client/`: Minecraft screens, settings, hooks, and mixins.
-- `fabric/` and `neoforge/`: loader entry points and event integration.
+Things to know:
 
-Fabric API is required on Fabric. YACL and Mod Menu are optional; settings remain available through the native fallback without YACL.
+- **Prompt detection is English-only.** On servers that talk in another language, registration is not confirmed automatically and you may need to confirm the pending login yourself.
+- You can add your own prompt, result or command-name rules in `patterns.json` in the data folder (copy the structure of [`default.json`](core/src/main/resources/assets/blockvault/patterns/default.json)). The file is read when you join a server.
+- BlockVault only listens for login prompts for a short time after you join a server.
 
-Source code: [GitHub](https://github.com/SilkyPanda/BlockVault). BlockVault is GPL-3.0-only.
+## Where your data lives
 
-Before treating behavior as verified, work through [the manual test checklist](TEST_CHECKLIST.md). Design and merge rules are in [DESIGN.md](DESIGN.md) and [CONFLICT_HANDLING.md](CONFLICT_HANDLING.md).
+Everything is stored outside the game folder:
+
+- Windows: `%LOCALAPPDATA%/BlockVault`
+- macOS: `~/Library/Application Support/BlockVault`
+- Linux: `$XDG_DATA_HOME/blockvault` or `~/.local/share/blockvault`
+
+You can use another folder with the Java property `blockvault.dataDir`.
+
+## Security notes
+
+- **Trust this device.** When on (the default), BlockVault stores the vault key on this computer so it can unlock without asking for your master password. Anyone who can read your user account's files can then open the vault. Turn it off to be asked every launch.
+- There is no cloud sync and no automatic lock after inactivity.
+- Copied passwords stay on your clipboard until you replace them.
+- A password is only ever sent to the Minecraft server you are connected to. Prompt detection reads server messages, which a server or another player's chat can imitate, so look at what a card shows before you confirm it.
+- Memory wiping of secrets is best effort; Java does not guarantee it.
+
+## Building
+
+The project targets Java 25. The pure-Java `core` and each loader have their own Gradle wrapper:
+
+```
+cd core      && ./gradlew test
+cd fabric    && ./gradlew build
+cd neoforge  && ./gradlew build
+```
+
+- `core/`: vault storage, encryption, password generation, prompt detection, login logic (no Minecraft dependency, fully unit-tested)
+- `shared-client/`: screens, settings, hooks and mixins
+- `fabric/`, `neoforge/`: loader entry points
+
+[ARCHITECTURE.md](ARCHITECTURE.md) explains how the pieces fit together and the rules the code follows. Pull requests are welcome. Please run the core tests, and try your change in the game on at least one loader.
+
+## License
+
+Copyright © 2026 SilkyPanda. BlockVault is free software under the **GNU General Public License v3.0 only**. See [LICENSE](LICENSE).

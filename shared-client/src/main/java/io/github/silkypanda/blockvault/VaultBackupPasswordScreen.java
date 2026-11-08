@@ -60,7 +60,7 @@ final class VaultBackupPasswordScreen extends BlockVaultScreen implements BlockV
                 statusKey = "blockvault.backup.older_password.failed";
                 return;
             }
-            Minecraft.getInstance().setScreenAndShow(new VaultBackupDetailScreen(backup, contents, parent, forRestore));
+            ScreenSwitcher.show(new VaultBackupDetailScreen(backup, contents, parent, forRestore));
             Arrays.fill(forRestore, '\0');
         });
     }

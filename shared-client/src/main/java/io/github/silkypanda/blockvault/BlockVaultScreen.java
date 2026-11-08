@@ -14,11 +14,12 @@ abstract class BlockVaultScreen extends Screen {
         this.parent = parent;
     }
 
-    protected final void returnToParent() {
-        Minecraft.getInstance().setScreenAndShow(parent);
-    }
+    /** The screen that opened this one, or {@code null} when it was opened from the game. */
+    final Screen parentScreen() { return parent; }
 
-    @Override public void onClose() { super.onClose(); }
+    protected final void returnToParent() {
+        ScreenSwitcher.show(parent);
+    }
 
     /** Returns the first Y coordinate for a vertically centered stack with the given total height. */
     protected final int centeredVerticalTop(int totalHeight) {

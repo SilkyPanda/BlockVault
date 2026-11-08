@@ -13,12 +13,13 @@ final class VaultSettingsScreenFactory {
 
     /** Creates a settings screen and records optional YACL screens. Call on the game thread. */
     static Screen create(Screen parent) {
+        BlockVaultConfig.currentLoaded();
         try {
-            Class<?> yaclScreen = Class.forName("io.github.silkypanda.blockvault.VaultYaclSettingsScreen");
-            Screen screen = (Screen) yaclScreen.getDeclaredConstructor(Screen.class).newInstance(parent);
+            Class<?> yacl = Class.forName("io.github.silkypanda.blockvault.VaultYaclSettings");
+            Screen screen = (Screen) yacl.getDeclaredMethod("create", Screen.class).invoke(null, parent);
             YACL_SCREENS.add(screen);
             return screen;
-        } catch (ReflectiveOperationException | LinkageError unavailable) {
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException unavailable) {
             return new VaultNativeSettingsScreen(parent);
         }
     }

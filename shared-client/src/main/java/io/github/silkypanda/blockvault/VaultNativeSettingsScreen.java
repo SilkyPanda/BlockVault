@@ -1,6 +1,5 @@
 package io.github.silkypanda.blockvault;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
@@ -13,7 +12,6 @@ import net.minecraft.network.chat.Component;
 /** Native settings and vault-management fallback used when YACL is not installed. */
 final class VaultNativeSettingsScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
     private BlockVaultConfig.Settings settings = BlockVaultConfig.Settings.defaults();
-    private boolean loaded;
     private int hintY = -1;
 
     VaultNativeSettingsScreen(Screen parent) {
@@ -22,17 +20,9 @@ final class VaultNativeSettingsScreen extends BlockVaultScreen implements BlockV
 
     @Override
     protected void init() {
-        if (!loaded) {
-            BlockVaultConfig.load(value -> {
-                if (Minecraft.getInstance().gui.screen() == this) {
-                    settings = value;
-                    loaded = true;
-                    clearWidgets();
-                    init();
-                }
-            });
-            return;
-        }
+        // Built straight from the loaded settings. Showing an empty "loading" screen first and filling it in a
+        // few frames later reads as a flicker.
+        settings = BlockVaultConfig.currentLoaded();
         int contentWidth = Math.max(1, Math.min(420, width - 24));
         int left = (width - contentWidth) / 2;
         int rowCount = 13;
@@ -78,9 +68,9 @@ final class VaultNativeSettingsScreen extends BlockVaultScreen implements BlockV
         addAction(left + buttonWidth + gap, actionY + rowStep, buttonWidth, rowHeight, "blockvault.transfer.import.short", "blockvault.transfer.import.help",
                 () -> VaultRuntime.openImportScreen(this));
         addAction(left, actionY + rowStep * 2, buttonWidth, rowHeight, "blockvault.transfer.export.short", "blockvault.transfer.export.help",
-                () -> Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(this, false)));
+                () -> ScreenSwitcher.show(new VaultTransferScreen(this, false)));
         addAction(left + buttonWidth + gap, actionY + rowStep * 2, buttonWidth, rowHeight, "blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
-                () -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(this)));
+                () -> ScreenSwitcher.show(new VaultEraseScreen(this)));
         addRenderableWidget(Button.builder(Component.translatable("blockvault.vault.back"), button ->
                 returnToParent()).bounds(left, actionY + rowStep * 3, contentWidth, rowHeight).build());
         int backBottom = actionY + rowStep * 3 + rowHeight;
@@ -89,10 +79,17 @@ final class VaultNativeSettingsScreen extends BlockVaultScreen implements BlockV
 
     private void addToggle(int x, int y, int controlWidth, int controlHeight, String key, String tooltipKey, boolean value,
                            java.util.function.Consumer<Boolean> change) {
-        String label = Component.translatable(value ? "options.on" : "options.off").getString();
-        Component message = Component.translatable(key).append(Component.literal(": ")).append(Component.literal(label));
-        addRenderableWidget(Button.builder(message, button -> change.accept(!value)).bounds(x, y, controlWidth, controlHeight)
-                .tooltip(Tooltip.create(Component.translatable(tooltipKey))).build());
+        boolean[] state = {value};
+        addRenderableWidget(Button.builder(toggleMessage(key, value), button -> {
+            state[0] = !state[0];
+            button.setMessage(toggleMessage(key, state[0]));
+            change.accept(state[0]);
+        }).bounds(x, y, controlWidth, controlHeight).tooltip(Tooltip.create(Component.translatable(tooltipKey))).build());
+    }
+
+    private static Component toggleMessage(String key, boolean value) {
+        return Component.translatable(key).append(Component.literal(": "))
+                .append(Component.translatable(value ? "options.on" : "options.off"));
     }
 
     private void addAction(int x, int y, int buttonWidth, int buttonHeight, String key, String tooltipKey, Runnable action) {
@@ -148,9 +145,12 @@ final class VaultNativeSettingsScreen extends BlockVaultScreen implements BlockV
 
     private Button addValue(int x, int y, int controlWidth, int controlHeight, String key, String tooltipKey,
                             java.util.function.Supplier<Component> value, Runnable next) {
-        Component label = Component.translatable(key).append(Component.literal(": ")).append(value.get());
-        Button button = Button.builder(label, pressed -> next.run()).bounds(x, y, controlWidth, controlHeight)
-                .tooltip(Tooltip.create(Component.translatable(tooltipKey))).build();
+        java.util.function.Supplier<Component> label = () -> Component.translatable(key)
+                .append(Component.literal(": ")).append(value.get());
+        Button button = Button.builder(label.get(), pressed -> {
+            next.run();
+            pressed.setMessage(label.get());
+        }).bounds(x, y, controlWidth, controlHeight).tooltip(Tooltip.create(Component.translatable(tooltipKey))).build();
         addRenderableWidget(button);
         return button;
     }
@@ -159,29 +159,21 @@ final class VaultNativeSettingsScreen extends BlockVaultScreen implements BlockV
         update(change, () -> { });
     }
 
+    /** Applies a change on screen and in the live session at once, then saves it in the background. */
     private void update(java.util.function.UnaryOperator<BlockVaultConfig.Settings> change, Runnable afterSave) {
+        settings = change.apply(settings);
+        Hooks.applySettings(settings);
         BlockVaultConfig.update(change, saved -> {
-            if (!saved) {
-                VaultRuntime.showToast("blockvault.vault.error");
-                return;
-            }
-            settings = change.apply(settings);
-            Hooks.applySettings(settings);
-            afterSave.run();
-            if (Minecraft.getInstance().gui.screen() == this) {
-                clearWidgets();
-                init();
-            }
+            if (!saved) VaultRuntime.showToast("blockvault.vault.error");
+            else afterSave.run();
         });
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        if (loaded && hintY >= 0) graphics.centeredText(font,
+        if (hintY >= 0) graphics.centeredText(font,
                 Component.translatable("blockvault.settings.native.hint"), width / 2, hintY, 0xffaaa5b5);
-        if (!loaded) graphics.centeredText(font, Component.translatable("blockvault.settings.loading"), width / 2,
-                height / 2, 0xffaaaaaa);
     }
 
     @Override public boolean isPauseScreen() { return false; }

@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test;
 final class VaultJsonTest {
     @Test
     void currentSchemaRoundTripPreservesCredentialAndMasksAccountString() {
-        Account account = new Account("Alex", "secret".toCharArray(), Account.Status.VERIFIED, 1, 2, 3, null);
-        ServerEntry server = new ServerEntry("id", "server", List.of("example.org:25565"), true, "authme", List.of(account));
+        Account account = new Account("Alex", "secret".toCharArray(), Account.Status.VERIFIED, 1, 2, 3);
+        ServerEntry server = new ServerEntry("id", "server", List.of("example.org:25565"), List.of(account));
         Vault result = VaultJson.read(VaultJson.write(new Vault(Vault.VERSION, List.of(server))));
         assertTrue(VaultJson.write(result).length > 0);
         assertEquals("secret", new String(result.servers().getFirst().accounts().getFirst().password()));
@@ -19,24 +19,35 @@ final class VaultJsonTest {
     }
 
 
-    @org.junit.jupiter.api.Test
-    void unknownFieldsAtEveryLevelSurviveReadAndWrite() {
-        String json = "{\"v\":2,\"futureRoot\":{\"a\":1},\"servers\":[{\"id\":\"s\",\"name\":\"n\",\"hosts\":[\"h:25565\"],"
-                + "\"neverSave\":false,\"autofill\":true,\"template\":\"auto\",\"futureServer\":[1,2],"
-                + "\"accounts\":[{\"user\":\"Alex\",\"pass\":\"pw\",\"status\":\"VERIFIED\",\"created\":1,"
-                + "\"modified\":2,\"used\":3,\"note\":\"keep me\"}]}],"
-                + "\"trash\":[{\"id\":\"t\",\"deletedAt\":5,\"whole\":false,\"futureTrash\":true,\"server\":{\"id\":\"s\","
-                + "\"name\":\"n\",\"hosts\":[\"h:25565\"],\"neverSave\":false,\"autofill\":true,\"template\":\"auto\","
-                + "\"accounts\":[]}}]}";
+    @Test
+    void perAccountSettingsRoundTrip() {
+        Account account = new Account("Alex", "secret".toCharArray(), Account.Status.PENDING, 1, 2, 3, false, "authme", null);
+        ServerEntry server = new ServerEntry("id", "server", List.of("example.org:25565"), List.of(account));
+        Account read = VaultJson.read(VaultJson.write(new Vault(Vault.VERSION, List.of(server))))
+                .servers().getFirst().accounts().getFirst();
+        assertEquals(Account.Status.PENDING, read.status());
+        assertEquals(false, read.autofill());
+        assertEquals("authme", read.templateId());
+    }
+
+    @Test
+    void malformedAccountBecomesAnUnusablePlaceholderAndIsWrittenBackUnchanged() {
+        String json = "{\"v\":1,\"servers\":[{\"id\":\"s\",\"name\":\"n\",\"hosts\":[\"h:25565\"],\"accounts\":["
+                + "{\"user\":\"Alex\",\"pass\":\"pw-12345\",\"status\":\"VERIFIED\",\"created\":1,\"modified\":2,"
+                + "\"used\":3,\"autofill\":true,\"template\":\"auto\"},"
+                + "{\"user\":\"Broken\",\"status\":\"NOT_A_STATUS\"}]}],\"trash\":[]}";
         Vault vault = VaultJson.read(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        List<Account> accounts = vault.servers().getFirst().accounts();
+        assertEquals(2, accounts.size());
+        assertTrue(accounts.get(0).isValidForUse());
+        org.junit.jupiter.api.Assertions.assertFalse(accounts.get(1).isValidForUse());
         String written = new String(VaultJson.write(vault), java.nio.charset.StandardCharsets.UTF_8);
-        com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(written).getAsJsonObject();
-        org.junit.jupiter.api.Assertions.assertEquals(1, root.getAsJsonObject("futureRoot").get("a").getAsInt());
-        com.google.gson.JsonObject server = root.getAsJsonArray("servers").get(0).getAsJsonObject();
-        org.junit.jupiter.api.Assertions.assertEquals(2, server.getAsJsonArray("futureServer").size());
-        org.junit.jupiter.api.Assertions.assertEquals("keep me",
-                server.getAsJsonArray("accounts").get(0).getAsJsonObject().get("note").getAsString());
-        org.junit.jupiter.api.Assertions.assertTrue(
-                root.getAsJsonArray("trash").get(0).getAsJsonObject().get("futureTrash").getAsBoolean());
+        assertTrue(written.contains("NOT_A_STATUS"));
+    }
+
+    @Test
+    void otherSchemaVersionsAreRejected() {
+        byte[] other = "{\"v\":2,\"servers\":[],\"trash\":[]}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertThrows(UnsupportedVaultVersionException.class, () -> VaultJson.read(other));
     }
 }

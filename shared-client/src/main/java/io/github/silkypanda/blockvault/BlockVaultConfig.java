@@ -20,14 +20,29 @@ final class BlockVaultConfig {
 
     static Settings current() { return current; }
 
-    static void resetAfterDataErasure() {
+    /**
+     * Returns the settings, reading {@code config.json} first if that has not happened yet. The file is a few hundred
+     * bytes and is read at most once per launch (it is normally preloaded in the background at startup), so
+     * opening a settings screen never has to show a "loading" state.
+     */
+    static synchronized Settings currentLoaded() {
+        if (!loaded) loadFromDisk();
+        return current;
+    }
+
+    /** Starts reading {@code config.json} on the background thread so it is ready before any screen needs it. */
+    static void preload() {
+        BackgroundExecutor.submit(() -> { currentLoaded(); return null; });
+    }
+
+    static synchronized void resetAfterDataErasure() {
         current = Settings.defaults();
         loaded = false;
     }
 
     static void load(Consumer<Settings> result) {
         BackgroundExecutor.submit(() -> {
-            if (!loaded) loadOnBackgroundThread();
+            currentLoaded();
             BackgroundExecutor.onGameThread(() -> result.accept(current));
             return null;
         });
@@ -36,7 +51,7 @@ final class BlockVaultConfig {
     static void update(UnaryOperator<Settings> change, Consumer<Boolean> result) {
         BackgroundExecutor.submit(() -> {
             try {
-                if (!loaded) loadOnBackgroundThread();
+                currentLoaded();
                 Settings next = change.apply(current);
                 write(DataDirs.resolve().resolve("config.json"), next);
                 current = next;
@@ -51,7 +66,7 @@ final class BlockVaultConfig {
 
     /** Persists the trust choice made on the vault creation screen on the config worker. */
     static void saveTrustDeviceChoice(boolean enabled) throws Exception {
-        if (!loaded) loadOnBackgroundThread();
+        currentLoaded();
         Settings next = current.withTrustDevice(enabled);
         write(DataDirs.resolve().resolve("config.json"), next);
         current = next;
@@ -61,7 +76,7 @@ final class BlockVaultConfig {
      * Reads {@code config.json}. An unreadable file is moved aside to {@code config.json.bad} and defaults are used
      * (with trusted-device unlock off for safety), so the problem is logged once and settings stay changeable.
      */
-    private static void loadOnBackgroundThread() {
+    private static void loadFromDisk() {
         Path path;
         try { path = DataDirs.resolve().resolve("config.json"); }
         catch (RuntimeException failure) { current = Settings.defaults().withTrustDevice(false); loaded = true; return; }

@@ -42,7 +42,7 @@ final class VaultRecoveryScreen extends BlockVaultScreen implements BlockVaultMa
         for (int i = 0; i < visible.size(); i++) {
             BackupSummary summary = visible.get(i);
             Button button = Button.builder(Component.literal(backupLabel(summary)), ignored -> {
-                        if (recoveryMode) net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
+                        if (recoveryMode) ScreenSwitcher.show(
                                 new VaultBackupRecoveryScreen(summary, this));
                         else inspect(summary);
                     })
@@ -93,10 +93,10 @@ final class VaultRecoveryScreen extends BlockVaultScreen implements BlockVaultMa
                 return;
             }
             if (contents == null) {
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
+                ScreenSwitcher.show(
                         new VaultBackupPasswordScreen(summary, this));
             } else {
-                net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
+                ScreenSwitcher.show(
                         new VaultBackupDetailScreen(summary, contents, this));
             }
         });

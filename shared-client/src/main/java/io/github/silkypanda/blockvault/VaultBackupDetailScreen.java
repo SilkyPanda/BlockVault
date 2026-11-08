@@ -128,7 +128,7 @@ final class VaultBackupDetailScreen extends BlockVaultScreen implements BlockVau
 
     private void requestDelete() {
         if (busy) return;
-        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(new VaultConfirmScreen(this,
+        ScreenSwitcher.show(new VaultConfirmScreen(this,
                 "blockvault.data.confirm.title", "blockvault.backup.delete.warning", "blockvault.backup.delete",
                 () -> {
                     busy = true;

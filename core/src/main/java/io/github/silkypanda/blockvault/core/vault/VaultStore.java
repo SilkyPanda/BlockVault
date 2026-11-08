@@ -80,8 +80,8 @@ public final class VaultStore {
         byte[] salt = SecureBytes.random(16);
         try {
             int iterations = calibratedKdfIterations();
-            header = new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, iterations, salt);
-            MasterPasswordKek kek = masterKek(masterPassword, salt, iterations, prefix(header));
+            header = new VaultFile.Header(iterations, salt);
+            MasterPasswordKek kek = masterKek(masterPassword, salt, iterations, VaultFile.prefix(header));
             try { wrappedKey = kek.wrap(vaultKey = SecureBytes.random(32)); }
             finally { kek.clear(); }
             vault = Vault.empty();
@@ -312,8 +312,7 @@ public final class VaultStore {
                         VaultFile.Parsed disk = VaultFile.parse(diskBytes);
                         byte[] diskJson = AesGcm.decrypt(vaultKey, disk.dataNonce(), disk.headerAad(), disk.ciphertext());
                         try {
-                            boolean diskChanged = diskDigest == null || !Arrays.equals(diskDigest, currentDigest);
-                            toSave = VaultMerger.merge(toSave, VaultJson.read(diskJson), System.currentTimeMillis(), diskChanged);
+                            toSave = VaultMerger.merge(toSave, VaultJson.read(diskJson), System.currentTimeMillis());
                             // Another instance may have changed the master password since we last looked.
                             header = disk.header();
                             wrappedKey = disk.wrappedKey();
@@ -563,7 +562,7 @@ public final class VaultStore {
         if (java.util.Arrays.equals(oldPassword, newPassword)) {
             throw new IllegalArgumentException("New master password must differ from the current password");
         }
-        MasterPasswordKek oldProvider = masterKek(oldPassword, header.salt(), header.iterations(), prefix(header));
+        MasterPasswordKek oldProvider = masterKek(oldPassword, header.salt(), header.iterations(), VaultFile.prefix(header));
         byte[] verifiedKey;
         try {
             verifiedKey = oldProvider.unwrap(wrappedKey);
@@ -582,8 +581,8 @@ public final class VaultStore {
         boolean committed = false;
         try {
             int iterations = calibratedKdfIterations();
-            final VaultFile.Header nextHeader = new VaultFile.Header(VaultFile.MASTER_PASSWORD_KEY_MODE, 1, 0, iterations, salt);
-            MasterPasswordKek provider = masterKek(newPassword, salt, iterations, prefix(nextHeader));
+            final VaultFile.Header nextHeader = new VaultFile.Header(iterations, salt);
+            MasterPasswordKek provider = masterKek(newPassword, salt, iterations, VaultFile.prefix(nextHeader));
             final byte[] nextWrapped;
             try { nextWrapped = provider.wrap(newKey); }
             finally { provider.clear(); }
@@ -782,13 +781,5 @@ public final class VaultStore {
     private static MasterPasswordKek masterKek(char[] password, byte[] salt, int iterations, byte[] aad) {
         return new MasterPasswordKek(password, salt, iterations, aad);
     }
-
-    private static byte[] prefix(VaultFile.Header h) {
-        java.nio.ByteBuffer bytes = java.nio.ByteBuffer.allocate(28).order(java.nio.ByteOrder.BIG_ENDIAN);
-        bytes.put(new byte[] {'B', 'V', 'L', 'T'}).put((byte) 1).put((byte) h.keyModeId())
-                .put((byte) h.kdfId()).put((byte) h.reserved()).putInt(h.iterations()).put(h.salt());
-        return bytes.array();
-    }
-
 
 }

@@ -1,13 +1,11 @@
 package io.github.silkypanda.blockvault;
 
-import com.google.gson.JsonObject;
 import io.github.silkypanda.blockvault.core.host.HostKey;
 import io.github.silkypanda.blockvault.core.session.CommandTemplate;
 import io.github.silkypanda.blockvault.core.session.CredentialPassword;
 import io.github.silkypanda.blockvault.core.session.SavedCredential;
 import io.github.silkypanda.blockvault.core.session.VaultAccess;
 import io.github.silkypanda.blockvault.core.vault.Account;
-import io.github.silkypanda.blockvault.core.vault.AccountPreferences;
 import io.github.silkypanda.blockvault.core.vault.ServerEntry;
 import io.github.silkypanda.blockvault.core.vault.TrashEntry;
 import io.github.silkypanda.blockvault.core.vault.Usernames;
@@ -49,14 +47,13 @@ final class VaultAccountService implements VaultAccess {
                     .filter(value -> value.isValidForUse() && Usernames.same(value.username(), username))
                     .findFirst().orElse(null);
             Account callbackAccount = account == null ? null : copyAccount(account);
-            String templateId = server == null || account == null ? "auto"
-                    : AccountPreferences.template(account, server.templateId());
-            boolean templateExplicit = !"auto".equals(templateId);
+            String templateId = account == null ? Account.AUTO_TEMPLATE : account.templateId();
+            boolean templateExplicit = !Account.AUTO_TEMPLATE.equals(templateId);
             CommandTemplate template = CommandTemplate.builtins().getOrDefault(templateId,
                     CommandTemplate.builtins().get("authme"));
             SavedCredential saved = server == null ? null
-                    : new SavedCredential(callbackAccount, account != null
-                            && AccountPreferences.autofill(account, true), template, templateExplicit);
+                    : new SavedCredential(callbackAccount, account != null && account.autofill(), template,
+                            templateExplicit);
             BackgroundExecutor.onGameThread(() -> {
                 try { result.accept(saved); }
                 finally { if (callbackAccount != null) callbackAccount.clearPassword(); }
@@ -71,9 +68,11 @@ final class VaultAccountService implements VaultAccess {
         char[] copy = password.clone();
         unlock.withVault(() -> {
             try {
-                changeAccount(host, username, old -> new Account(username, copy, Account.Status.PENDING,
-                        old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
-                        old == null ? 0 : old.lastUsedAt(), old == null ? null : withoutPrevious(old)));
+                changeAccount(host, username, old -> {
+                    long now = System.currentTimeMillis();
+                    return old == null ? new Account(username, copy, Account.Status.PENDING, now, now, 0)
+                            : old.withCredential(copy, Account.Status.PENDING, now, old.lastUsedAt());
+                });
                 BackgroundExecutor.onGameThread(() -> saved.accept(true));
             } catch (Exception failure) {
                 BackgroundExecutor.onGameThread(() -> saved.accept(false));
@@ -82,14 +81,8 @@ final class VaultAccountService implements VaultAccess {
     }
 
     @Override public void markVerified(String host, String username) {
-        unlock.withVault(() -> changeAccount(host, username, old -> {
-            if (old == null) return null;
-            char[] secret = old.password();
-            try {
-                return new Account(username, secret, Account.Status.VERIFIED, old.createdAt(), old.modifiedAt(),
-                        System.currentTimeMillis(), withoutPrevious(old));
-            } finally { Arrays.fill(secret, '\0'); }
-        }));
+        unlock.withVault(() -> changeAccount(host, username,
+                old -> old == null ? null : old.verifiedAt(System.currentTimeMillis())));
     }
 
     @Override public void delete(String host, String username) {
@@ -119,9 +112,7 @@ final class VaultAccountService implements VaultAccess {
         char[] copy = password.clone();
         unlock.withVault(() -> {
             try {
-                changeAccount(host, username, old -> new Account(username, copy, Account.Status.VERIFIED,
-                        old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
-                        System.currentTimeMillis(), old == null ? null : withoutPrevious(old)));
+                changeAccount(host, username, old -> verifiedWith(old, username, copy));
             } finally { Arrays.fill(copy, '\0'); }
         });
     }
@@ -135,9 +126,7 @@ final class VaultAccountService implements VaultAccess {
             BackgroundExecutor.onGameThread(() -> result.accept(saved));
         };
         unlock.withVault(() -> {
-            changeAccount(host, username, old -> new Account(username, copy, Account.Status.VERIFIED,
-                    old == null ? System.currentTimeMillis() : old.createdAt(), System.currentTimeMillis(),
-                    System.currentTimeMillis(), old == null ? null : withoutPrevious(old)));
+            changeAccount(host, username, old -> verifiedWith(old, username, copy));
             finish.accept(true);
         }, () -> finish.accept(false), () -> finish.accept(false));
     }
@@ -201,8 +190,7 @@ final class VaultAccountService implements VaultAccess {
                     .anyMatch(account -> Usernames.same(account.username(), username));
             if (exists) return "blockvault.add.exists";
             long now = System.currentTimeMillis();
-            changeAccount(host, username, old -> new Account(username, password, Account.Status.VERIFIED,
-                    now, now, 0, new JsonObject()));
+            changeAccount(host, username, old -> new Account(username, password, Account.Status.VERIFIED, now, now, 0));
             return null;
         } catch (RuntimeException error) {
             return "blockvault.vault.error";
@@ -218,22 +206,23 @@ final class VaultAccountService implements VaultAccess {
         char[] copy = password.clone();
         unlock.withVault(() -> {
             try {
-                changeAccount(row.host(), row.username(), old -> new Account(row.username(), copy,
-                        Account.Status.VERIFIED, old == null ? System.currentTimeMillis() : old.createdAt(),
-                        System.currentTimeMillis(), old == null ? 0 : old.lastUsedAt(),
-                        old == null ? null : withoutPrevious(old)));
+                changeAccount(row.host(), row.username(), old -> {
+                    long now = System.currentTimeMillis();
+                    return old == null ? new Account(row.username(), copy, Account.Status.VERIFIED, now, now, 0)
+                            : old.withCredential(copy, Account.Status.VERIFIED, now, old.lastUsedAt());
+                });
                 BackgroundExecutor.onGameThread(() -> VaultRuntime.toast("blockvault.toast.saved"));
             } finally { Arrays.fill(copy, '\0'); }
         });
     }
 
     void updateAutofill(VaultRow row, boolean autofill) {
-        updatePreference(row, account -> AccountPreferences.withAutofill(account, autofill));
+        updatePreference(row, account -> account.withAutofill(autofill));
     }
 
     void updateTemplate(VaultRow row, String templateId) {
-        if (!"auto".equals(templateId) && !CommandTemplate.builtins().containsKey(templateId)) return;
-        updatePreference(row, account -> AccountPreferences.withTemplate(account, templateId));
+        if (!Account.AUTO_TEMPLATE.equals(templateId) && !CommandTemplate.builtins().containsKey(templateId)) return;
+        updatePreference(row, account -> account.withTemplate(templateId));
     }
 
     private void updatePreference(VaultRow row, UnaryOperator<Account> change) {
@@ -357,8 +346,7 @@ final class VaultAccountService implements VaultAccess {
         for (ServerEntry server : vault.servers()) {
             String host = server.hosts().stream().findFirst().orElse(server.name());
             for (Account account : server.accounts()) result.add(new VaultRow(server.name(), host, account.username(),
-                    account.status(), AccountPreferences.autofill(account, true),
-                    AccountPreferences.template(account, "auto"), !account.isValidForUse()));
+                    account.status(), account.autofill(), account.templateId(), !account.isValidForUse()));
         }
         return List.copyOf(result);
     }
@@ -380,7 +368,7 @@ final class VaultAccountService implements VaultAccess {
         List<ServerEntry> servers = new ArrayList<>(current.servers());
         int serverIndex = indexOfServer(servers, host);
         ServerEntry server = serverIndex < 0
-                ? new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), true, "auto", List.of())
+                ? new ServerEntry(UUID.randomUUID().toString(), host, List.of(host), List.of())
                 : servers.get(serverIndex);
         List<Account> accounts = new ArrayList<>(server.accounts());
         int accountIndex = -1;
@@ -394,11 +382,7 @@ final class VaultAccountService implements VaultAccess {
         }
         Account replacement = update.apply(existing);
         if (replacement != null && existing != null && !replacement.username().equals(existing.username())) {
-            char[] password = replacement.password();
-            try {
-                replacement = new Account(existing.username(), password, replacement.status(), replacement.createdAt(),
-                        replacement.modifiedAt(), replacement.lastUsedAt(), replacement.metadata());
-            } finally { Arrays.fill(password, '\0'); }
+            replacement = replacement.withUsername(existing.username());
         }
         if (replacement == null && accountIndex < 0 && serverIndex < 0) return;
         if (replacement == null && accountIndex >= 0) accounts.remove(accountIndex);
@@ -431,17 +415,12 @@ final class VaultAccountService implements VaultAccess {
         return -1;
     }
 
-    private static Account copyAccount(Account source) {
-        char[] password = source.password();
-        try {
-            return new Account(source.username(), password, source.status(), source.createdAt(), source.modifiedAt(),
-                    source.lastUsedAt(), source.metadata());
-        } finally { Arrays.fill(password, '\0'); }
-    }
+    private static Account copyAccount(Account source) { return source.copy(); }
 
-    private static JsonObject withoutPrevious(Account account) {
-        JsonObject fields = account.metadata();
-        fields.remove("blockvaultPrevious");
-        return fields;
+    /** A verified, just-used account holding the given password; an existing account keeps its settings. */
+    private static Account verifiedWith(Account old, String username, char[] password) {
+        long now = System.currentTimeMillis();
+        return old == null ? new Account(username, password, Account.Status.VERIFIED, now, now, now)
+                : old.withCredential(password, Account.Status.VERIFIED, now, now);
     }
 }

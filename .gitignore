@@ -1,3 +1,4 @@
+# Build output and tooling
 .gradle/
 build/
 out/
@@ -14,3 +15,15 @@ run/
 /api-dump-neoforge/
 /test/
 /.ci-artifacts/
+
+# Working notes that are not part of the project (kept locally, never uploaded by `git add -A`).
+# Reviews, status, test checklists, decision logs and AI-assistant history live in dev-notes/.
+/dev-notes/
+/BlockVault-review*.md
+/STATUS.md
+/TEST_CHECKLIST.md
+/CHANGES.md
+/DECISIONS.md
+/DESIGN.md
+/CONFLICT_HANDLING.md
+/*.patch

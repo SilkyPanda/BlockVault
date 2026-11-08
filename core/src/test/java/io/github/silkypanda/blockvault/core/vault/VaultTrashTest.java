@@ -25,7 +25,7 @@ final class VaultTrashTest {
     }
 
     @Test
-    void deletingTheLastAccountMovesItsServerSettingsIntoTrashForRestore() {
+    void deletingTheLastAccountMovesItsServerIntoTrashForRestore() {
         ServerEntry server = vault(account("Alex", "a", 1)).servers().getFirst();
         Vault trashed = VaultTrash.trashAccount(vault(account("Alex", "a", 1)), "id", "Alex", 1000);
         assertTrue(trashed.servers().isEmpty());
@@ -33,15 +33,14 @@ final class VaultTrashTest {
         assertEquals(1, trashed.trash().getFirst().server().accounts().size());
         Vault restored = VaultTrash.restore(trashed, trashed.trash().getFirst().id(), 2000);
         assertEquals(1, restored.servers().size());
-        assertEquals(server.autofill(), restored.servers().getFirst().autofill());
+        assertEquals(server.hosts(), restored.servers().getFirst().hosts());
     }
 
     @Test
     void restoringOverALiveAccountRestoresTheDeletedPassword() {
         Vault trashed = VaultTrash.trashAccount(vault(account("Alex", "old", 10)), "id", "Alex", 1000);
         // Restoring the deleted entry explicitly replaces the same username's live replacement.
-        Vault live = new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), true,
-                "auto", List.of(account("Alex", "new", 50)))), trashed.trash());
+        Vault live = new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), List.of(account("Alex", "new", 50)))), trashed.trash());
         Vault restored = VaultTrash.restore(live, trashed.trash().getFirst().id(), 2000);
         assertEquals("old", new String(restored.servers().getFirst().accounts().getFirst().password()));
         assertEquals(0, restored.trash().size());
@@ -70,11 +69,10 @@ final class VaultTrashTest {
     }
 
     private static Account account(String user, String password, long modified) {
-        return new Account(user, password.toCharArray(), Account.Status.VERIFIED, 1, modified, 0, null);
+        return new Account(user, password.toCharArray(), Account.Status.VERIFIED, 1, modified, 0);
     }
 
     private static Vault vault(Account... accounts) {
-        return new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), true,
-                "auto", List.of(accounts))));
+        return new Vault(Vault.VERSION, List.of(new ServerEntry("id", "name", List.of("host:25565"), List.of(accounts))));
     }
 }

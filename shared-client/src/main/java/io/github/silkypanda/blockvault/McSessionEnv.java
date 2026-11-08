@@ -77,7 +77,7 @@ final class McSessionEnv implements SessionEnv {
     private void display(PromptModel model) {
         waitingModel = null;
         activeCard = new CredentialConfirmScreen(model, session, this::showNext);
-        Minecraft.getInstance().gui.setScreen(activeCard);
+        ScreenSwitcher.show(activeCard);
     }
 
     private void pollForFreeScreen() {

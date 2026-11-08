@@ -34,7 +34,7 @@ final class VaultEraseScreen extends BlockVaultScreen implements BlockVaultManag
 
     private void requestConfirmation() {
         if (busy) return;
-        Minecraft.getInstance().setScreenAndShow(new VaultConfirmScreen(this,
+        ScreenSwitcher.show(new VaultConfirmScreen(this,
                 "blockvault.data.confirm.title",
                 "blockvault.data.erase.confirm.warning",
                 "blockvault.data.erase.confirm",

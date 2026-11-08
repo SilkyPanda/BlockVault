@@ -163,7 +163,6 @@ final class VaultListScreen extends BlockVaultScreen implements BlockVaultManage
         updateVisibleRows();
     }
 
-    net.minecraft.client.gui.screens.Screen parentScreen() { return parent; }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
@@ -207,7 +206,7 @@ final class VaultListScreen extends BlockVaultScreen implements BlockVaultManage
     @Override public boolean isPauseScreen() { return false; }
 
     private static final class MinecraftHolder {
-        private static void open(Screen screen) { net.minecraft.client.Minecraft.getInstance().setScreenAndShow(screen); }
+        private static void open(Screen screen) { ScreenSwitcher.show(screen); }
     }
 
     @Override public void onClose() {

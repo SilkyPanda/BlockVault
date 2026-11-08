@@ -99,18 +99,24 @@ final class VaultUnlockCoordinator {
 
     private void finishUnlock(boolean create, boolean trustReady, boolean showImport,
                               boolean showVault, List<Waiting> resumed) {
-        navigation.closeAccessScreen();
         VaultRuntime.toast("blockvault.toast.unlocked");
         if (create && trustReady) showTrustedDeviceNotice();
+        // When another BlockVault screen follows, it replaces the unlock screen directly. Closing the unlock
+        // screen first would flash the game (or a rebuilt title screen) for a few frames in between.
         if (showImport) {
             net.minecraft.client.gui.screens.Screen parent = navigation.returnScreen();
             navigation.clearReturnScreen();
             navigation.openImportScreen(parent);
         } else if (showVault) {
             BackgroundExecutor.submit(() -> {
-                showVaultRows.accept(navigation.returnScreen());
+                try { showVaultRows.accept(navigation.returnScreen()); }
+                catch (RuntimeException failure) {
+                    BackgroundExecutor.onGameThread(navigation::closeAccessScreen);
+                }
                 return null;
             });
+        } else {
+            navigation.closeAccessScreen();
         }
         BackgroundExecutor.submit(() -> {
             while (!resumed.isEmpty()) {

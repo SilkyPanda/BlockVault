@@ -19,33 +19,23 @@ public final class VaultMerger {
 
     /** Merges {@code current} (wins ties) with {@code onDisk}. */
     public static Vault merge(Vault current, Vault onDisk, long nowMillis) {
-        return merge(current, onDisk, nowMillis, false);
-    }
-
-    /** Merges a stale client snapshot while optionally taking concurrent server settings from the newer disk copy. */
-    public static Vault merge(Vault current, Vault onDisk, long nowMillis, boolean adoptDiskSettings) {
-        List<ServerEntry> servers = mergeServers(current.servers(), onDisk.servers(), nowMillis, adoptDiskSettings);
+        List<ServerEntry> servers = mergeServers(current.servers(), onDisk.servers(), nowMillis);
         Map<String, TrashEntry> trash = new LinkedHashMap<>();
         for (TrashEntry entry : onDisk.trash()) trash.put(entry.id(), entry);
         for (TrashEntry entry : current.trash()) trash.put(entry.id(), entry);
-        Vault merged = new Vault(Math.max(current.v(), onDisk.v()), servers, new ArrayList<>(trash.values()), current.extra());
+        Vault merged = new Vault(Math.max(current.v(), onDisk.v()), servers, new ArrayList<>(trash.values()));
         return VaultTrash.purgeExpired(merged, nowMillis);
     }
 
     /** Server-level merge used by {@link #merge} and by restoring from the trash. */
     static List<ServerEntry> mergeServers(List<ServerEntry> current, List<ServerEntry> other, long nowMillis) {
-        return mergeServers(current, other, nowMillis, false);
-    }
-
-    private static List<ServerEntry> mergeServers(List<ServerEntry> current, List<ServerEntry> other, long nowMillis,
-                                                   boolean adoptDiskSettings) {
         Map<String, ServerEntry> merged = new LinkedHashMap<>();
         for (ServerEntry server : other) merged.put(server.id(), server);
         for (ServerEntry server : current) {
             String matchingId = merged.containsKey(server.id()) ? server.id() : merged.values().stream()
                     .filter(candidate -> sharesHost(server, candidate)).map(ServerEntry::id).findFirst().orElse(null);
             ServerEntry match = matchingId == null ? null : merged.remove(matchingId);
-            merged.put(server.id(), match == null ? server : mergeServer(server, match, nowMillis, adoptDiskSettings));
+            merged.put(server.id(), match == null ? server : mergeServer(server, match, nowMillis));
         }
         return new ArrayList<>(merged.values());
     }
@@ -54,8 +44,7 @@ public final class VaultMerger {
         return left.hosts().stream().anyMatch(right.hosts()::contains);
     }
 
-    private static ServerEntry mergeServer(ServerEntry current, ServerEntry other, long nowMillis,
-                                            boolean adoptDiskSettings) {
+    private static ServerEntry mergeServer(ServerEntry current, ServerEntry other, long nowMillis) {
         Map<String, Account> accounts = new LinkedHashMap<>();
         List<Account> invalidAccounts = new ArrayList<>();
         for (Account account : other.accounts()) {
@@ -71,21 +60,19 @@ public final class VaultMerger {
             Account old = accounts.get(key);
             Account winner = old == null || effective(account, nowMillis) >= effective(old, nowMillis)
                     ? account : old;
-            accounts.put(key, winner.username().equals(account.username()) ? winner : withUsername(winner, account.username()));
+            accounts.put(key, winner.username().equals(account.username()) ? winner : winner.withUsername(account.username()));
         }
-        // Server settings have no per-field timestamps. When a stale live instance detects a changed disk digest,
-        // the disk copy is the newer write and wins; otherwise deliberate local settings edits remain authoritative.
-        ServerEntry settings = adoptDiskSettings ? other : current;
         List<Account> combined = new ArrayList<>(accounts.values());
         combined.addAll(invalidAccounts);
-        return settings.withAccounts(combined);
+        return current.withAccounts(combined);
     }
 
     private static void addInvalid(List<Account> accounts, Account candidate) {
         for (Account existing : accounts) {
             if (!existing.username().equals(candidate.username()) || existing.status() != candidate.status()
                     || existing.createdAt() != candidate.createdAt() || existing.modifiedAt() != candidate.modifiedAt()
-                    || existing.lastUsedAt() != candidate.lastUsedAt() || !existing.metadata().equals(candidate.metadata())) continue;
+                    || existing.lastUsedAt() != candidate.lastUsedAt()
+                    || !java.util.Objects.equals(existing.invalidRaw(), candidate.invalidRaw())) continue;
             char[] left = existing.password();
             char[] right = candidate.password();
             try { if (java.util.Arrays.equals(left, right)) return; }
@@ -96,13 +83,6 @@ public final class VaultMerger {
 
     private static long effective(Account account, long nowMillis) {
         return Math.min(account.modifiedAt(), nowMillis);
-    }
-
-    private static Account withUsername(Account source, String spelling) {
-        char[] password = source.password();
-        try { return new Account(spelling, password, source.status(), source.createdAt(), source.modifiedAt(),
-                source.lastUsedAt(), source.metadata()); }
-        finally { java.util.Arrays.fill(password, '\0'); }
     }
 
     /** Describes what {@link #merge} would change in {@code current} if {@code other} were merged in. */

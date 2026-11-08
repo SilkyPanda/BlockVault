@@ -11,28 +11,24 @@ import dev.isxander.yacl3.api.controller.IntegerSliderControllerBuilder;
 import dev.isxander.yacl3.api.controller.TickBoxControllerBuilder;
 import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** YACL settings screen for BlockVault's non-secret client preferences. */
-final class VaultYaclSettingsScreen extends BlockVaultScreen implements BlockVaultManagedScreen {
+/**
+ * YACL settings screen for BlockVault's non-secret client preferences.
+ *
+ * <p>The screen is built directly from the already-loaded settings. There is deliberately no intermediate
+ * "loading" screen: replacing one screen by another a few frames after opening is a visible flicker.
+ * This class is only touched through reflection (see {@link VaultSettingsScreenFactory}) so that YACL stays optional.
+ */
+final class VaultYaclSettings {
     private static final BlockVaultConfig.Settings DEFAULTS = BlockVaultConfig.Settings.defaults();
-    private boolean loadRequested;
 
-    VaultYaclSettingsScreen(Screen parent) {
-        super(Component.translatable("blockvault.settings.title"), parent);
-    }
+    private VaultYaclSettings() { }
 
-    @Override
-    protected void init() {
-        if (loadRequested) return;
-        loadRequested = true;
-        BlockVaultConfig.load(settings -> {
-            Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft.gui.screen() == this) minecraft.setScreenAndShow(createYacl(parent, settings));
-        });
+    /** Builds the settings screen from the current settings. */
+    static Screen create(Screen parent) {
+        return createYacl(parent, BlockVaultConfig.currentLoaded());
     }
 
     private static Screen createYacl(Screen parent, BlockVaultConfig.Settings settings) {
@@ -138,7 +134,7 @@ final class VaultYaclSettingsScreen extends BlockVaultScreen implements BlockVau
                 .option(transferAction("blockvault.transfer.import.short", "blockvault.transfer.import.help", true))
                 .option(transferAction("blockvault.transfer.export.short", "blockvault.transfer.export.help", false))
                 .option(screenAction("blockvault.config.action.erase_data", "blockvault.settings.description.data.erase",
-                        screen -> Minecraft.getInstance().setScreenAndShow(new VaultEraseScreen(screen))))
+                        screen -> ScreenSwitcher.show(new VaultEraseScreen(screen))))
                 .build();
     }
 
@@ -167,7 +163,7 @@ final class VaultYaclSettingsScreen extends BlockVaultScreen implements BlockVau
                 .description(description(description))
                 .action((screen, option) -> {
                     if (importing) VaultRuntime.openImportScreen(screen);
-                    else Minecraft.getInstance().setScreenAndShow(new VaultTransferScreen(screen, false));
+                    else ScreenSwitcher.show(new VaultTransferScreen(screen, false));
                 })
                 .build();
     }
@@ -238,15 +234,4 @@ final class VaultYaclSettingsScreen extends BlockVaultScreen implements BlockVau
     }
 
     private enum UnlockPolicy { TRUST, ASK }
-
-    @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        if (Minecraft.getInstance().gui.screen() == this) {
-            graphics.centeredText(font, Component.translatable("blockvault.settings.loading"), width / 2,
-                    height / 2 + 12, 0xffaaaaaa);
-        }
-    }
-
-    @Override public boolean isPauseScreen() { return false; }
 }

@@ -97,7 +97,7 @@ final class VaultTransferScreen extends BlockVaultScreen implements BlockVaultMa
                 this.failureKey = failureKey;
                 return;
             }
-            net.minecraft.client.Minecraft.getInstance().setScreenAndShow(new VaultImportPreviewScreen(parent, preview));
+            ScreenSwitcher.show(new VaultImportPreviewScreen(parent, preview));
         });
     }
 

@@ -24,7 +24,7 @@ if grep -rEn --include='*.java' '@(Inject|Redirect|ModifyArg|ModifyVariable|Modi
   echo '::warning::Check that every mixin injector declares require = 0 (multi-line annotations may be false positives)'
 fi
 
-for f in LICENSE README.md STATUS.md DECISIONS.md .github/workflows/build.yml; do
+for f in LICENSE README.md ARCHITECTURE.md .github/workflows/build.yml; do
   [ -f "$f" ] || { echo "::error::missing $f"; fail=1; }
 done
 

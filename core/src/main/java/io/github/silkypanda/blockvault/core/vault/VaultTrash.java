@@ -31,7 +31,7 @@ public final class VaultTrash {
         if (entry == null) return vault;
         List<TrashEntry> trash = new ArrayList<>(vault.trash());
         trash.add(entry);
-        return new Vault(vault.v(), servers, trash, vault.extra());
+        return new Vault(vault.v(), servers, trash);
     }
 
     /**
@@ -60,7 +60,7 @@ public final class VaultTrash {
             break;
         }
         if (!placed) servers.add(restoredServer);
-        return new Vault(vault.v(), servers, trash, vault.extra());
+        return new Vault(vault.v(), servers, trash);
     }
 
     /** Permanently removes one trash entry. */
@@ -81,7 +81,7 @@ public final class VaultTrash {
             long deletedAt = Math.min(entry.deletedAt(), nowMillis);
             if (nowMillis - deletedAt <= Vault.TRASH_RETENTION_MILLIS) {
                 kept.add(deletedAt == entry.deletedAt() ? entry : new TrashEntry(entry.id(), deletedAt,
-                        entry.server(), entry.extra()));
+                        entry.server()));
                 changed |= deletedAt != entry.deletedAt();
             } else changed = true;
         }
