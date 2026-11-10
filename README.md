@@ -49,7 +49,7 @@ Everything is stored outside the game folder:
 
 - Windows: `%LOCALAPPDATA%/BlockVault`
 - macOS: `~/Library/Application Support/BlockVault`
-- Linux: `$XDG_DATA_HOME/blockvault` or `~/.local/share/blockvault`
+- Linux: `$XDG_DATA_HOME/blockvault` or `~/.local/share/blockvault` if `$XDG_DATA_HOME/blockvault` is unavailable
 
 You can use another folder with the Java property `blockvault.dataDir`.
 
