@@ -11,11 +11,16 @@ import net.minecraft.network.chat.Component;
 final class ScreenText {
     private static final int ENTER_KEY = 257;
     private static final int KEYPAD_ENTER_KEY = 335;
+    private static final int ESCAPE_KEY = 256;
 
     private ScreenText() { }
 
     static boolean isEnter(KeyEvent event) {
         return event.key() == ENTER_KEY || event.key() == KEYPAD_ENTER_KEY;
+    }
+
+    static boolean isEscape(KeyEvent event) {
+        return event.key() == ESCAPE_KEY;
     }
 
     static int drawCenteredWrapped(GuiGraphicsExtractor graphics, Font font, Component text,

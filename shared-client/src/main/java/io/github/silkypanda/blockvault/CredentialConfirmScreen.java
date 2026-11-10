@@ -310,10 +310,15 @@ final class CredentialConfirmScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
-        // Result cards require the explicit Close button. In particular, do not let Enter
-        // fall through to a stale text-field/button focus and submit the old credential.
-        if (closing || resultMode) return true;
-        if (inputGraceActive() || closeAnimating || !openingFinished()) return true;
+        if (closing) return true;
+        if (ScreenText.isEscape(event)) {
+            if (!closeAnimating) onClose();
+            return true;
+        }
+        // Do not let Enter fall through to stale text-field/button focus and resubmit
+        // credentials after the card has switched to a result state.
+        if (resultMode || closeAnimating) return true;
+        if (inputGraceActive() || !openingFinished()) return true;
         if (ScreenText.isEnter(event)) {
             if (model.variant() == CardVariant.PENDING_LOGIN) { tryPendingLogin(); return true; }
             if (model.variant() == CardVariant.REJECTED) {
